@@ -421,7 +421,7 @@ function renderPages() {
     return `<li data-page="${p.index}" aria-current="${p.index === state.page}" title="${escapeHtml(title)}">
       <span class="dot ${p.status}" aria-hidden="true"></span>
       <span class="num">${p.index}</span>
-      ${hasDraft ? '<span class="draft" title="unsaved edits">✎</span>' : ""}
+      ${hasDraft ? '<span class="draft-mark" title="unsaved edits">✎</span>' : ""}
       ${who ? `<span class="who" title="last changed by ${escapeHtml(p.changed_by)}">${who}</span>` : ""}
       <span class="lbl">${p.skip ? "skip" : p.label ? escapeHtml(p.label) : ""}</span>
       <span class="visually-hidden">${statusLabel(p.status)}${hasDraft ? ", unsaved edits" : ""}</span>
