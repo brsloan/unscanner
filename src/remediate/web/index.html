@@ -11,6 +11,7 @@
 <header class="topbar">
   <h1>remediate</h1>
   <button id="btn-open" type="button">Open PDF…</button>
+  <button id="btn-save-all" type="button" disabled title="Save every page with unsaved edits (Ctrl+S)">Save</button>
   <button id="btn-transcribe" type="button" disabled>Transcribe…</button>
   <button id="btn-build" type="button" disabled>Build</button>
   <button id="btn-validate" type="button" disabled>Validate</button>
@@ -88,6 +89,7 @@
       <span id="banner-text"></span>
       <button id="banner-primary" type="button" class="primary">Reload</button>
       <button id="banner-secondary" type="button">Keep my edits</button>
+        <button id="banner-tertiary" type="button" hidden>Stay</button>
     </div>
     <div id="editor" class="editor" contenteditable="true" spellcheck="true" aria-label="Page HTML" role="textbox" aria-multiline="true"></div>
     <textarea id="source" class="source" hidden aria-label="Page HTML source" spellcheck="false"></textarea>
@@ -121,8 +123,8 @@
       <label title="Last paragraph continues on the next page"><input id="f-ends" type="checkbox"> ends mid-¶</label>
       <label><input id="f-skip" type="checkbox"> skip</label>
       <span class="spacer"></span>
-      <button id="btn-save" type="button" class="primary" disabled title="Ctrl+S">Save</button>
-      <button id="btn-save-next" type="button" disabled>Save &amp; next</button>
+      <button id="btn-approve" type="button" class="primary" disabled title="Save and mark this page approved (Ctrl+Enter)">Approve</button>
+      <button id="btn-approve-next" type="button" disabled title="Approve and move to the next page">Approve &amp; next</button>
     </form>
   </section>
 </div>

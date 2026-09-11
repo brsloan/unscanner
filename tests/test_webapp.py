@@ -70,6 +70,18 @@ def test_open_edit_build_validate(client, tmp_path):
     assert not [i for i in r.json()["issues"] if i["severity"] == "error"], r.json()["issues"]
 
 
+def test_save_versus_approve(client, tmp_path):
+    pdf = make_pdf(tmp_path / "approve sample.pdf")
+    doc_id = client.post("/api/documents", json={"pdf_path": str(pdf)}).json()["doc_id"]
+    # Save (draft) keeps the page unapproved; Approve marks it done; editing again and saving un-approves it.
+    r = client.put(f"/api/documents/{doc_id}/pages/1", json={"html": "<p>draft text</p>", "status": "needs_review"})
+    assert r.json()["status"] == "needs_review"
+    r = client.put(f"/api/documents/{doc_id}/pages/1", json={"html": "<p>draft text</p>", "status": "done", "version": 1})
+    assert r.json()["status"] == "done"
+    r = client.put(f"/api/documents/{doc_id}/pages/1", json={"html": "<p>changed</p>", "status": "needs_review", "version": 2})
+    assert r.json()["status"] == "needs_review"
+
+
 def test_figures_survive_editor_saves_and_can_be_previewed(client, tmp_path):
     pdf = make_pdf(tmp_path / "fig sample.pdf")
     doc_id = client.post("/api/documents", json={"pdf_path": str(pdf)}).json()["doc_id"]

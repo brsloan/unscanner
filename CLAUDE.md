@@ -36,7 +36,7 @@ changes small, plain, and covered by tests.
    through `Document`. Never store state anywhere else.
 6. The EPUB must pass epubcheck with zero errors (`remediate validate` runs it when Java is present).
 7. Every stored page change goes through `pipeline.apply_result`, which bumps `page.version` and sets
-   `page.changed_by` ("editor" for a person, "claude" for MCP `set_page`, a model id for batch runs).
+   `page.changed_by` ("editor" for a person, "claude" for MCP `set_page`, a model id for batch runs). Status `done` means a person approved the page in the UI; a plain Save keeps it `needs_review`.
    The UI sends the version it loaded on save and the server answers 409 on a mismatch; never bypass
    this, it is what lets a person and Claude edit the same document at the same time.
 

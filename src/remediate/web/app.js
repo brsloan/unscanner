@@ -312,13 +312,14 @@ $("#f-notes").addEventListener("input", updateNotesUI);
 updateNotesUI();
 
 // ------------------------------------------------------------------ banner (messages from Claude / conflicts)
-function showBanner(text, primary, secondary) {
+function showBanner(text, primary, secondary, tertiary) {
   const b = $("#banner");
   $("#banner-text").textContent = text;
-  const p = $("#banner-primary"), s = $("#banner-secondary");
-  p.hidden = !primary; s.hidden = !secondary;
+  const p = $("#banner-primary"), s = $("#banner-secondary"), t = $("#banner-tertiary");
+  p.hidden = !primary; s.hidden = !secondary; t.hidden = !tertiary;
   if (primary) { p.textContent = primary.label; p.onclick = () => { hideBanner(); primary.run(); }; }
   if (secondary) { s.textContent = secondary.label; s.onclick = () => { hideBanner(); secondary.run(); }; }
+  if (tertiary) { t.textContent = tertiary.label; t.onclick = () => { hideBanner(); tertiary.run(); }; }
   b.hidden = false;
 }
 function hideBanner() { $("#banner").hidden = true; }
@@ -334,6 +335,7 @@ async function loadDocs(selectId) {
 }
 
 async function openDoc(docId, pageToShow) {
+  storeDraftNow();  // keep unsaved edits of the page we are leaving, whatever document it belongs to
   if (!docId) { state.doc = null; renderPages(); return; }
   state.doc = await api(`/documents/${docId}`);
   localStorage.setItem("remediate.lastDoc", docId);
@@ -343,15 +345,63 @@ async function openDoc(docId, pageToShow) {
   $("#lnk-epub").href = `/api/documents/${docId}/output/epub`;
   if (state.doc.job) pollJob(state.doc.job.id);
   const first = pageToShow || (state.doc.pages.find((p) => p.status === "needs_review") || state.doc.pages[0] || {}).index;
+  state.page = null; state.dirty = false;  // switching documents: the previous page's draft is already stored
   if (first) loadPage(first);
   startPolling();
 }
 
+const STATUS_LABEL = { done: "approved", needs_review: "needs review", pending: "not transcribed", error: "error" };
+const statusLabel = (s) => STATUS_LABEL[s] || s;
+
 function renderMeta() {
   const s = state.doc.status_counts || {};
   const el = $("#doc-meta");
-  el.textContent = `${s.done || 0}/${state.doc.page_count} done · ${s.needs_review || 0} review`;
-  el.title = `${state.doc.page_count} pages · ${s.done || 0} done · ${s.needs_review || 0} need review · ${s.pending || 0} pending · ${s.error || 0} errors`;
+  const drafts = new Set(Object.keys(docDrafts()).map(Number));
+  if (state.dirty && state.page) drafts.add(state.page);
+  const draftCount = drafts.size;
+  el.textContent = `${s.done || 0}/${state.doc.page_count} approved · ${s.needs_review || 0} review${draftCount ? ` · ${draftCount} unsaved` : ""}`;
+  el.title = `${state.doc.page_count} pages · ${s.done || 0} approved · ${s.needs_review || 0} need review · ${s.pending || 0} not transcribed · ${s.error || 0} errors · ${draftCount} with unsaved edits`;
+  const all = $("#btn-save-all");
+  all.disabled = !draftCount; all.textContent = draftCount ? `Save (${draftCount})` : "Save";
+}
+
+// ------------------------------------------------------------------ drafts: unsaved edits kept per page, in memory and localStorage
+function allDrafts() {
+  try { return JSON.parse(localStorage.getItem("remediate.drafts") || "{}"); } catch (_) { return {}; }
+}
+function writeDrafts(d) { try { localStorage.setItem("remediate.drafts", JSON.stringify(d)); } catch (_) { /* storage full or disabled */ } }
+function docDrafts() { return (state.doc && allDrafts()[state.doc.doc_id]) || {}; }
+function getDraft(n) { return docDrafts()[n] || null; }
+function setDraft(n, draft) {
+  const d = allDrafts(); (d[state.doc.doc_id] = d[state.doc.doc_id] || {})[n] = draft; writeDrafts(d);
+}
+function clearDraft(n, docId = state.doc.doc_id) {
+  const d = allDrafts(); if (d[docId]) { delete d[docId][n]; if (!Object.keys(d[docId]).length) delete d[docId]; } writeDrafts(d);
+}
+/* Snapshot of the editor and page fields for the current page. */
+function formSnapshot() {
+  return { html: currentHtml(), label: $("#f-label").value.trim() || null,
+    starts_mid_paragraph: $("#f-starts").checked, ends_mid_paragraph: $("#f-ends").checked,
+    skip: $("#f-skip").checked, notes: $("#f-notes").value.trim(),
+    figures: (state.pageData && state.pageData.figures) || [], version: state.pageData ? state.pageData.version : null,
+    at: Date.now() };
+}
+let draftTimer = null;
+function storeDraftSoon() { clearTimeout(draftTimer); draftTimer = setTimeout(storeDraftNow, 400); }
+function storeDraftNow() {
+  clearTimeout(draftTimer);
+  if (!state.doc || !state.page || !state.dirty) return;
+  setDraft(state.page, formSnapshot());
+  renderPages(); renderMeta();
+}
+function applyDraft(d) {
+  $("#editor").innerHTML = d.html || ""; showFigures($("#editor"));
+  $("#source").value = d.html || "";
+  $("#f-label").value = d.label || "";
+  $("#f-starts").checked = !!d.starts_mid_paragraph; $("#f-ends").checked = !!d.ends_mid_paragraph;
+  $("#f-skip").checked = !!d.skip; $("#f-notes").value = d.notes || "";
+  if (d.figures) state.pageData.figures = d.figures;
+  state.dirty = true;
 }
 
 function whoLabel(p) {
@@ -362,26 +412,32 @@ function whoLabel(p) {
 function renderPages() {
   const list = $("#page-list");
   if (!state.doc) { list.innerHTML = ""; return; }
+  const drafts = docDrafts();
   list.innerHTML = state.doc.pages.map((p) => {
     const who = whoLabel(p);
-    const title = `PDF page ${p.index}${p.label ? ", printed " + p.label : ""}: ${p.status}${p.skip ? " (skipped)" : ""}` +
-      (p.changed_by ? ` · last changed by ${p.changed_by}` : "") + (p.notes ? ` · ${p.notes}` : "");
+    const hasDraft = !!drafts[p.index] || (p.index === state.page && state.dirty);
+    const title = `PDF page ${p.index}${p.label ? ", printed " + p.label : ""}: ${statusLabel(p.status)}${p.skip ? " (skipped)" : ""}` +
+      (hasDraft ? " · unsaved edits" : "") + (p.changed_by ? ` · last changed by ${p.changed_by}` : "") + (p.notes ? ` · ${p.notes}` : "");
     return `<li data-page="${p.index}" aria-current="${p.index === state.page}" title="${escapeHtml(title)}">
       <span class="dot ${p.status}" aria-hidden="true"></span>
       <span class="num">${p.index}</span>
+      ${hasDraft ? '<span class="draft" title="unsaved edits">✎</span>' : ""}
       ${who ? `<span class="who" title="last changed by ${escapeHtml(p.changed_by)}">${who}</span>` : ""}
       <span class="lbl">${p.skip ? "skip" : p.label ? escapeHtml(p.label) : ""}</span>
-      <span class="visually-hidden">${p.status}</span>
+      <span class="visually-hidden">${statusLabel(p.status)}${hasDraft ? ", unsaved edits" : ""}</span>
     </li>`;
   }).join("");
 }
 
 // ------------------------------------------------------------------ pages
 async function loadPage(n, opts = {}) {
-  if (state.dirty && !opts.force && !confirm("Discard unsaved changes on this page?")) return;
+  // Leaving a page never loses anything: unsaved edits are kept as a draft and restored on return.
+  if (state.dirty && !opts.discardCurrent && n !== state.page) storeDraftNow();
+  else if (opts.discardCurrent) clearDraft(state.page);
   const d = await api(`/documents/${state.doc.doc_id}/pages/${n}`);
   state.page = n; state.pageData = d; state.dirty = false;
   hideBanner();
+  const draft = opts.discardCurrent || opts.fresh ? null : getDraft(n);
   const ind = $("#page-indicator");
   ind.textContent = `${n}/${d.of}`;
   ind.title = `PDF page ${n} of ${d.of}${d.label ? ", printed page " + d.label : ""}`;
@@ -396,12 +452,23 @@ async function loadPage(n, opts = {}) {
   $("#f-ends").checked = !!d.ends_mid_paragraph;
   $("#f-skip").checked = !!d.skip;
   $("#f-notes").value = d.notes || "";
+  if (draft) {
+    applyDraft(draft);
+    if (draft.version !== d.version) {
+      // The page changed on the server (e.g. Claude edited it) after this draft was made: keep the
+      // draft's version so a save is refused and the conflict banner offers reload or overwrite.
+      state.pageData.version = draft.version;
+      showBanner(`Page ${n} was changed by ${d.changed_by || "someone"} after your unsaved edits were made.`,
+        { label: "Show their version", run: () => loadPage(n, { discardCurrent: true }) },
+        { label: "Keep my edits", run: () => {} });
+    }
+  }
   updateNotesUI();
-  $("#btn-save").disabled = false; $("#btn-save-next").disabled = false;
-  renderPages();
+  ["#btn-approve", "#btn-approve-next"].forEach((b) => ($(b).disabled = false));
+  renderPages(); renderMeta();
   if (!opts.silent) {
     const who = d.changed_by && d.changed_by !== "editor" ? ` · last changed by ${d.changed_by}` : "";
-    setStatus(`Page ${n}: ${d.status}${who}${d.notes ? " · has notes" : ""}`);
+    setStatus(`Page ${n}: ${statusLabel(d.status)}${who}${d.notes ? " · has notes" : ""}${draft ? " · restored unsaved edits" : ""}`);
   }
   $("#editor").scrollTop = 0;
   marker.hidden = true; edgeTicks.hidden = true; lastLocateKey = ""; state.lastBox = null;
@@ -430,35 +497,62 @@ function currentHtml() {
   return $("#toggle-source").checked ? $("#source").value : editorHtml();
 }
 
-async function savePage(andNext = false, overwrite = false) {
-  if (!state.doc || !state.page) return;
+/* Write one page to the document. approve=true marks it approved ("done"); otherwise its edits are
+   saved as needing review. Returns the saved page or null (a 409 conflict is reported to the caller). */
+async function persistPage(n, snap, { approve = false, overwrite = false } = {}) {
   const body = {
-    html: currentHtml(), label: $("#f-label").value.trim() || null,
-    starts_mid_paragraph: $("#f-starts").checked, ends_mid_paragraph: $("#f-ends").checked,
-    skip: $("#f-skip").checked, notes: $("#f-notes").value.trim(), status: "done",
-    version: overwrite ? null : state.pageData.version,
-    figures: state.pageData.figures || [],  // crop boxes as adjusted in the editor
+    html: snap.html, label: snap.label, starts_mid_paragraph: snap.starts_mid_paragraph,
+    ends_mid_paragraph: snap.ends_mid_paragraph, skip: snap.skip, notes: snap.notes,
+    status: approve ? "done" : "needs_review", version: overwrite ? null : snap.version,
+    figures: snap.figures || [],
   };
+  return api(`/documents/${state.doc.doc_id}/pages/${n}`, { method: "PUT", body });
+}
+
+async function savePage(andNext = false, overwrite = false, approve = false) {
+  if (!state.doc || !state.page) return;
+  const n = state.page;
   try {
-    const saved = await api(`/documents/${state.doc.doc_id}/pages/${state.page}`, { method: "PUT", body });
-    state.dirty = false; state.pageData = { ...state.pageData, ...saved };
+    const saved = await persistPage(n, formSnapshot(), { approve, overwrite });
+    state.dirty = false; clearDraft(n); state.pageData = { ...state.pageData, ...saved };
     $("#editor").innerHTML = saved.html; showFigures($("#editor")); $("#source").value = saved.html;
-    const p = state.doc.pages.find((x) => x.index === state.page);
+    const p = state.doc.pages.find((x) => x.index === n);
     Object.assign(p, saved);
-    renderPages();
-    setStatus(`Saved page ${state.page} (${saved.words} words)`);
+    renderPages(); renderMeta();
+    setStatus(`${approve ? "Approved" : "Saved"} page ${n} (${saved.words} words)`);
     reportView();
-    if (andNext && state.page < state.doc.page_count) loadPage(state.page + 1);
+    if (andNext && n < state.doc.page_count) loadPage(n + 1);
   } catch (e) {
     if (e.status === 409) {
       showBanner(e.message,
-        { label: "Reload their version", run: () => loadPage(state.page, { force: true }) },
-        { label: "Overwrite with mine", run: () => savePage(andNext, true) });
+        { label: "Reload their version", run: () => loadPage(n, { discardCurrent: true }) },
+        { label: "Overwrite with mine", run: () => savePage(andNext, true, approve) });
     } else setStatus("Save failed: " + e.message, true);
   }
 }
 
-function markDirty() { if (!state.dirty) { state.dirty = true; reportView(); } }
+/* Save every page with unsaved edits (current page from the form, others from their drafts). */
+async function saveAll() {
+  if (!state.doc) return;
+  let ok = 0, conflicts = [], failed = [];
+  if (state.dirty) { await savePage(false); if (!state.dirty) ok++; else conflicts.push(state.page); }
+  const drafts = docDrafts();
+  for (const n of Object.keys(drafts).map(Number).sort((a, b) => a - b)) {
+    if (n === state.page) continue;
+    try {
+      const saved = await persistPage(n, drafts[n]);
+      clearDraft(n); ok++;
+      const p = state.doc.pages.find((x) => x.index === n); if (p) Object.assign(p, saved);
+    } catch (e) { (e.status === 409 ? conflicts : failed).push(n); }
+  }
+  renderPages(); renderMeta();
+  let msg = `Saved ${ok} page${ok === 1 ? "" : "s"}.`;
+  if (conflicts.length) msg += ` Pages ${conflicts.join(", ")} changed on the server since your edits; open them to resolve.`;
+  if (failed.length) msg += ` Failed: ${failed.join(", ")}.`;
+  setStatus(msg, conflicts.length + failed.length > 0);
+}
+
+function markDirty() { if (!state.dirty) { state.dirty = true; reportView(); renderPages(); renderMeta(); } storeDraftSoon(); }
 
 // ------------------------------------------------------------------ collaboration: report view, poll, follow
 let reportTimer = null;
@@ -495,12 +589,10 @@ async function poll() {
       await api("/session/requested", { method: "DELETE" });
       const go = async () => {
         if (req.doc_id !== state.doc.doc_id) { $("#doc-select").value = req.doc_id; await openDoc(req.doc_id, req.page); }
-        else await loadPage(req.page, { force: true });
+        else await loadPage(req.page);
         if (req.note) setStatus("Claude: " + req.note);
       };
-      if (state.dirty) showBanner(`Claude wants to show you page ${req.page}${req.note ? ": " + req.note : ""}. You have unsaved edits.`,
-        { label: "Go (discard edits)", run: go }, { label: "Stay", run: () => {} });
-      else await go();
+      await go();  // unsaved edits on the current page are kept as a draft
     }
     const fresh = await api(`/documents/${state.doc.doc_id}`);
     state.doc.pages = fresh.pages; state.doc.status_counts = fresh.status_counts;
@@ -509,13 +601,13 @@ async function poll() {
     if (cur && state.pageData && cur.version !== state.pageData.version && $("#banner").hidden) {
       const who = cur.changed_by || "someone";
       if (!state.dirty) {
-        await loadPage(state.page, { force: true, silent: true });
-        showBanner(`Page ${state.page} was updated by ${who}. Check it and Save to confirm.`,
+        await loadPage(state.page, { fresh: true, silent: true });
+        showBanner(`Page ${state.page} was updated by ${who}. Check it and Approve to confirm.`,
           { label: "OK", run: () => {} }, null);
       } else {
         showBanner(`Page ${state.page} was changed by ${who} while you were editing.`,
-          { label: "Reload their version", run: () => loadPage(state.page, { force: true }) },
-          { label: "Keep my edits", run: () => { state.pageData.version = cur.version; } });
+          { label: "Reload their version", run: () => loadPage(state.page, { discardCurrent: true }) },
+          { label: "Keep my edits", run: () => { state.pageData.version = cur.version; storeDraftNow(); } });
       }
     }
   } catch (_) { /* server briefly unavailable; try again next tick */ }
@@ -747,18 +839,20 @@ $("#toggle-draft").addEventListener("change", (e) => {
   if (e.target.checked) { $("#editor").hidden = true; $("#source").hidden = true; $("#toggle-source").checked = false; }
   else { $("#editor").hidden = false; }
 });
-$("#btn-save").addEventListener("click", () => savePage(false));
-$("#btn-save-next").addEventListener("click", () => savePage(true));
+$("#btn-approve").addEventListener("click", () => savePage(false, false, true));
+$("#btn-approve-next").addEventListener("click", () => savePage(true, false, true));
+$("#btn-save-all").addEventListener("click", saveAll);
 $("#btn-prev").addEventListener("click", () => state.page > 1 && loadPage(state.page - 1));
 $("#btn-next").addEventListener("click", () => state.doc && state.page < state.doc.page_count && loadPage(state.page + 1));
 $("#page-list").addEventListener("click", (e) => { const li = e.target.closest("li[data-page]"); if (li) loadPage(+li.dataset.page); });
 $("#doc-select").addEventListener("change", (e) => openDoc(e.target.value));
 document.addEventListener("keydown", (e) => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); savePage(false); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveAll(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); savePage(false, false, true); }
   if (e.altKey && e.key === "ArrowLeft") { e.preventDefault(); $("#btn-prev").click(); }
   if (e.altKey && e.key === "ArrowRight") { e.preventDefault(); $("#btn-next").click(); }
 });
-window.addEventListener("beforeunload", (e) => { if (state.dirty) { e.preventDefault(); e.returnValue = ""; } });
+window.addEventListener("beforeunload", () => storeDraftNow());  // drafts survive a reload
 
 // ------------------------------------------------------------------ dialogs
 function wireDialog(id) {
@@ -814,12 +908,13 @@ async function pollJob(jobId) {
       const u = job.summary.usage || {};
       setStatus(`Transcribed ${job.summary.done} pages (${job.summary.errors} errors) · ${u.input_tokens || 0} in / ${u.output_tokens || 0} out tokens`);
     }
-    if (state.page && !state.dirty) loadPage(state.page, { force: true });
+    if (state.page && !state.dirty) loadPage(state.page, { fresh: true });
   }
 }
 
 $("#btn-build").addEventListener("click", async () => {
   if (state.dirty) await savePage(false);
+  if (Object.keys(docDrafts()).length) await saveAll();
   setStatus("Building…");
   try {
     const r = await api(`/documents/${state.doc.doc_id}/build`, { method: "POST" });

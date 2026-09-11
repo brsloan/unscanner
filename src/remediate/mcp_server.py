@@ -112,7 +112,7 @@ def list_documents() -> list[dict[str, Any]]:
 
 @server.tool()
 def get_status(doc_id: str) -> dict[str, Any]:
-    """Status of every page: index, printed label, status (pending/done/needs_review/error), who last
+    """Status of every page: index, printed label, status (pending / needs_review / done = approved by a person / error), who last
     changed it (editor = a person, claude = you, or a model id), notes."""
     doc = _load(doc_id)
     return {
@@ -152,8 +152,8 @@ def get_current_view(include_image: bool = True):
 @server.tool()
 def show_page(doc_id: str, page: int, note: str = "") -> dict[str, Any]:
     """Ask the web UI to navigate to a page (e.g. to show the person what you changed or want them to
-    check). note: short text shown to them in the UI banner. The UI follows within a couple of seconds
-    unless the person has unsaved edits, in which case it offers them the jump instead."""
+    check). note: short text shown to them in the UI status bar. The UI follows within a couple of
+    seconds; any unsaved edits on the page they were on are kept as a draft."""
     doc = _load(doc_id)
     doc.page(page)  # validates the index
     _session().request_view(doc_id, page, note)
@@ -186,7 +186,7 @@ def set_page(doc_id: str, page: int, html: str, label: str | None = None, starts
     skip: true for blank or content-free pages. notes: anything a human should check (marks the page
     needs_review). figures: [{"id","alt","bbox":[x0,y0,x1,y1] in 0-1000 page coords,"caption"}] for
     each <img src="fig:ID"> in the html; bbox lets the builder crop the image out of the scan.
-    The page is recorded as changed by "claude"; a person confirms it by saving in the UI.
+    The page is recorded as changed by "claude"; a person confirms it by approving it in the UI.
     """
     from .sanitize import sanitize_fragment
 

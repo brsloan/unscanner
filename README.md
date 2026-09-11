@@ -64,8 +64,8 @@ python -m remediate.cli ui          # opens http://127.0.0.1:8765 in your browse
 ```
 
 The UI is for the review step, which is where the human time goes. It shows the scanned page next
-to an editor for that page's transcription, with the page list colour-coded by status (green done,
-amber needs review, grey pending, red error) and review pages opened first.
+to an editor for that page's transcription, with the page list colour-coded by approval status (green approved,
+amber needs review, grey not transcribed, red error) and review pages opened first.
 
 - **Editor**: paragraphs, headings, lists, block quotes, strong/emphasis, superscript, alt text for a
   selected image, `lang` marking for foreign-language passages. There is no way to produce inline
@@ -82,8 +82,13 @@ amber needs review, grey pending, red error) and review pages opened first.
   changes are kept when you Save. Placement is stored as the classes
   `align-left|center|right` and `wrap` on the `<figure>`; these are the only classes the sanitizer
   keeps, and the output CSS styles them in both HTML and EPUB.
-- **Page fields**: printed page number, starts/ends mid-paragraph flags, skip, notes. Save marks the
-  page reviewed. Ctrl+S saves, Alt+Left/Right moves between pages, "Save & next" does both.
+- **Editing and approval**: unsaved edits are kept per page in the browser, so you can move between
+  pages freely and come back; pages with unsaved edits show a pencil in the page list. **Save** in the
+  top bar (Ctrl+S) is document-level: it writes every page with unsaved edits without approving
+  them. **Approve** (Ctrl+Enter) stores the current page and marks it approved, which is what the green dot
+  in the page list means (amber: needs review, grey: not transcribed). Editing an approved page and
+  saving puts it back to needs review. Alt+Left/Right moves between pages; "Approve & next" does both.
+- **Page fields**: printed page number, starts/ends mid-paragraph flags, skip, notes.
 - **Follow and Mark**: with Follow on, moving the caret through the editor scrolls the scan to keep
   the matching line in view; with Mark on, a red dot sits just left of the word the caret is on, and
   short red ticks on the four edges of the preview pane point at its row and column so the eye can
@@ -116,7 +121,7 @@ works too; both share `work/session.json`).
   "retry these equations" needs no page numbers. Claude calls `get_current_view` and sees the same
   page image and HTML you see.
 - When Claude saves a page with `set_page`, your editor reloads within two seconds and shows a
-  banner "updated by claude". The page list marks it too. Click Save to confirm it as reviewed.
+  banner "updated by claude". The page list marks it too. Click Approve to confirm it.
 - If you have unsaved edits when Claude changes the page, the banner offers to reload or keep yours.
   The same protection works the other way: a save based on a stale copy is refused and you choose.
 - Claude can call `show_page` to bring a page up in your window ("look at page 12").
