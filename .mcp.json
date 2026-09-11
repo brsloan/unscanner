@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "remediate": {
+      "command": "python",
+      "args": ["-m", "remediate.cli", "serve"],
+      "env": {
+        "REMEDIATE_BACKEND": "anthropic",
+        "REMEDIATE_MODEL": "claude-opus-5"
+      }
+    }
+  }
+}

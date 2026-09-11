@@ -1,0 +1,7 @@
+work/
+out/
+tools/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+pdfs/
