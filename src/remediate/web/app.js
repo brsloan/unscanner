@@ -60,11 +60,118 @@ function setZoomMode(mode) {
   if (mode !== "manual") $("#zoom").value = 100;
   applyZoom();
 }
-img.addEventListener("load", applyZoom);
+img.addEventListener("load", () => { applyZoom(); if (state.lastBox && (state.follow || state.mark)) placeMarker(state.lastBox); });
 new ResizeObserver(applyZoom).observe(scroller);
 $("#btn-fit").addEventListener("click", () => setZoomMode("fit"));
 $("#btn-fill").addEventListener("click", () => setZoomMode("fill"));
 $("#zoom").addEventListener("input", () => { state.zoomMode = "manual"; localStorage.setItem("remediate.zoomMode", "manual"); applyZoom(); });
+
+// ------------------------------------------------------------------ follow / mark: locate the editor caret on the scan
+const marker = $("#marker"), edgeTicks = $("#edge-ticks");
+state.follow = localStorage.getItem("remediate.follow") === "true";
+state.mark = localStorage.getItem("remediate.mark") === "true";
+function renderFollowButtons() {
+  $("#btn-follow").setAttribute("aria-pressed", String(state.follow));
+  $("#btn-mark").setAttribute("aria-pressed", String(state.mark));
+  if (!state.mark) { marker.hidden = true; edgeTicks.hidden = true; }
+}
+
+/* Ticks on the pane edges at the dot's column (top/bottom) and row (left/right); each pair is hidden
+   when the dot is scrolled out of the pane in that direction. */
+function updateEdgeTicks() {
+  if (marker.hidden) { edgeTicks.hidden = true; return; }
+  edgeTicks.hidden = false;  // must be laid out to be measured
+  const area = edgeTicks.getBoundingClientRect(), m = marker.getBoundingClientRect();
+  const x = m.left - area.left, y = m.top - area.top;
+  const inX = x >= 0 && x <= area.width, inY = y >= 0 && y <= area.height;
+  edgeTicks.hidden = !(inX || inY);
+  for (const t of edgeTicks.querySelectorAll(".n, .s")) { t.hidden = !inX; t.style.left = x + "px"; }
+  for (const t of edgeTicks.querySelectorAll(".w, .e")) { t.hidden = !inY; t.style.top = y + "px"; }
+}
+$("#image-scroll").addEventListener("scroll", updateEdgeTicks);
+new ResizeObserver(updateEdgeTicks).observe($("#image-scroll"));
+marker.addEventListener("transitionend", updateEdgeTicks);
+$("#btn-follow").addEventListener("click", () => { state.follow = !state.follow; localStorage.setItem("remediate.follow", state.follow); renderFollowButtons(); locateCaret(); });
+$("#btn-mark").addEventListener("click", () => { state.mark = !state.mark; localStorage.setItem("remediate.mark", state.mark); renderFollowButtons(); locateCaret(); });
+renderFollowButtons();
+
+const BLOCK_SEL = "p,li,h1,h2,h3,h4,h5,h6,td,th,dd,dt,figcaption,caption,blockquote,pre,aside";
+
+/* Editor text built from its text nodes (a space between blocks) plus the caret's offset in it. */
+function editorTextAndCaret(ed, anchorNode, anchorOffset) {
+  let target = anchorNode, tOff = anchorOffset;
+  if (target && target.nodeType !== Node.TEXT_NODE) {  // caret given as (element, child index): use the first text node from there
+    const child = target.childNodes[anchorOffset] || target.childNodes[anchorOffset - 1] || target;
+    const w = document.createTreeWalker(child, NodeFilter.SHOW_TEXT);
+    target = child.nodeType === Node.TEXT_NODE ? child : w.nextNode();
+    tOff = 0;
+  }
+  const walker = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT);
+  let text = "", caret = -1, prevBlock = null, node;
+  while ((node = walker.nextNode())) {
+    const block = (node.parentElement && node.parentElement.closest(BLOCK_SEL)) || ed;
+    if (prevBlock && block !== prevBlock) text += " ";
+    prevBlock = block;
+    if (node === target) caret = text.length + tOff;
+    text += node.data;
+  }
+  return { text, caret: caret < 0 ? text.length : caret };
+}
+
+/* Words around the caret in the editor: returns {context: [...], index} or null. */
+function caretContext(before = 4, after = 4) {
+  const sel = window.getSelection();
+  const ed = $("#editor");
+  if (!sel || !sel.anchorNode || !ed.contains(sel.anchorNode) || ed.hidden) return null;
+  const { text, caret } = editorTextAndCaret(ed, sel.anchorNode, sel.anchorOffset);
+  const re = /\S+/g; const words = []; let m;
+  while ((m = re.exec(text))) words.push({ t: m[0], s: m.index, e: m.index + m[0].length });
+  if (!words.length) return null;
+  let i = words.findIndex((w) => caret <= w.e);
+  if (i < 0) i = words.length - 1;
+  const lo = Math.max(0, i - before), hi = Math.min(words.length, i + after + 1);
+  return { context: words.slice(lo, hi).map((w) => w.t), index: i - lo };
+}
+
+let locateTimer = null, lastLocateKey = "";
+function locateCaret() {
+  if (!state.doc || !state.page || (!state.follow && !state.mark)) { marker.hidden = true; edgeTicks.hidden = true; return; }
+  clearTimeout(locateTimer);
+  locateTimer = setTimeout(async () => {
+    const ctx = caretContext();
+    if (!ctx) return;
+    const key = state.page + "|" + ctx.context.join(" ") + "|" + ctx.index;
+    if (key === lastLocateKey) return;
+    lastLocateKey = key;
+    try {
+      const r = await api(`/documents/${state.doc.doc_id}/pages/${state.page}/locate`, { method: "POST", body: ctx });
+      if (!r.found) { marker.hidden = true; edgeTicks.hidden = true; return; }
+      placeMarker(r.box);
+    } catch (_) { /* ignore */ }
+  }, 150);
+}
+
+function placeMarker(box) {
+  // Dot sits just left of the word, vertically centred on it; positions are % of the image so zoom is irrelevant.
+  state.lastBox = box;
+  if (!img.clientHeight) return;  // image not laid out yet; the load handler re-places it
+  const xPct = Math.max(0, box.x0 / 10 - 1.2), yPct = (box.y0 + box.y1) / 20;
+  marker.style.left = xPct + "%"; marker.style.top = yPct + "%";
+  marker.hidden = !state.mark;
+  updateEdgeTicks();
+  if (state.follow) {
+    const wrap = $("#img-wrap");
+    const y = wrap.offsetTop + (yPct / 100) * img.clientHeight;
+    const x = wrap.offsetLeft + (xPct / 100) * img.clientWidth;
+    const top = scroller.scrollTop, h = scroller.clientHeight;
+    if (y < top + h * 0.2 || y > top + h * 0.8) scroller.scrollTo({ top: y - h / 2, behavior: "smooth" });
+    const left = scroller.scrollLeft, w = scroller.clientWidth;
+    if (img.clientWidth > w && (x < left + w * 0.1 || x > left + w * 0.9)) scroller.scrollTo({ left: x - w / 2, behavior: "smooth" });
+  }
+}
+$("#editor").addEventListener("keyup", locateCaret);
+$("#editor").addEventListener("mouseup", locateCaret);
+$("#editor").addEventListener("focus", locateCaret);
 
 // ------------------------------------------------------------------ resizable panels (drag the gutters)
 function setupGutter(id, cssVar, measure, min) {
@@ -202,6 +309,7 @@ async function loadPage(n, opts = {}) {
     setStatus(`Page ${n}: ${d.status}${who}${d.notes ? " · has notes" : ""}`);
   }
   $("#editor").scrollTop = 0;
+  marker.hidden = true; edgeTicks.hidden = true; lastLocateKey = ""; state.lastBox = null;
   reportView();
 }
 

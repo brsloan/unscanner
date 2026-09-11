@@ -37,10 +37,22 @@
       <button id="btn-next" type="button" title="Next page (Alt+Right)">▶</button>
       <button id="btn-fit" type="button" class="small" title="Fit whole page in the pane" aria-pressed="true">Fit</button>
       <button id="btn-fill" type="button" class="small" title="Fill the pane width" aria-pressed="false">Fill</button>
+      <button id="btn-follow" type="button" class="small" title="Scroll the scan to follow the caret in the editor" aria-pressed="false">Follow</button>
+      <button id="btn-mark" type="button" class="small" title="Mark the caret position on the scan with a red dot" aria-pressed="false">Mark</button>
       <span class="spacer"></span>
       <label class="zoom-label"><span class="visually-hidden">Zoom</span><input id="zoom" type="range" min="25" max="300" value="100" title="Zoom"></label>
     </div>
-    <div class="image-scroll" id="image-scroll"><img id="page-image" alt="Scanned page image" hidden></div>
+    <div class="image-area">
+      <div class="image-scroll" id="image-scroll">
+        <div class="img-wrap" id="img-wrap">
+          <img id="page-image" alt="Scanned page image" hidden>
+          <div id="marker" class="marker" aria-hidden="true" hidden><i class="dot"></i></div>
+        </div>
+      </div>
+      <div id="edge-ticks" class="edge-ticks" aria-hidden="true" hidden>
+        <i class="etick n"></i><i class="etick s"></i><i class="etick w"></i><i class="etick e"></i>
+      </div>
+    </div>
   </section>
   <div class="gutter" id="gutter-2" role="separator" aria-orientation="vertical" aria-label="Resize page image" tabindex="0"></div>
 

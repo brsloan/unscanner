@@ -52,8 +52,19 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 .pane-toolbar { display: flex; align-items: center; gap: 0.3em; padding: 0.25em 0.45em; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; flex: none; }
 #page-indicator { min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }
 .zoom-label input { width: 90px; vertical-align: middle; }
+.image-area { position: relative; flex: 1; min-height: 0; display: flex; }
 .image-scroll { flex: 1; overflow: auto; background: #6b6b6b; text-align: center; line-height: 0; }
-#page-image { display: inline-block; margin: 6px; box-shadow: 0 0 8px rgba(0,0,0,0.5); background: #fff; max-width: none; }
+.img-wrap { position: relative; display: inline-block; margin: 6px; line-height: 0; }
+#page-image { display: block; box-shadow: 0 0 8px rgba(0,0,0,0.5); background: #fff; max-width: none; }
+/* caret marker: a red dot just left of the word the caret is on */
+.marker { position: absolute; width: 0; height: 0; pointer-events: none; transition: left 0.12s, top 0.12s; }
+.marker .dot { position: absolute; width: 8px; height: 8px; left: -4px; top: -4px; border-radius: 50%; background: #e11d48; box-shadow: 0 0 0 1px #fff; }
+/* short ticks on the outer edges of the preview pointing inward at the dot's row and column */
+.edge-ticks { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.etick { position: absolute; background: #e11d48; box-shadow: 0 0 0 1px rgba(255,255,255,0.8); }
+.etick.n, .etick.s { width: 2px; height: 12px; margin-left: -1px; }
+.etick.w, .etick.e { height: 2px; width: 12px; margin-top: -1px; }
+.etick.n { top: 0; } .etick.s { bottom: 0; } .etick.w { left: 0; } .etick.e { right: 0; }
 
 .editor, .source, .draft { flex: 1; overflow: auto; padding: 1em 1.3em; margin: 0; border: 0; background: var(--panel); font-family: Georgia, "Times New Roman", serif; font-size: 1.05rem; line-height: 1.5; }
 .source { font-family: ui-monospace, Consolas, monospace; font-size: 0.9rem; resize: none; white-space: pre; }

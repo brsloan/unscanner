@@ -74,6 +74,12 @@ amber needs review, grey pending, red error) and review pages opened first.
   edits (tables, footnotes), and "OCR draft" shows the baseline text.
 - **Page fields**: printed page number, starts/ends mid-paragraph flags, skip, notes. Save marks the
   page reviewed. Ctrl+S saves, Alt+Left/Right moves between pages, "Save & next" does both.
+- **Follow and Mark**: with Follow on, moving the caret through the editor scrolls the scan to keep
+  the matching line in view; with Mark on, a red dot sits just left of the word the caret is on, and
+  short red ticks on the four edges of the preview pane point at its row and column so the eye can
+  find it without anything cluttering the text. The two toggles are independent. Matching uses the word boxes from
+  the PDF text layer (or OCR boxes when there is none) and a few words of context around the caret,
+  so it also works when the transcription differs slightly from the OCR.
 - **Layout**: the scan opens scaled to fit; Fit and Fill buttons and a zoom slider sit next to the
   page arrows. Drag the borders between the page list, the scan and the editor to resize them
   (double-click a border to reset; the widths are remembered). Status and model notes appear in a

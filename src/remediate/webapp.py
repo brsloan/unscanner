@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .document import Document, parse_page_range, slugify
-from .pdf import cached_page_png, new_document
+from .pdf import cached_page_png, cached_page_words, new_document
 from .pipeline import apply_result, ensure_draft_text
 from .prompts import GUIDELINES
 from .sanitize import sanitize_fragment
@@ -63,6 +63,11 @@ class OpenRequest(BaseModel):
     title: str = ""
     author: str = ""
     language: str = "en"
+
+
+class LocateRequest(BaseModel):
+    context: list[str]
+    index: int
 
 
 class TranscribeRequest(BaseModel):
@@ -209,6 +214,30 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         except IndexError as e:
             raise HTTPException(404, str(e)) from e
         return FileResponse(cached_page_png(doc, n), media_type="image/png")
+
+    @app.get("/api/documents/{doc_id}/pages/{n}/words")
+    def get_page_words(doc_id: str, n: int) -> list[dict[str, Any]]:
+        """Word boxes on the scan (0-1000 page coordinates, reading order), for the follow/marker feature."""
+        doc = load_doc(doc_id)
+        try:
+            doc.page(n)
+        except IndexError as e:
+            raise HTTPException(404, str(e)) from e
+        return cached_page_words(doc, n)
+
+    @app.post("/api/documents/{doc_id}/pages/{n}/locate")
+    def locate_on_page(doc_id: str, n: int, req: LocateRequest) -> dict[str, Any]:
+        """Find the page word matching the editor caret: req.context are the words around the caret,
+        req.index is which of them the caret is on. Returns {found: bool, box?: {...}}."""
+        from .locate import locate
+
+        doc = load_doc(doc_id)
+        try:
+            doc.page(n)
+        except IndexError as e:
+            raise HTTPException(404, str(e)) from e
+        box = locate(cached_page_words(doc, n), req.context, req.index)
+        return {"found": box is not None, "box": box}
 
     @app.put("/api/documents/{doc_id}/pages/{n}")
     def put_page(doc_id: str, n: int, upd: PageUpdate) -> dict[str, Any]:
