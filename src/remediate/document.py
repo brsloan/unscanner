@@ -40,6 +40,9 @@ class Page:
     figures: list[Figure] = field(default_factory=list)
     model: str = ""
     usage: dict = field(default_factory=dict)
+    version: int = 0  # bumped on every stored change; the UI sends it back to detect conflicts
+    changed_by: str = ""  # "editor" (a person in the UI), "claude" (MCP set_page), or a model id
+    updated_at: str = ""
 
     @staticmethod
     def from_dict(d: dict) -> "Page":

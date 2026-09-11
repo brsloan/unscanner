@@ -95,7 +95,7 @@ OUTPUT_SCHEMA = {
 
 
 def build_user_prompt(page_index: int, n_pages: int, draft_text: str, prev_tail: str, next_head: str,
-                      doc_title: str, doc_language: str) -> str:
+                      doc_title: str, doc_language: str, instructions: str = "") -> str:
     parts = [
         f"Document: {doc_title or 'untitled'} (language: {doc_language}). "
         f"This is PDF page {page_index} of {n_pages}.",
@@ -108,6 +108,9 @@ def build_user_prompt(page_index: int, n_pages: int, draft_text: str, prev_tail:
         parts.append("DRAFT OCR TEXT OF THIS PAGE (may contain errors; the image is authoritative):\n" + draft_text)
     else:
         parts.append("No draft text is available for this page; transcribe from the image.")
+    if instructions and instructions.strip():
+        parts.append("ADDITIONAL INSTRUCTIONS FOR THIS PAGE (from the person reviewing the document):\n"
+                     + instructions.strip())
     parts.append("Return only the JSON object.")
     return "\n\n".join(parts)
 

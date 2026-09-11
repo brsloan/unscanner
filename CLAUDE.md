@@ -19,7 +19,8 @@ changes small, plain, and covered by tests.
 | `src/remediate/sanitize.py` | normalizes any HTML (editor or model) to the allowed semantic vocabulary |
 | `src/remediate/cli.py` | `remediate` command line |
 | `src/remediate/mcp_server.py` | MCP tools for agents |
-| `src/remediate/webapp.py` + `web/` | local web UI (FastAPI + one plain HTML/JS page, no build step) |
+| `src/remediate/webapp.py` + `web/` | local web UI (FastAPI + one plain HTML/JS page, no build step); mounts the MCP server at `/mcp` |
+| `src/remediate/session.py` | `work/session.json`: what the UI shows (for `get_current_view`) and agent navigation requests (`show_page`) |
 
 ## Invariants — do not break
 
@@ -33,6 +34,10 @@ changes small, plain, and covered by tests.
 5. `work/<doc>/doc.json` is the single source of truth; CLI, MCP server and web UI all read/write it
    through `Document`. Never store state anywhere else.
 6. The EPUB must pass epubcheck with zero errors (`remediate validate` runs it when Java is present).
+7. Every stored page change goes through `pipeline.apply_result`, which bumps `page.version` and sets
+   `page.changed_by` ("editor" for a person, "claude" for MCP `set_page`, a model id for batch runs).
+   The UI sends the version it loaded on save and the server answers 409 on a mismatch; never bypass
+   this, it is what lets a person and Claude edit the same document at the same time.
 
 ## Where to make common changes
 

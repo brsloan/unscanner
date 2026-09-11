@@ -4,6 +4,7 @@ document state the CLI and MCP server use. Run with `remediate ui`.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import shutil
 import threading
@@ -22,6 +23,7 @@ from .pdf import cached_page_png, new_document
 from .pipeline import apply_result, ensure_draft_text
 from .prompts import GUIDELINES
 from .sanitize import sanitize_fragment
+from .session import Session
 
 WEB_DIR = Path(__file__).parent / "web"
 
@@ -45,6 +47,15 @@ class PageUpdate(BaseModel):
     skip: bool = False
     notes: str = ""
     status: str = "done"  # a human save marks the page reviewed unless told otherwise
+    version: int | None = None  # version the editor loaded; a stale value is rejected with 409
+
+
+class ViewUpdate(BaseModel):
+    doc_id: str
+    page: int
+    label: str | None = None
+    selection: str = ""
+    dirty: bool = False
 
 
 class OpenRequest(BaseModel):
@@ -57,17 +68,36 @@ class OpenRequest(BaseModel):
 class TranscribeRequest(BaseModel):
     pages: str = "all"
     force: bool = False
+    instructions: str = ""
 
 
-def create_app(work_root: str | Path = "work", out_root: str | Path = "out") -> FastAPI:
+def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mount_mcp: bool = True) -> FastAPI:
     work_root = Path(work_root).resolve()
     out_root = Path(out_root).resolve()
     work_root.mkdir(parents=True, exist_ok=True)
     settings_path = work_root / "settings.json"
+    session = Session(work_root)
     jobs: dict[str, dict[str, Any]] = {}
     jobs_lock = threading.Lock()
 
-    app = FastAPI(title="remediate", docs_url="/api/docs")
+    # The MCP server shares this process (and the session file) when mounted at /mcp, so Claude
+    # Desktop / Claude Code can connect to http://127.0.0.1:<port>/mcp while the UI is open.
+    from . import mcp_server
+
+    mcp_server.configure(work_root, out_root)
+    mcp_app = mcp_server.server.streamable_http_app(streamable_http_path="/", stateless_http=True) if mount_mcp else None
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        if mcp_app is not None:
+            async with mcp_server.server.session_manager.run():
+                yield
+        else:
+            yield
+
+    app = FastAPI(title="remediate", docs_url="/api/docs", lifespan=lifespan)
+    if mcp_app is not None:
+        app.mount("/mcp", mcp_app)
 
     # ---------------------------------------------------------------- helpers
     def load_settings() -> dict[str, Any]:
@@ -88,7 +118,8 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out") -> 
     def page_view(p) -> dict[str, Any]:
         return {"index": p.index, "label": p.label, "status": p.status, "skip": p.skip,
                 "words": len((p.html or "").split()), "notes": p.notes,
-                "starts_mid_paragraph": p.starts_mid_paragraph, "ends_mid_paragraph": p.ends_mid_paragraph}
+                "starts_mid_paragraph": p.starts_mid_paragraph, "ends_mid_paragraph": p.ends_mid_paragraph,
+                "version": p.version, "changed_by": p.changed_by, "updated_at": p.updated_at}
 
     def doc_view(doc: Document) -> dict[str, Any]:
         return {"doc_id": Path(doc.workdir).name, **doc.summary(), "pages": [page_view(p) for p in doc.pages],
@@ -186,10 +217,13 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out") -> 
             p = doc.page(n)
         except IndexError as e:
             raise HTTPException(404, str(e)) from e
+        if upd.version is not None and upd.version != p.version:
+            raise HTTPException(409, f"page {n} was changed by {p.changed_by or 'someone else'} while you were "
+                                     f"editing (version {p.version}, you loaded {upd.version}); reload it first")
         clean = sanitize_fragment(upd.html)
         apply_result(p, {"label": upd.label, "skip": upd.skip, "starts_mid_paragraph": upd.starts_mid_paragraph,
                          "ends_mid_paragraph": upd.ends_mid_paragraph, "html": clean, "figures": [],
-                         "notes": upd.notes}, model="editor")
+                         "notes": upd.notes}, model="editor", changed_by="editor")
         if upd.status in ("done", "needs_review", "pending"):
             p.status = upd.status if (clean or upd.skip) else "pending"
         doc.save()
@@ -222,7 +256,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out") -> 
             try:
                 job["summary"] = transcribe_pages(doc, backend, idx, force=req.force,
                                                   workers=int(load_settings().get("workers") or 4),
-                                                  on_progress=progress)
+                                                  on_progress=progress, instructions=req.instructions)
                 job["status"] = "finished"
             except Exception as e:  # noqa: BLE001
                 job["status"] = "error"
@@ -284,6 +318,21 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out") -> 
         if not p.exists():
             raise HTTPException(404, "no such figure")
         return FileResponse(p, media_type="image/png")
+
+    # ---------------------------------------------------------------- collaboration session
+    @app.get("/api/session")
+    def get_session() -> dict[str, Any]:
+        """What the UI shows (view) and any navigation an agent requested (requested)."""
+        return session.get()
+
+    @app.put("/api/session/view")
+    def put_view(v: ViewUpdate) -> dict[str, Any]:
+        return session.update_view(v.doc_id, v.page, v.label, v.selection, v.dirty)
+
+    @app.delete("/api/session/requested")
+    def clear_requested() -> dict[str, Any]:
+        session.clear_request()
+        return session.get()
 
     # ---------------------------------------------------------------- settings / misc
     @app.get("/api/settings")

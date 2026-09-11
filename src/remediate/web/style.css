@@ -57,6 +57,10 @@ button:focus-visible, a:focus-visible, [contenteditable]:focus-visible { outline
 .editor [lang] { text-decoration: underline dotted var(--accent); }
 .editor sup a, .editor a { color: var(--accent); }
 
+.banner { display: flex; align-items: center; gap: 0.6em; padding: 0.4em 0.8em; background: #fef3c7; color: #78350f; border-bottom: 1px solid #f59e0b; }
+@media (prefers-color-scheme: dark) { .banner { background: #4a3a10; color: #fde68a; border-color: #b45309; } }
+.banner span { flex: 1; }
+.page-list .who { font-size: 0.75em; color: var(--accent); }
 .page-form { display: flex; align-items: center; gap: 0.8em; padding: 0.4em 0.8em; border-top: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
 .page-form .grow { flex: 1; display: flex; gap: 0.4em; } .page-form .grow input { flex: 1; }
 

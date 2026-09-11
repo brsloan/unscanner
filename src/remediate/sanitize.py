@@ -94,6 +94,52 @@ def sanitize_fragment(fragment: str) -> str:
         if not el.text_content().strip() and not list(el.iter("img", "br", "math")):
             el.drop_tree()
 
+    _wrap_top_level_inline(root)
     parts = [root.text or ""]
     parts += [lhtml.tostring(c, encoding="unicode", method="html") for c in root]
     return "".join(parts).strip()
+
+
+TOP_LEVEL_BLOCKS = BLOCKS | {"table", "figure", "hr", "math", "dl"}
+
+
+def _wrap_top_level_inline(root) -> None:
+    """Wrap runs of bare text / inline elements directly under the root into <p> elements, so a
+    fragment like "<strong>Title</strong> text<p>...</p>" has no phrasing content outside a block."""
+    items: list = []  # sequence of ("text", str) | ("el", element)
+    if root.text and root.text.strip():
+        items.append(("text", root.text))
+    root.text = None
+    for child in list(root):
+        items.append(("el", child))
+        if child.tail and child.tail.strip():
+            items.append(("text", child.tail))
+        child.tail = None
+    for _, child in [i for i in items if i[0] == "el"]:
+        root.remove(child)
+
+    run: list = []
+
+    def flush():
+        if not run:
+            return
+        p = lhtml.Element("p")
+        for kind, item in run:
+            if kind == "text":
+                if len(p):
+                    p[-1].tail = (p[-1].tail or "") + item
+                else:
+                    p.text = (p.text or "") + item
+            else:
+                p.append(item)
+        if p.text_content().strip() or list(p.iter("img", "br", "math")):
+            root.append(p)
+        run.clear()
+
+    for kind, item in items:
+        if kind == "el" and item.tag in TOP_LEVEL_BLOCKS:
+            flush()
+            root.append(item)
+        else:
+            run.append((kind, item))
+    flush()

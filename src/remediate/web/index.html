@@ -64,6 +64,11 @@
         <label><input type="checkbox" id="toggle-source"> HTML source</label>
         <label><input type="checkbox" id="toggle-draft"> OCR draft</label>
       </div>
+      <div id="banner" class="banner" role="status" aria-live="polite" hidden>
+        <span id="banner-text"></span>
+        <button id="banner-primary" type="button" class="primary">Reload</button>
+        <button id="banner-secondary" type="button">Keep my edits</button>
+      </div>
       <div id="editor" class="editor" contenteditable="true" spellcheck="true" aria-label="Page HTML" role="textbox" aria-multiline="true"></div>
       <textarea id="source" class="source" hidden aria-label="Page HTML source" spellcheck="false"></textarea>
       <pre id="draft" class="draft" hidden aria-label="OCR draft text"></pre>
@@ -104,6 +109,8 @@
     <p id="transcribe-backend"></p>
     <p><label>Pages <input name="pages" type="text" value="all" size="16"></label>
        <label><input name="force" type="checkbox"> redo pages already done</label></p>
+    <p><label>Extra instructions for this run<br>
+       <textarea name="instructions" rows="3" cols="60" placeholder="e.g. write every display equation as MathML; read the left column before the right"></textarea></label></p>
     <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Start</button></menu>
   </form>
 </dialog>

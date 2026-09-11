@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
@@ -31,16 +32,20 @@ def ensure_draft_text(doc: Document, indexes: list[int], save: bool = True) -> N
         doc.save()
 
 
-def page_prompt(doc: Document, index: int) -> str:
+def page_prompt(doc: Document, index: int, instructions: str = "") -> str:
     page = doc.page(index)
     prev_tail = doc.page(index - 1).draft_text[-TAIL_CHARS:] if index > 1 else ""
     next_head = doc.page(index + 1).draft_text[:HEAD_CHARS] if index < len(doc.pages) else ""
     return build_user_prompt(index, len(doc.pages), page.draft_text, prev_tail, next_head,
-                             doc.title, doc.language)
+                             doc.title, doc.language, instructions=instructions)
 
 
-def apply_result(page: Page, result: dict, model: str = "", usage: dict | None = None) -> None:
-    """Store a normalized transcription result on a page."""
+def apply_result(page: Page, result: dict, model: str = "", usage: dict | None = None,
+                 changed_by: str | None = None) -> None:
+    """Store a normalized transcription result on a page and stamp version/changed_by."""
+    page.version += 1
+    page.changed_by = changed_by or model or "unknown"
+    page.updated_at = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
     page.label = result.get("label") or page.label
     page.skip = bool(result.get("skip"))
     page.starts_mid_paragraph = bool(result.get("starts_mid_paragraph"))
@@ -58,10 +63,12 @@ def apply_result(page: Page, result: dict, model: str = "", usage: dict | None =
 
 
 def transcribe_pages(doc: Document, backend: Backend, indexes: list[int], force: bool = False,
-                     workers: int = 4, on_progress: Callable[[Page, str], None] | None = None) -> dict:
+                     workers: int = 4, on_progress: Callable[[Page, str], None] | None = None,
+                     instructions: str = "") -> dict:
     """Transcribe the given pages with `backend`. Skips pages already done unless force=True.
 
-    Returns a summary dict with counts and token usage.
+    `instructions` is free text appended to every page prompt (e.g. "the equations were transcribed
+    badly; write every display equation as MathML"). Returns a summary dict with counts and usage.
     """
     todo = [i for i in indexes if force or doc.page(i).status in ("pending", "error")]
     ensure_draft_text(doc, todo)
@@ -71,7 +78,7 @@ def transcribe_pages(doc: Document, backend: Backend, indexes: list[int], force:
 
     def work(i: int) -> tuple[int, dict | None, dict | None, str | None]:
         png = cached_page_png(doc, i).read_bytes()
-        prompt = page_prompt(doc, i)
+        prompt = page_prompt(doc, i, instructions)
         try:
             result, usage = backend.transcribe(png, prompt)
             return i, result, usage, None

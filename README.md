@@ -84,6 +84,28 @@ amber needs review, grey pending, red error) and review pages opened first.
 The UI is one FastAPI file (`webapp.py`) and one plain HTML/JS/CSS page under `web/`, with no build
 step, so a library can adapt it with Claude's help; see `CLAUDE.md`.
 
+### Working on a document together with Claude
+
+Keep the UI open and talk to Claude (Desktop or Code) in another window. Claude connects to the same
+document state through the MCP server, which is also mounted inside the UI at
+`http://127.0.0.1:8765/mcp` while `remediate ui` is running (the stdio server in `.mcp.json`
+works too; both share `work/session.json`).
+
+- The UI reports the page you are on, and any text you have selected, so "this table is wrong" or
+  "retry these equations" needs no page numbers. Claude calls `get_current_view` and sees the same
+  page image and HTML you see.
+- When Claude saves a page with `set_page`, your editor reloads within two seconds and shows a
+  banner "updated by claude". The page list marks it too. Click Save to confirm it as reviewed.
+- If you have unsaved edits when Claude changes the page, the banner offers to reload or keep yours.
+  The same protection works the other way: a save based on a stale copy is refused and you choose.
+- Claude can call `show_page` to bring a page up in your window ("look at page 12").
+- Claude can rerun the model on a range with extra guidance (`transcribe_pages` with
+  `instructions`), and the Transcribe dialog in the UI has the same "extra instructions" box.
+
+For Claude Desktop, add the running UI as a remote MCP server with URL `http://127.0.0.1:8765/mcp`,
+or use the stdio configuration shown below. For Claude Code, `.mcp.json` in this folder is picked up
+automatically, or run `claude mcp add --transport http remediate http://127.0.0.1:8765/mcp`.
+
 ## MCP server
 
 Start with `remediate serve` (stdio). `.mcp.json` in this folder already registers it for Claude Code;

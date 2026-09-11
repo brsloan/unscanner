@@ -1,8 +1,12 @@
-/* remediate UI: plain JS, no build step. Talks to the JSON API in webapp.py. */
+/* remediate UI: plain JS, no build step. Talks to the JSON API in webapp.py.
+   Collaboration: the UI reports what it shows to /api/session/view, polls the document every 2 s
+   so edits made by Claude (through the MCP server) appear, follows show_page requests, and refuses
+   to overwrite a page that changed underneath it (HTTP 409). */
 "use strict";
 
 const $ = (sel) => document.querySelector(sel);
-const state = { docs: [], doc: null, page: null, pageData: null, dirty: false, job: null, settings: null };
+const state = { docs: [], doc: null, page: null, pageData: null, dirty: false, job: null, settings: null,
+  lastRequestAt: 0, lastSelection: "", polling: null };
 
 // ------------------------------------------------------------------ api
 async function api(path, opts = {}) {
@@ -14,7 +18,7 @@ async function api(path, opts = {}) {
   if (!res.ok) {
     let msg = res.statusText;
     try { msg = (await res.json()).detail || msg; } catch (_) { /* ignore */ }
-    throw new Error(msg);
+    const err = new Error(msg); err.status = res.status; throw err;
   }
   return res.json();
 }
@@ -25,6 +29,19 @@ function setStatus(text, isError = false) {
   el.style.color = isError ? "var(--err)" : "";
 }
 
+// ------------------------------------------------------------------ banner (messages from Claude / conflicts)
+function showBanner(text, primary, secondary) {
+  const b = $("#banner");
+  $("#banner-text").textContent = text;
+  const p = $("#banner-primary"), s = $("#banner-secondary");
+  p.hidden = !primary; s.hidden = !secondary;
+  if (primary) { p.textContent = primary.label; p.onclick = () => { hideBanner(); primary.run(); }; }
+  if (secondary) { s.textContent = secondary.label; s.onclick = () => { hideBanner(); secondary.run(); }; }
+  b.hidden = false;
+}
+function hideBanner() { $("#banner").hidden = true; }
+$("#banner-primary").addEventListener("click", () => {});
+
 // ------------------------------------------------------------------ documents
 async function loadDocs(selectId) {
   state.docs = await api("/documents");
@@ -34,42 +51,53 @@ async function loadDocs(selectId) {
   if (selectId) { sel.value = selectId; await openDoc(selectId); }
 }
 
-async function openDoc(docId) {
+async function openDoc(docId, pageToShow) {
   if (!docId) { state.doc = null; renderPages(); return; }
   state.doc = await api(`/documents/${docId}`);
   localStorage.setItem("remediate.lastDoc", docId);
-  renderPages();
-  const s = state.doc.status_counts || {};
-  $("#doc-meta").textContent = `${state.doc.page_count} pages · ${s.done || 0} done · ${s.needs_review || 0} to review · ${s.pending || 0} pending`;
+  renderPages(); renderMeta();
   ["#btn-transcribe", "#btn-build", "#btn-validate"].forEach((b) => ($(b).disabled = false));
   $("#lnk-html").href = `/api/documents/${docId}/output/html`;
   $("#lnk-epub").href = `/api/documents/${docId}/output/epub`;
   if (state.doc.job) pollJob(state.doc.job.id);
-  const first = (state.doc.pages.find((p) => p.status === "needs_review") || state.doc.pages[0]);
-  if (first) loadPage(first.index);
+  const first = pageToShow || (state.doc.pages.find((p) => p.status === "needs_review") || state.doc.pages[0] || {}).index;
+  if (first) loadPage(first);
+  startPolling();
+}
+
+function renderMeta() {
+  const s = state.doc.status_counts || {};
+  $("#doc-meta").textContent = `${state.doc.page_count} pages · ${s.done || 0} done · ${s.needs_review || 0} to review · ${s.pending || 0} pending`;
+}
+
+function whoLabel(p) {
+  if (!p.changed_by || p.changed_by === "editor") return "";
+  return p.changed_by === "claude" ? "claude" : "model";
 }
 
 function renderPages() {
   const list = $("#page-list");
   if (!state.doc) { list.innerHTML = ""; return; }
   list.innerHTML = state.doc.pages.map((p) => `
-    <li data-page="${p.index}" aria-current="${p.index === state.page}" title="${escapeHtml(p.notes || p.status)}">
+    <li data-page="${p.index}" aria-current="${p.index === state.page}" title="${escapeHtml(p.notes || p.status)}${p.changed_by ? " · last changed by " + escapeHtml(p.changed_by) : ""}">
       <span class="dot ${p.status}" aria-hidden="true"></span>
       <span>Page ${p.index}${p.skip ? " (skipped)" : ""}</span>
+      <span class="who">${whoLabel(p)}</span>
       <span class="lbl">${p.label ? "p. " + escapeHtml(p.label) : ""}</span>
       <span class="visually-hidden">${p.status}</span>
     </li>`).join("");
 }
 
 // ------------------------------------------------------------------ pages
-async function loadPage(n) {
-  if (state.dirty && !confirm("Discard unsaved changes on this page?")) return;
+async function loadPage(n, opts = {}) {
+  if (state.dirty && !opts.force && !confirm("Discard unsaved changes on this page?")) return;
   const d = await api(`/documents/${state.doc.doc_id}/pages/${n}`);
   state.page = n; state.pageData = d; state.dirty = false;
+  hideBanner();
   $("#page-indicator").textContent = `PDF page ${n} of ${d.of}${d.label ? " · printed " + d.label : ""}`;
   const img = $("#page-image");
   img.hidden = false;
-  img.src = `/documents/${state.doc.doc_id}/pages/${n}/image`.replace(/^/, "/api");
+  img.src = `/api/documents/${state.doc.doc_id}/pages/${n}/image`;
   $("#editor").innerHTML = d.html || "";
   $("#source").value = d.html || "";
   $("#draft").textContent = d.draft_text || "(no draft text)";
@@ -80,34 +108,107 @@ async function loadPage(n) {
   $("#f-notes").value = d.notes || "";
   $("#btn-save").disabled = false; $("#btn-save-next").disabled = false;
   renderPages();
-  setStatus(d.status === "needs_review" && d.notes ? "Model note: " + d.notes : `Page ${n}: ${d.status}`);
+  if (!opts.silent) {
+    const who = d.changed_by && d.changed_by !== "editor" ? ` · last changed by ${d.changed_by}` : "";
+    setStatus(d.status === "needs_review" && d.notes ? "Model note: " + d.notes : `Page ${n}: ${d.status}${who}`);
+  }
   $("#editor").scrollTop = 0;
+  reportView();
 }
 
 function currentHtml() {
   return $("#toggle-source").checked ? $("#source").value : $("#editor").innerHTML;
 }
 
-async function savePage(andNext = false) {
+async function savePage(andNext = false, overwrite = false) {
   if (!state.doc || !state.page) return;
   const body = {
     html: currentHtml(), label: $("#f-label").value.trim() || null,
     starts_mid_paragraph: $("#f-starts").checked, ends_mid_paragraph: $("#f-ends").checked,
     skip: $("#f-skip").checked, notes: $("#f-notes").value.trim(), status: "done",
+    version: overwrite ? null : state.pageData.version,
   };
   try {
     const saved = await api(`/documents/${state.doc.doc_id}/pages/${state.page}`, { method: "PUT", body });
-    state.dirty = false;
+    state.dirty = false; state.pageData = { ...state.pageData, ...saved };
     $("#editor").innerHTML = saved.html; $("#source").value = saved.html;
     const p = state.doc.pages.find((x) => x.index === state.page);
     Object.assign(p, saved);
     renderPages();
     setStatus(`Saved page ${state.page} (${saved.words} words)`);
+    reportView();
     if (andNext && state.page < state.doc.page_count) loadPage(state.page + 1);
-  } catch (e) { setStatus("Save failed: " + e.message, true); }
+  } catch (e) {
+    if (e.status === 409) {
+      showBanner(e.message,
+        { label: "Reload their version", run: () => loadPage(state.page, { force: true }) },
+        { label: "Overwrite with mine", run: () => savePage(andNext, true) });
+    } else setStatus("Save failed: " + e.message, true);
+  }
 }
 
-function markDirty() { state.dirty = true; }
+function markDirty() { if (!state.dirty) { state.dirty = true; reportView(); } }
+
+// ------------------------------------------------------------------ collaboration: report view, poll, follow
+let reportTimer = null;
+function reportView() {
+  if (!state.doc || !state.page) return;
+  clearTimeout(reportTimer);
+  reportTimer = setTimeout(() => {
+    api("/session/view", { method: "PUT", body: {
+      doc_id: state.doc.doc_id, page: state.page, label: $("#f-label").value.trim() || null,
+      selection: state.lastSelection, dirty: state.dirty } }).catch(() => {});
+  }, 300);
+}
+
+document.addEventListener("selectionchange", () => {
+  const sel = window.getSelection();
+  const ed = $("#editor");
+  let text = "";
+  if (sel && !sel.isCollapsed && ed.contains(sel.anchorNode)) text = sel.toString().slice(0, 2000);
+  if (text !== state.lastSelection) { state.lastSelection = text; reportView(); }
+});
+
+function startPolling() {
+  if (state.polling) return;
+  state.polling = setInterval(poll, 2000);
+}
+
+async function poll() {
+  if (!state.doc || document.hidden) return;
+  try {
+    const s = await api("/session");
+    const req = s.requested;
+    if (req && req.at > state.lastRequestAt) {
+      state.lastRequestAt = req.at;
+      await api("/session/requested", { method: "DELETE" });
+      const go = async () => {
+        if (req.doc_id !== state.doc.doc_id) { $("#doc-select").value = req.doc_id; await openDoc(req.doc_id, req.page); }
+        else await loadPage(req.page, { force: true });
+        if (req.note) setStatus("Claude: " + req.note);
+      };
+      if (state.dirty) showBanner(`Claude wants to show you page ${req.page}${req.note ? ": " + req.note : ""}. You have unsaved edits.`,
+        { label: "Go (discard edits)", run: go }, { label: "Stay", run: () => {} });
+      else await go();
+    }
+    const fresh = await api(`/documents/${state.doc.doc_id}`);
+    state.doc.pages = fresh.pages; state.doc.status_counts = fresh.status_counts;
+    renderPages(); renderMeta();
+    const cur = fresh.pages.find((p) => p.index === state.page);
+    if (cur && state.pageData && cur.version !== state.pageData.version && $("#banner").hidden) {
+      const who = cur.changed_by || "someone";
+      if (!state.dirty) {
+        await loadPage(state.page, { force: true, silent: true });
+        showBanner(`Page ${state.page} was updated by ${who}. Check it and Save to confirm.`,
+          { label: "OK", run: () => {} }, null);
+      } else {
+        showBanner(`Page ${state.page} was changed by ${who} while you were editing.`,
+          { label: "Reload their version", run: () => loadPage(state.page, { force: true }) },
+          { label: "Keep my edits", run: () => { state.pageData.version = cur.version; } });
+      }
+    }
+  } catch (_) { /* server briefly unavailable; try again next tick */ }
+}
 
 // ------------------------------------------------------------------ editor commands
 document.execCommand("defaultParagraphSeparator", false, "p");
@@ -145,7 +246,7 @@ $("#toggle-source").addEventListener("change", (e) => {
   const src = e.target.checked;
   if (src) { $("#source").value = $("#editor").innerHTML; } else { $("#editor").innerHTML = $("#source").value; }
   $("#source").hidden = !src; $("#editor").hidden = src;
-  if (src) $("#toggle-draft").checked = false, $("#draft").hidden = true;
+  if (src) { $("#toggle-draft").checked = false; $("#draft").hidden = true; }
 });
 $("#toggle-draft").addEventListener("change", (e) => {
   $("#draft").hidden = !e.target.checked;
@@ -201,7 +302,8 @@ $("#btn-transcribe").addEventListener("click", async () => {
 $("#form-transcribe").addEventListener("submit", async (e) => {
   const f = new FormData(e.target);
   try {
-    const job = await api(`/documents/${state.doc.doc_id}/transcribe`, { method: "POST", body: { pages: f.get("pages") || "all", force: !!f.get("force") } });
+    const job = await api(`/documents/${state.doc.doc_id}/transcribe`, { method: "POST",
+      body: { pages: f.get("pages") || "all", force: !!f.get("force"), instructions: f.get("instructions") || "" } });
     pollJob(job.id);
   } catch (err) { setStatus("Could not start: " + err.message, true); }
 });
@@ -211,18 +313,16 @@ async function pollJob(jobId) {
   state.job = job;
   if (job.status === "running") {
     setStatus(`Transcribing with ${job.model}: ${job.completed}/${job.requested} pages${job.errors ? ", " + job.errors + " errors" : ""} — ${job.last}`);
-    const fresh = await api(`/documents/${state.doc.doc_id}`);
-    state.doc.pages = fresh.pages; state.doc.status_counts = fresh.status_counts; renderPages();
     setTimeout(() => pollJob(jobId), 2000);
   } else {
     const fresh = await api(`/documents/${state.doc.doc_id}`);
-    state.doc = fresh; renderPages();
+    state.doc = fresh; renderPages(); renderMeta();
     if (job.status === "error") setStatus("Transcription failed: " + job.error, true);
     else {
       const u = job.summary.usage || {};
       setStatus(`Transcribed ${job.summary.done} pages (${job.summary.errors} errors) · ${u.input_tokens || 0} in / ${u.output_tokens || 0} out tokens`);
     }
-    if (state.page && !state.dirty) loadPage(state.page);
+    if (state.page && !state.dirty) loadPage(state.page, { force: true });
   }
 }
 
