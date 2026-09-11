@@ -68,6 +68,8 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 .crop-box .n { left: calc(50% - 5px); top: -6px; cursor: ns-resize; } .crop-box .s { left: calc(50% - 5px); bottom: -6px; cursor: ns-resize; }
 .crop-box .w { left: -6px; top: calc(50% - 5px); cursor: ew-resize; } .crop-box .e { right: -6px; top: calc(50% - 5px); cursor: ew-resize; }
 .image-scroll.drawing, .image-scroll.drawing #page-image { cursor: crosshair; }
+/* while drawing, the first click lands on the scan even over an existing crop box */
+.image-scroll.drawing .crop-box { pointer-events: none; }
 .hint { color: var(--muted); font-size: 0.9em; }
 /* short ticks on the outer edges of the preview pointing inward at the dot's row and column */
 .edge-ticks { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }

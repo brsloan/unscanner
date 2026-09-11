@@ -718,12 +718,21 @@ window.addEventListener("mousemove", (e) => {
   if (!cropDrag) return;
   const p = pagePoint(e), dx = p.x - cropDrag.start.x, dy = p.y - cropDrag.start.y;
   const b = { ...cropDrag.box }, m = cropDrag.mode, MIN = 8;
-  if (m === "move") { const w = b.x1 - b.x0, h = b.y1 - b.y0; b.x0 = Math.max(0, Math.min(1000 - w, b.x0 + dx)); b.y0 = Math.max(0, Math.min(1000 - h, b.y0 + dy)); b.x1 = b.x0 + w; b.y1 = b.y0 + h; }
-  if (m === "draw") { b.x0 = Math.min(cropDrag.start.x, p.x); b.x1 = Math.max(cropDrag.start.x, p.x); b.y0 = Math.min(cropDrag.start.y, p.y); b.y1 = Math.max(cropDrag.start.y, p.y); }
-  if (m.includes("w")) b.x0 = Math.min(b.x0 + dx, b.x1 - MIN);
-  if (m.includes("e")) b.x1 = Math.max(b.x1 + dx, b.x0 + MIN);
-  if (m.includes("n")) b.y0 = Math.min(b.y0 + dy, b.y1 - MIN);
-  if (m.includes("s")) b.y1 = Math.max(b.y1 + dy, b.y0 + MIN);
+  // The three modes are exclusive: "draw" anchors the first click and stretches the opposite corner to
+  // the cursor; "move" shifts the whole box; anything else is a resize handle (n/s/e/w/ne/...). Keep the
+  // resize checks out of the draw branch: "draw" contains the letter w, which used to drag the left edge.
+  if (m === "draw") {
+    const s = cropDrag.start;
+    b.x0 = Math.min(s.x, p.x); b.x1 = Math.max(s.x, p.x); b.y0 = Math.min(s.y, p.y); b.y1 = Math.max(s.y, p.y);
+  } else if (m === "move") {
+    const w = b.x1 - b.x0, h = b.y1 - b.y0;
+    b.x0 = Math.max(0, Math.min(1000 - w, b.x0 + dx)); b.y0 = Math.max(0, Math.min(1000 - h, b.y0 + dy)); b.x1 = b.x0 + w; b.y1 = b.y0 + h;
+  } else {
+    if (m.includes("w")) b.x0 = Math.min(b.x0 + dx, b.x1 - MIN);
+    if (m.includes("e")) b.x1 = Math.max(b.x1 + dx, b.x0 + MIN);
+    if (m.includes("n")) b.y0 = Math.min(b.y0 + dy, b.y1 - MIN);
+    if (m.includes("s")) b.y1 = Math.max(b.y1 + dy, b.y0 + MIN);
+  }
   ["x0", "y0", "x1", "y1"].forEach((k) => (b[k] = Math.max(0, Math.min(1000, b[k]))));
   cropDrag.current = b; cropDrag.moved = true;
   showCropBox(b);
