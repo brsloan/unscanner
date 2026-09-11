@@ -133,6 +133,88 @@ function caretContext(before = 4, after = 4) {
   return { context: words.slice(lo, hi).map((w) => w.t), index: i - lo };
 }
 
+/* Reverse direction: click a word on the scan to jump to it in the editor. */
+const pageWordsCache = {};
+async function pageWords() {
+  const key = state.doc.doc_id + "/" + state.page;
+  if (!pageWordsCache[key]) pageWordsCache[key] = await api(`/documents/${state.doc.doc_id}/pages/${state.page}/words`);
+  return pageWordsCache[key];
+}
+const normTok = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "");
+function tokMatch(a, b) {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const [s, l] = a.length <= b.length ? [a, b] : [b, a];
+  return s.length >= 4 && l.startsWith(s);
+}
+/* Same alignment as locate.py: slide `context` over `words`, return the index aligned with context[index]. */
+function alignWords(words, context, index) {
+  const q = context.map(normTok), need = Math.min(3, q.filter(Boolean).length);
+  let best = 0, bestPos = -1;
+  for (let start = -index; start < words.length - index; start++) {
+    let score = 0;
+    for (let j = 0; j < q.length; j++) { const k = start + j; if (q[j] && k >= 0 && k < words.length && tokMatch(q[j], words[k])) score++; }
+    const pos = start + index;
+    const bonus = pos >= 0 && pos < words.length && tokMatch(q[index], words[pos]) ? 0.5 : 0;
+    if (score + bonus > best && pos >= 0 && pos < words.length) { best = score + bonus; bestPos = pos; }
+  }
+  return best >= need ? bestPos : -1;
+}
+/* Editor words with their character ranges, plus the text-node segments to map a range back to the DOM. */
+function editorWords(ed) {
+  const walker = document.createTreeWalker(ed, NodeFilter.SHOW_TEXT);
+  let text = "", prevBlock = null, node; const segs = [];
+  while ((node = walker.nextNode())) {
+    const block = (node.parentElement && node.parentElement.closest(BLOCK_SEL)) || ed;
+    if (prevBlock && block !== prevBlock) text += " ";
+    prevBlock = block;
+    segs.push({ node, start: text.length, end: text.length + node.data.length });
+    text += node.data;
+  }
+  const re = /\S+/g; const words = []; let m;
+  while ((m = re.exec(text))) words.push({ t: m[0], s: m.index, e: m.index + m[0].length });
+  const point = (off) => { const seg = segs.find((g) => off >= g.start && off <= g.end) || segs[segs.length - 1]; return seg ? [seg.node, Math.min(seg.node.data.length, off - seg.start)] : null; };
+  return { words, point };
+}
+async function jumpToScanWord(evt) {
+  if (!state.doc || !state.page || !img.naturalWidth || $("#toggle-source").checked) return;
+  const rect = img.getBoundingClientRect();
+  const px = (evt.clientX - rect.left) / rect.width * 1000, py = (evt.clientY - rect.top) / rect.height * 1000;
+  if (px < 0 || px > 1000 || py < 0 || py > 1000) return;
+  let words;
+  try { words = await pageWords(); } catch (_) { return; }
+  // Word under the pointer, else the nearest word on that line, else the nearest word within reach.
+  let i = words.findIndex((w) => px >= w.x0 && px <= w.x1 && py >= w.y0 && py <= w.y1);
+  if (i < 0) {
+    let bestD = 30;
+    words.forEach((w, k) => {
+      const onLine = py >= w.y0 && py <= w.y1;
+      const dx = px < w.x0 ? w.x0 - px : px > w.x1 ? px - w.x1 : 0;
+      const dy = py < w.y0 ? w.y0 - py : py > w.y1 ? py - w.y1 : 0;
+      const d = onLine ? dx : Math.hypot(dx, dy) + 10;
+      if (d < bestD) { bestD = d; i = k; }
+    });
+  }
+  if (i < 0) return;
+  const lo = Math.max(0, i - 4), hi = Math.min(words.length, i + 5);
+  const context = words.slice(lo, hi).map((w) => w.t || w.text);
+  const ed = $("#editor");
+  const { words: ew, point } = editorWords(ed);
+  const j = alignWords(ew.map((w) => normTok(w.t)), context, i - lo);
+  if (j < 0) { setStatus(`"${words[i].text}" not found in the transcription for this page.`); return; }
+  const a = point(ew[j].s), b = point(ew[j].e);
+  if (!a || !b) return;
+  const range = document.createRange(); range.setStart(a[0], a[1]); range.setEnd(b[0], b[1]);
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  ed.focus({ preventScroll: true });
+  const wr = range.getBoundingClientRect(), er = ed.getBoundingClientRect();
+  // Instant rather than smooth: a smooth scroll here is cancelled by the selection/focus change in some browsers.
+  ed.scrollTop = ed.scrollTop + (wr.top - er.top) - er.height / 2 + wr.height / 2;
+  lastLocateKey = state.page + "|" + context.join(" ") + "|" + (i - lo);  // no need to re-locate what we just clicked
+  if (state.mark) placeMarker(words[i]);
+}
+scroller.addEventListener("click", jumpToScanWord);
+
 let locateTimer = null, lastLocateKey = "";
 function locateCaret() {
   if (!state.doc || !state.page || (!state.follow && !state.mark)) { marker.hidden = true; edgeTicks.hidden = true; return; }

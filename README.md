@@ -77,7 +77,8 @@ amber needs review, grey pending, red error) and review pages opened first.
 - **Follow and Mark**: with Follow on, moving the caret through the editor scrolls the scan to keep
   the matching line in view; with Mark on, a red dot sits just left of the word the caret is on, and
   short red ticks on the four edges of the preview pane point at its row and column so the eye can
-  find it without anything cluttering the text. The two toggles are independent. Matching uses the word boxes from
+  find it without anything cluttering the text. The two toggles are independent. The link works both ways: clicking a word on the scan selects
+  it in the editor and scrolls it into view. Matching uses the word boxes from
   the PDF text layer (or OCR boxes when there is none) and a few words of context around the caret,
   so it also works when the transcription differs slightly from the OCR.
 - **Layout**: the scan opens scaled to fit; Fit and Fill buttons and a zoom slider sit next to the
