@@ -71,6 +71,20 @@ def test_anthropic_request_shape():
     assert usage["cache_read_input_tokens"] == 1200
 
 
+def test_anthropic_missing_key_is_a_clear_backend_error(monkeypatch):
+    import pytest
+
+    from remediate.backends.base import BackendError
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    be = AnthropicBackend(model="claude-haiku-4-5", client=anthropic.Anthropic(api_key=None, max_retries=0))
+    with pytest.raises(BackendError, match="API key"):
+        be.describe_image(b"\x89PNG", "alt text please")
+    with pytest.raises(BackendError, match="API key"):
+        be.transcribe(b"\x89PNG", "This is PDF page 1 of 1.")
+
+
 def test_anthropic_haiku_omits_effort_and_fallbacks():
     seen = {}
 

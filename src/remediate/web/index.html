@@ -90,6 +90,23 @@
       <label id="notes-label" for="f-notes">Notes</label>
       <textarea id="f-notes" rows="2" placeholder="Model notes appear here; add anything a reviewer should know. A page with notes stays marked for review."></textarea>
     </section>
+    <section id="figure-panel" class="figure-panel" aria-labelledby="figure-label" hidden>
+      <div class="figure-row">
+        <strong id="figure-label">Figure</strong>
+        <label>Align
+          <select id="fig-align" aria-label="Figure alignment"><option value="">default</option><option value="align-left">left</option><option value="align-center">center</option><option value="align-right">right</option></select></label>
+        <label title="Let text flow around the figure (left or right alignment)"><input id="fig-wrap" type="checkbox"> wrap text</label>
+        <span class="spacer"></span>
+        <button id="fig-close" type="button" class="small" title="Close figure panel">Close</button>
+      </div>
+      <div class="figure-row">
+        <label class="grow" for="fig-alt">Alt text</label>
+      </div>
+      <div class="figure-row">
+        <textarea id="fig-alt" rows="2" placeholder="Describe what the image shows and why it matters. Leave empty only for purely decorative images."></textarea>
+        <button id="fig-ai" type="button" title="Ask the configured model to write alt text from the cropped image">AI autofill</button>
+      </div>
+    </section>
     <form id="page-form" class="page-form" onsubmit="return false">
       <label>p. <input id="f-label" type="text" size="5" title="Printed page number"></label>
       <label title="First paragraph continues from the previous page"><input id="f-starts" type="checkbox"> starts mid-¶</label>

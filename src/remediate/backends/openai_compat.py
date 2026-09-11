@@ -80,3 +80,20 @@ class OpenAICompatBackend(Backend):
             return normalize_result(parse_model_json(text)), usage
         except ValueError as e:
             raise BackendError(f"model returned invalid JSON: {e}") from e
+
+    def describe_image(self, image_png: bytes, prompt: str) -> str:
+        img = base64.standard_b64encode(image_png).decode()
+        body = {
+            "model": self.model, "temperature": self.temperature, "max_tokens": 600,
+            "messages": [{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img}"}},
+                {"type": "text", "text": prompt},
+            ]}],
+        }
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        try:
+            r = self.client.post(f"{self.base_url}/chat/completions", json=body, headers=headers)
+            r.raise_for_status()
+            return (r.json()["choices"][0]["message"]["content"] or "").strip()
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
+            raise BackendError(f"describe request failed: {e}") from e

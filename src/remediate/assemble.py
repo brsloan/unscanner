@@ -16,6 +16,7 @@ from lxml import etree, html as lhtml
 
 from .document import Document, Page, slugify
 from .pdf import cached_page_png, crop_png
+from .sanitize import ALLOWED_CLASSES
 
 TEXT_BLOCKS = {"p", "li", "dd", "dt", "h1", "h2", "h3", "h4", "h5", "h6"}
 CONTAINERS = {"blockquote", "ul", "ol", "section", "aside", "dl", "div"}
@@ -33,6 +34,10 @@ div[role="doc-pagebreak"] { display: block; width: max-content; margin: 1.5em 0 
 aside[role="doc-footnote"] { font-size: 0.9em; border-top: 1px solid #8a8a8a; margin-top: 1em; padding-top: 0.5em; }
 figure { margin: 1.5em 0; } figure img { max-width: 100%; height: auto; }
 figcaption { font-size: 0.9em; font-style: italic; }
+figure.align-center { text-align: center; } figure.align-right { text-align: right; }
+figure.wrap.align-left { float: left; max-width: 45%; margin: 0.3em 1.2em 0.8em 0; }
+figure.wrap.align-right { float: right; max-width: 45%; margin: 0.3em 0 0.8em 1.2em; }
+h1, h2, h3, h4, h5, h6, table, [role="doc-pagebreak"] { clear: both; }
 table { border-collapse: collapse; margin: 1em 0; } th, td { border: 1px solid #8a8a8a; padding: 0.3em 0.6em; }
 nav.page-list ol { columns: 6 5em; list-style: none; padding: 0; }
 .skip-link { position: absolute; left: -999px; } .skip-link:focus { left: 1em; top: 1em; }
@@ -257,9 +262,15 @@ def strip_disallowed(main, warnings: list[str]) -> None:
     for el in main.iter():
         if not isinstance(el.tag, str):
             continue
-        for attr in ("style", "class", "align", "width", "height", "bgcolor", "font"):
-            if attr in el.attrib and not (attr == "class" and el.get("class") == "figure-description"):
+        for attr in ("style", "align", "width", "height", "bgcolor", "font"):
+            if attr in el.attrib:
                 del el.attrib[attr]
+        if "class" in el.attrib:
+            keep = [c for c in el.get("class", "").split() if c in ALLOWED_CLASSES]
+            if keep:
+                el.set("class", " ".join(keep))
+            else:
+                del el.attrib["class"]
         if el.tag in ("b", "i", "font", "center"):
             el.tag = {"b": "strong", "i": "em"}.get(el.tag, "span")
     for el in list(main.iter("script", "style", "link", "meta")):

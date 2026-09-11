@@ -72,6 +72,12 @@ amber needs review, grey pending, red error) and review pages opened first.
   styles, fonts or layout tables: everything saved goes through the same sanitizer as model output
   and is reduced to the accessible vocabulary. An "HTML source" toggle gives a raw view for precise
   edits (tables, footnotes), and "OCR draft" shows the baseline text.
+- **Figures**: click a figure in the editor to open the figure panel above the save bar: alt text
+  (with an "AI autofill" button that sends the cropped image to the configured model and fills in a
+  suggestion, or leaves it empty when the model judges the image decorative), alignment (left,
+  center, right) and "wrap text" for left/right-aligned figures. Placement is stored as the classes
+  `align-left|center|right` and `wrap` on the `<figure>`; these are the only classes the sanitizer
+  keeps, and the output CSS styles them in both HTML and EPUB.
 - **Page fields**: printed page number, starts/ends mid-paragraph flags, skip, notes. Save marks the
   page reviewed. Ctrl+S saves, Alt+Left/Right moves between pages, "Save & next" does both.
 - **Follow and Mark**: with Follow on, moving the caret through the editor scrolls the scan to keep

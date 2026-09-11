@@ -17,6 +17,13 @@ _EFFORT_MODELS = ("claude-opus-5", "claude-opus-4", "claude-sonnet-5", "claude-s
 _FALLBACK_MODELS = ("claude-opus-5", "claude-fable")
 
 
+def _friendly(e: Exception) -> str:
+    msg = str(e)
+    if "authentication" in msg.lower() or "api_key" in msg.lower():
+        return "no Anthropic API key configured: set it in Settings or in the ANTHROPIC_API_KEY environment variable"
+    return f"Anthropic client error: {msg}"
+
+
 class AnthropicBackend(Backend):
     name = "anthropic"
 
@@ -80,6 +87,8 @@ class AnthropicBackend(Backend):
                     time.sleep(5 * (attempt + 1))
                     continue
                 raise BackendError(f"connection error: {e}") from e
+            except (anthropic.AnthropicError, TypeError) as e:  # e.g. no API key configured
+                raise BackendError(_friendly(e)) from e
         if resp is None:
             raise BackendError("gave up after repeated rate limiting")
 
@@ -100,3 +109,30 @@ class AnthropicBackend(Backend):
             return normalize_result(parse_model_json(text)), usage
         except ValueError as e:
             raise BackendError(f"model returned invalid JSON: {e}") from e
+
+    def describe_image(self, image_png: bytes, prompt: str) -> str:
+        img = base64.standard_b64encode(image_png).decode()
+        kwargs: dict = dict(
+            model=self.model,
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": img}},
+                    {"type": "text", "text": prompt},
+                ],
+            }],
+        )
+        if self.model.startswith(_EFFORT_MODELS):
+            kwargs["output_config"] = {"effort": "low"}
+        try:
+            resp = self.client.messages.create(**kwargs)
+        except anthropic.APIStatusError as e:
+            raise BackendError(f"Anthropic API error {e.status_code}: {e.message}") from e
+        except anthropic.APIConnectionError as e:
+            raise BackendError(f"connection error: {e}") from e
+        except (anthropic.AnthropicError, TypeError) as e:
+            raise BackendError(_friendly(e)) from e
+        if resp.stop_reason == "refusal":
+            raise BackendError("model declined to describe the image")
+        return "".join(b.text for b in resp.content if b.type == "text").strip()

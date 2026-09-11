@@ -84,6 +84,8 @@ def transcribe_pages(doc: Document, backend: Backend, indexes: list[int], force:
             return i, result, usage, None
         except BackendError as e:
             return i, None, None, str(e)
+        except Exception as e:  # noqa: BLE001 - keep one bad page from killing the whole run
+            return i, None, None, f"{type(e).__name__}: {e}"
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
         futures = [ex.submit(work, i) for i in todo]

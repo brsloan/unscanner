@@ -67,6 +67,11 @@ class OpenRequest(BaseModel):
     language: str = "en"
 
 
+class DescribeRequest(BaseModel):
+    caption: str = ""
+    context: str = ""
+
+
 class LocateRequest(BaseModel):
     context: list[str]
     index: int
@@ -203,7 +208,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         ensure_draft_text(doc, [n])
         return {
             **page_view(p), "html": p.html, "draft_text": p.draft_text, "draft_source": p.draft_source,
-            "model": p.model, "of": len(doc.pages),
+            "model": p.model, "of": len(doc.pages), "figures": [asdict(f) for f in p.figures],
             "previous_page_ends_with": doc.page(n - 1).draft_text[-300:] if n > 1 else "",
             "next_page_starts_with": doc.page(n + 1).draft_text[:200] if n < len(doc.pages) else "",
         }
@@ -233,6 +238,39 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         if fig is None or not fig.bbox:
             raise HTTPException(404, "no crop box for this figure")
         return Response(crop_png(cached_page_png(doc, n).read_bytes(), fig.bbox), media_type="image/png")
+
+    @app.post("/api/documents/{doc_id}/pages/{n}/figures/{fid}/describe")
+    def describe_figure(doc_id: str, n: int, fid: str, req: DescribeRequest) -> dict[str, Any]:
+        """Ask the configured model for alt text for a figure crop. Returns {alt, decorative}."""
+        from .backends import BackendError
+        from .backends.base import ALT_TEXT_PROMPT
+        from .pdf import crop_png
+
+        doc = load_doc(doc_id)
+        try:
+            p = doc.page(n)
+        except IndexError as e:
+            raise HTTPException(404, str(e)) from e
+        fig = next((f for f in p.figures if f.id == fid), None)
+        if fig is None or not fig.bbox:
+            raise HTTPException(404, "no crop box for this figure")
+        try:
+            backend = make_backend_from_settings()
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(400, f"backend not configured: {e}") from e
+        prompt = ALT_TEXT_PROMPT
+        if req.caption.strip():
+            prompt += f"\nCaption printed with the image: {req.caption.strip()}"
+        if req.context.strip():
+            prompt += f"\nText near the image on the page: {req.context.strip()[:1500]}"
+        try:
+            text = backend.describe_image(crop_png(cached_page_png(doc, n).read_bytes(), fig.bbox), prompt)
+        except BackendError as e:
+            raise HTTPException(502, str(e)) from e
+        except Exception as e:  # noqa: BLE001 - surface the reason to the UI instead of a bare 500
+            raise HTTPException(502, f"{type(e).__name__}: {e}") from e
+        decorative = text.strip().upper().startswith("DECORATIVE")
+        return {"alt": "" if decorative else text.strip(), "decorative": decorative, "model": backend.model}
 
     @app.get("/api/documents/{doc_id}/pages/{n}/words")
     def get_page_words(doc_id: str, n: int) -> list[dict[str, Any]]:

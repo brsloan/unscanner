@@ -85,6 +85,29 @@ def test_figures_survive_editor_saves_and_can_be_previewed(client, tmp_path):
     assert 'src="figures/p001-1-1.png"' in client.get(f"/api/documents/{doc_id}/preview").text
 
 
+def test_figure_alt_autofill_and_layout_classes(client, tmp_path, monkeypatch):
+    class DescribingBackend(FakeBackend):
+        def describe_image(self, image_png, prompt):
+            assert image_png[:4] == b"\x89PNG" and "Caption printed with the image: Figure 1" in prompt
+            return "A grey rectangle standing in for a chart."
+
+    monkeypatch.setattr("remediate.backends.make_backend", lambda *a, **k: DescribingBackend())
+    pdf = make_pdf(tmp_path / "alt sample.pdf")
+    doc_id = client.post("/api/documents", json={"pdf_path": str(pdf)}).json()["doc_id"]
+    client.put(f"/api/documents/{doc_id}/pages/1", json={
+        "html": '<figure class="align-right wrap junk" style="x"><img src="fig:1-1" alt=""><figcaption>Figure 1</figcaption></figure><p>Body.</p>',
+        "figures": [{"id": "1-1", "alt": "", "bbox": [100, 100, 300, 300], "caption": "Figure 1"}]})
+    page = client.get(f"/api/documents/{doc_id}/pages/1").json()
+    assert '<figure class="align-right wrap">' in page["html"]  # layout classes kept, junk dropped
+    r = client.post(f"/api/documents/{doc_id}/pages/1/figures/1-1/describe", json={"caption": "Figure 1", "context": "Body."})
+    assert r.status_code == 200 and r.json()["alt"].startswith("A grey rectangle") and r.json()["decorative"] is False
+    assert client.post(f"/api/documents/{doc_id}/pages/1/figures/zzz/describe", json={}).status_code == 404
+    # the built HTML keeps the placement classes and carries CSS for them
+    client.post(f"/api/documents/{doc_id}/build")
+    out = client.get(f"/api/documents/{doc_id}/preview").text
+    assert 'class="align-right wrap"' in out and "figure.wrap.align-right" in out
+
+
 def test_settings_roundtrip(client):
     r = client.put("/api/settings", json={"backend": "openai", "openai_model": "qwen2.5vl:7b", "junk": 1})
     assert r.json()["backend"] == "openai" and "junk" not in r.json()

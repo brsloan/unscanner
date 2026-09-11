@@ -88,6 +88,16 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 .notes-panel label { font-weight: 600; font-size: 0.9em; }
 .notes-panel textarea { width: 100%; resize: vertical; min-height: 2.4em; max-height: 40vh; font: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0.3em 0.5em; }
 .warn { color: #f59e0b; }
+.figure-panel { flex: none; display: flex; flex-direction: column; gap: 0.25em; padding: 0.35em 0.6em; border-top: 2px solid var(--accent); background: var(--panel); }
+.figure-row { display: flex; align-items: center; gap: 0.6em; }
+.figure-row label { display: inline-flex; align-items: center; gap: 0.3em; white-space: nowrap; }
+.figure-row textarea { flex: 1; resize: vertical; min-height: 2.4em; font: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0.3em 0.5em; }
+.editor figure { margin: 1em 0; } .editor figure img { max-width: 100%; }
+.editor figure.align-center { text-align: center; } .editor figure.align-right { text-align: right; }
+.editor figure.wrap.align-left { float: left; max-width: 45%; margin: 0.3em 1.2em 0.8em 0; }
+.editor figure.wrap.align-right { float: right; max-width: 45%; margin: 0.3em 0 0.8em 1.2em; }
+.editor h1, .editor h2, .editor h3, .editor table { clear: both; }
+.editor figure.selected-figure { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .page-form { display: flex; align-items: center; gap: 0.5em; padding: 0.3em 0.6em; border-top: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; flex: none; }
 .page-form label { display: inline-flex; align-items: center; gap: 0.25em; white-space: nowrap; }
 .page-form .grow { flex: 1; min-width: 8em; } .page-form .grow input { width: 100%; }

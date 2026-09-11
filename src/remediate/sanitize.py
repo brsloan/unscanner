@@ -15,9 +15,14 @@ ALLOWED_TAGS = {
     "dl", "dt", "dd", "pre", "code", "hr", "span", "aside", "section", "a", "br", "math", "del", "ins", "abbr",
 }
 GLOBAL_ATTRS = {"id", "lang"}
+# The only class names that survive: figure placement chosen in the editor, and the assembler's
+# placeholder for figures that could not be cropped.
+ALLOWED_CLASSES = {"align-left", "align-center", "align-right", "wrap", "figure-description"}
 TAG_ATTRS = {
     "a": {"href", "role"},
     "img": {"src", "alt"},
+    "figure": {"class"},
+    "p": {"class"},
     "th": {"scope", "colspan", "rowspan"},
     "td": {"colspan", "rowspan"},
     "aside": {"role", "aria-label"},
@@ -84,6 +89,12 @@ def sanitize_fragment(fragment: str) -> str:
         for name in list(el.attrib):
             if name not in allowed:
                 del el.attrib[name]
+        if "class" in el.attrib:
+            keep = [c for c in el.get("class", "").split() if c in ALLOWED_CLASSES]
+            if keep:
+                el.set("class", " ".join(keep))
+            else:
+                del el.attrib["class"]
         if tag == "a" and el.get("href", "").lower().startswith(("javascript:", "data:")):
             del el.attrib["href"]
         if tag == "img" and el.get("alt") is None:

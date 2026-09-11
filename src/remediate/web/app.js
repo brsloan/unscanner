@@ -181,6 +181,16 @@ async function jumpToScanWord(evt) {
   const rect = img.getBoundingClientRect();
   const px = (evt.clientX - rect.left) / rect.width * 1000, py = (evt.clientY - rect.top) / rect.height * 1000;
   if (px < 0 || px > 1000 || py < 0 || py > 1000) return;
+  // A click inside a figure's crop box selects that figure in the editor.
+  const fig = (state.pageData.figures || []).find((f) => f.bbox && px >= f.bbox[0] && px <= f.bbox[2] && py >= f.bbox[1] && py <= f.bbox[3]);
+  if (fig) {
+    const imgEl = $("#editor").querySelector(`img[data-fig="${CSS.escape(fig.id)}"]`);
+    if (!imgEl) { setStatus(`Figure ${fig.id} is not in the transcription for this page.`); return; }
+    const ed = $("#editor"), ir = imgEl.getBoundingClientRect(), er = ed.getBoundingClientRect();
+    ed.scrollTop = ed.scrollTop + (ir.top - er.top) - er.height / 2 + ir.height / 2;
+    selectFigure(imgEl);
+    return;
+  }
   let words;
   try { words = await pageWords(); } catch (_) { return; }
   // Word under the pointer, else the nearest word on that line, else the nearest word within reach.
@@ -218,6 +228,7 @@ scroller.addEventListener("click", jumpToScanWord);
 let locateTimer = null, lastLocateKey = "";
 function locateCaret() {
   if (!state.doc || !state.page || (!state.follow && !state.mark)) { marker.hidden = true; edgeTicks.hidden = true; return; }
+  if (selectedImg) return;  // a figure is selected: the dot stays on the figure
   clearTimeout(locateTimer);
   locateTimer = setTimeout(async () => {
     const ctx = caretContext();
@@ -393,6 +404,7 @@ async function loadPage(n, opts = {}) {
   }
   $("#editor").scrollTop = 0;
   marker.hidden = true; edgeTicks.hidden = true; lastLocateKey = ""; state.lastBox = null;
+  selectFigure(null);
   reportView();
 }
 
@@ -408,7 +420,8 @@ function showFigures(ed) {
 function editorHtml() {
   const clone = $("#editor").cloneNode(true);
   clone.querySelectorAll("img[data-fig]").forEach((im) => { im.setAttribute("src", "fig:" + im.dataset.fig); delete im.dataset.fig; });
-  clone.querySelectorAll("img.selected").forEach((im) => im.classList.remove("selected"));
+  clone.querySelectorAll("img.selected").forEach((im) => im.removeAttribute("class"));
+  clone.querySelectorAll("figure.selected-figure").forEach((f) => { f.classList.remove("selected-figure"); if (!f.classList.length) f.removeAttribute("class"); });
   return clone.innerHTML;
 }
 function currentHtml() {
@@ -517,16 +530,72 @@ $("#editor").addEventListener("input", markDirty);
 $("#source").addEventListener("input", markDirty);
 ["#f-label", "#f-starts", "#f-ends", "#f-skip", "#f-notes"].forEach((s) => $(s).addEventListener("change", markDirty));
 
+// ------------------------------------------------------------------ figure panel (alt text, AI autofill, alignment, wrap)
 let selectedImg = null;
-$("#editor").addEventListener("click", (e) => {
+function selectFigure(imgEl) {
   document.querySelectorAll("#editor img.selected").forEach((i) => i.classList.remove("selected"));
-  selectedImg = e.target.tagName === "IMG" ? e.target : null;
-  if (selectedImg) selectedImg.classList.add("selected");
+  document.querySelectorAll("#editor figure.selected-figure").forEach((f) => f.classList.remove("selected-figure"));
+  selectedImg = imgEl;
+  if (!imgEl) { $("#figure-panel").hidden = true; return; }
+  imgEl.classList.add("selected");
+  const fig = imgEl.closest("figure");
+  if (fig) fig.classList.add("selected-figure");
+  $("#figure-label").textContent = "Figure" + (imgEl.dataset.fig ? " " + imgEl.dataset.fig : "");
+  $("#fig-alt").value = imgEl.getAttribute("alt") || "";
+  const cls = fig ? fig.classList : { contains: () => false };
+  $("#fig-align").value = ["align-left", "align-center", "align-right"].find((c) => cls.contains(c)) || "";
+  $("#fig-wrap").checked = cls.contains("wrap");
+  $("#fig-ai").disabled = !imgEl.dataset.fig;
+  $("#fig-ai").title = imgEl.dataset.fig ? "Ask the configured model to write alt text from the cropped image"
+    : "AI autofill needs a figure with a crop box on the scan";
+  $("#figure-panel").hidden = false;
+  // Move the dot to the figure's box on the scan.
+  const box = figureBox(imgEl.dataset.fig);
+  if (box && (state.mark || state.follow)) { lastLocateKey = "figure:" + imgEl.dataset.fig; placeMarker(box); }
+}
+function figureBox(fid) {
+  const f = fid && state.pageData && (state.pageData.figures || []).find((x) => x.id === fid);
+  return f && f.bbox && f.bbox.length === 4 ? { x0: f.bbox[0], y0: f.bbox[1], x1: f.bbox[2], y1: f.bbox[3] } : null;
+}
+$("#editor").addEventListener("click", (e) => {
+  const imgEl = e.target.tagName === "IMG" ? e.target : e.target.closest && e.target.closest("figure") ? e.target.closest("figure").querySelector("img") : null;
+  selectFigure(imgEl || null);
 });
 $("#btn-alt").addEventListener("click", () => {
   if (!selectedImg) { setStatus("Click an image in the editor first.", true); return; }
-  const alt = prompt("Alternative text for this image (describe what it shows and why it matters):", selectedImg.alt || "");
-  if (alt !== null) { selectedImg.alt = alt; markDirty(); }
+  selectFigure(selectedImg); $("#fig-alt").focus();
+});
+$("#fig-close").addEventListener("click", () => selectFigure(null));
+$("#fig-alt").addEventListener("input", () => { if (selectedImg) { selectedImg.setAttribute("alt", $("#fig-alt").value); markDirty(); } });
+function applyFigureLayout() {
+  const fig = selectedImg && selectedImg.closest("figure");
+  if (!fig) return;
+  ["align-left", "align-center", "align-right", "wrap"].forEach((c) => fig.classList.remove(c));
+  const align = $("#fig-align").value;
+  if (align) fig.classList.add(align);
+  if ($("#fig-wrap").checked && (align === "align-left" || align === "align-right")) fig.classList.add("wrap");
+  if ($("#fig-wrap").checked && !(align === "align-left" || align === "align-right")) setStatus("Wrap needs left or right alignment.");
+  if (!fig.classList.length) fig.removeAttribute("class");
+  markDirty();
+}
+$("#fig-align").addEventListener("change", applyFigureLayout);
+$("#fig-wrap").addEventListener("change", applyFigureLayout);
+$("#fig-ai").addEventListener("click", async () => {
+  if (!selectedImg || !selectedImg.dataset.fig) return;
+  const fig = selectedImg.closest("figure");
+  const caption = fig && fig.querySelector("figcaption") ? fig.querySelector("figcaption").textContent.trim() : "";
+  // A little context: the text of the blocks before and after the figure.
+  const around = [];
+  if (fig) { if (fig.previousElementSibling) around.push(fig.previousElementSibling.textContent); if (fig.nextElementSibling) around.push(fig.nextElementSibling.textContent); }
+  $("#fig-ai").disabled = true; setStatus("Asking the model for alt text…");
+  try {
+    const r = await api(`/documents/${state.doc.doc_id}/pages/${state.page}/figures/${encodeURIComponent(selectedImg.dataset.fig)}/describe`,
+      { method: "POST", body: { caption, context: around.join("\n").slice(0, 1500) } });
+    if (r.decorative) setStatus(`${r.model} judged this image decorative; alt text left empty. Override if it carries meaning.`);
+    else setStatus(`Alt text suggested by ${r.model}; edit as needed and Save.`);
+    $("#fig-alt").value = r.alt; selectedImg.setAttribute("alt", r.alt); markDirty();
+  } catch (e) { setStatus("AI autofill failed: " + e.message, true); }
+  finally { $("#fig-ai").disabled = false; }
 });
 $("#btn-lang").addEventListener("click", () => {
   const sel = window.getSelection();
