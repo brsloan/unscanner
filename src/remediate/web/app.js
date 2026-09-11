@@ -26,8 +26,89 @@ async function api(path, opts = {}) {
 function setStatus(text, isError = false) {
   const el = $("#status");
   el.textContent = text;
-  el.style.color = isError ? "var(--err)" : "";
+  el.classList.toggle("error", isError);
+  // Show the expand toggle only when the message does not fit on one line.
+  const bar = $("#statusbar");
+  bar.classList.remove("expanded");
+  $("#btn-status-expand").setAttribute("aria-expanded", "false");
+  $("#btn-status-expand").textContent = "▲";
+  requestAnimationFrame(() => { $("#btn-status-expand").hidden = el.scrollWidth <= el.clientWidth; });
 }
+$("#btn-status-expand").addEventListener("click", (e) => {
+  const bar = $("#statusbar"), open = !bar.classList.contains("expanded");
+  bar.classList.toggle("expanded", open);
+  e.target.setAttribute("aria-expanded", String(open));
+  e.target.textContent = open ? "▼" : "▲";
+});
+
+// ------------------------------------------------------------------ page image scaling (fit / fill / manual)
+const img = $("#page-image"), scroller = $("#image-scroll");
+state.zoomMode = localStorage.getItem("remediate.zoomMode") || "fit";
+function applyZoom() {
+  if (!img.naturalWidth) return;
+  const cw = scroller.clientWidth - 12, ch = scroller.clientHeight - 12;
+  let scale;
+  if (state.zoomMode === "fit") scale = Math.min(cw / img.naturalWidth, ch / img.naturalHeight);
+  else if (state.zoomMode === "fill") scale = cw / img.naturalWidth;
+  else scale = (+$("#zoom").value / 100) * (cw / img.naturalWidth);
+  img.style.width = Math.max(40, Math.floor(img.naturalWidth * scale)) + "px";
+  $("#btn-fit").setAttribute("aria-pressed", String(state.zoomMode === "fit"));
+  $("#btn-fill").setAttribute("aria-pressed", String(state.zoomMode === "fill"));
+}
+function setZoomMode(mode) {
+  state.zoomMode = mode; localStorage.setItem("remediate.zoomMode", mode);
+  if (mode !== "manual") $("#zoom").value = 100;
+  applyZoom();
+}
+img.addEventListener("load", applyZoom);
+new ResizeObserver(applyZoom).observe(scroller);
+$("#btn-fit").addEventListener("click", () => setZoomMode("fit"));
+$("#btn-fill").addEventListener("click", () => setZoomMode("fill"));
+$("#zoom").addEventListener("input", () => { state.zoomMode = "manual"; localStorage.setItem("remediate.zoomMode", "manual"); applyZoom(); });
+
+// ------------------------------------------------------------------ resizable panels (drag the gutters)
+function setupGutter(id, cssVar, measure, min) {
+  const g = $(id);
+  const saved = localStorage.getItem("remediate." + cssVar);
+  if (saved) document.documentElement.style.setProperty(cssVar, saved);
+  const apply = (px) => {
+    const v = Math.max(min, Math.min(px, window.innerWidth - 300)) + "px";
+    document.documentElement.style.setProperty(cssVar, v);
+    localStorage.setItem("remediate." + cssVar, v);
+  };
+  g.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    const startX = e.clientX, startW = measure();
+    document.body.classList.add("dragging"); g.classList.add("dragging");
+    const move = (ev) => apply(startW + ev.clientX - startX);
+    const up = () => { document.body.classList.remove("dragging"); g.classList.remove("dragging");
+      window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+    window.addEventListener("mousemove", move); window.addEventListener("mouseup", up);
+  });
+  g.addEventListener("keydown", (e) => {  // keyboard resize for accessibility
+    if (e.key === "ArrowLeft") { apply(measure() - 20); e.preventDefault(); }
+    if (e.key === "ArrowRight") { apply(measure() + 20); e.preventDefault(); }
+  });
+  g.addEventListener("dblclick", () => { localStorage.removeItem("remediate." + cssVar); document.documentElement.style.removeProperty(cssVar); });
+}
+setupGutter("#gutter-1", "--sidebar-w", () => $("#sidebar").getBoundingClientRect().width, 90);
+setupGutter("#gutter-2", "--image-w", () => $("#pane-image").getBoundingClientRect().width, 120);
+
+// ------------------------------------------------------------------ notes panel (toggle + warning when hidden but non-empty)
+function updateNotesUI() {
+  const visible = localStorage.getItem("remediate.notesVisible") !== "false";
+  $("#notes-panel").hidden = !visible;
+  $("#btn-notes").setAttribute("aria-pressed", String(visible));
+  $("#notes-warn").hidden = visible || !$("#f-notes").value.trim();
+}
+$("#btn-notes").addEventListener("click", () => {
+  const visible = localStorage.getItem("remediate.notesVisible") !== "false";
+  localStorage.setItem("remediate.notesVisible", String(!visible));
+  updateNotesUI();
+  if (!visible) $("#f-notes").focus();
+});
+$("#f-notes").addEventListener("input", updateNotesUI);
+updateNotesUI();
 
 // ------------------------------------------------------------------ banner (messages from Claude / conflicts)
 function showBanner(text, primary, secondary) {
@@ -46,7 +127,7 @@ $("#banner-primary").addEventListener("click", () => {});
 async function loadDocs(selectId) {
   state.docs = await api("/documents");
   const sel = $("#doc-select");
-  sel.innerHTML = '<option value="">— choose a document —</option>' +
+  sel.innerHTML = '<option value="">— document —</option>' +
     state.docs.map((d) => `<option value="${d.doc_id}">${escapeHtml(d.title || d.doc_id)}</option>`).join("");
   if (selectId) { sel.value = selectId; await openDoc(selectId); }
 }
@@ -67,25 +148,31 @@ async function openDoc(docId, pageToShow) {
 
 function renderMeta() {
   const s = state.doc.status_counts || {};
-  $("#doc-meta").textContent = `${state.doc.page_count} pages · ${s.done || 0} done · ${s.needs_review || 0} to review · ${s.pending || 0} pending`;
+  const el = $("#doc-meta");
+  el.textContent = `${s.done || 0}/${state.doc.page_count} done · ${s.needs_review || 0} review`;
+  el.title = `${state.doc.page_count} pages · ${s.done || 0} done · ${s.needs_review || 0} need review · ${s.pending || 0} pending · ${s.error || 0} errors`;
 }
 
 function whoLabel(p) {
   if (!p.changed_by || p.changed_by === "editor") return "";
-  return p.changed_by === "claude" ? "claude" : "model";
+  return p.changed_by === "claude" ? "C" : "M";
 }
 
 function renderPages() {
   const list = $("#page-list");
   if (!state.doc) { list.innerHTML = ""; return; }
-  list.innerHTML = state.doc.pages.map((p) => `
-    <li data-page="${p.index}" aria-current="${p.index === state.page}" title="${escapeHtml(p.notes || p.status)}${p.changed_by ? " · last changed by " + escapeHtml(p.changed_by) : ""}">
+  list.innerHTML = state.doc.pages.map((p) => {
+    const who = whoLabel(p);
+    const title = `PDF page ${p.index}${p.label ? ", printed " + p.label : ""}: ${p.status}${p.skip ? " (skipped)" : ""}` +
+      (p.changed_by ? ` · last changed by ${p.changed_by}` : "") + (p.notes ? ` · ${p.notes}` : "");
+    return `<li data-page="${p.index}" aria-current="${p.index === state.page}" title="${escapeHtml(title)}">
       <span class="dot ${p.status}" aria-hidden="true"></span>
-      <span>Page ${p.index}${p.skip ? " (skipped)" : ""}</span>
-      <span class="who">${whoLabel(p)}</span>
-      <span class="lbl">${p.label ? "p. " + escapeHtml(p.label) : ""}</span>
+      <span class="num">${p.index}</span>
+      ${who ? `<span class="who" title="last changed by ${escapeHtml(p.changed_by)}">${who}</span>` : ""}
+      <span class="lbl">${p.skip ? "skip" : p.label ? escapeHtml(p.label) : ""}</span>
       <span class="visually-hidden">${p.status}</span>
-    </li>`).join("");
+    </li>`;
+  }).join("");
 }
 
 // ------------------------------------------------------------------ pages
@@ -94,8 +181,9 @@ async function loadPage(n, opts = {}) {
   const d = await api(`/documents/${state.doc.doc_id}/pages/${n}`);
   state.page = n; state.pageData = d; state.dirty = false;
   hideBanner();
-  $("#page-indicator").textContent = `PDF page ${n} of ${d.of}${d.label ? " · printed " + d.label : ""}`;
-  const img = $("#page-image");
+  const ind = $("#page-indicator");
+  ind.textContent = `${n}/${d.of}`;
+  ind.title = `PDF page ${n} of ${d.of}${d.label ? ", printed page " + d.label : ""}`;
   img.hidden = false;
   img.src = `/api/documents/${state.doc.doc_id}/pages/${n}/image`;
   $("#editor").innerHTML = d.html || "";
@@ -106,11 +194,12 @@ async function loadPage(n, opts = {}) {
   $("#f-ends").checked = !!d.ends_mid_paragraph;
   $("#f-skip").checked = !!d.skip;
   $("#f-notes").value = d.notes || "";
+  updateNotesUI();
   $("#btn-save").disabled = false; $("#btn-save-next").disabled = false;
   renderPages();
   if (!opts.silent) {
     const who = d.changed_by && d.changed_by !== "editor" ? ` · last changed by ${d.changed_by}` : "";
-    setStatus(d.status === "needs_review" && d.notes ? "Model note: " + d.notes : `Page ${n}: ${d.status}${who}`);
+    setStatus(`Page ${n}: ${d.status}${who}${d.notes ? " · has notes" : ""}`);
   }
   $("#editor").scrollTop = 0;
   reportView();
@@ -253,8 +342,6 @@ $("#toggle-draft").addEventListener("change", (e) => {
   if (e.target.checked) { $("#editor").hidden = true; $("#source").hidden = true; $("#toggle-source").checked = false; }
   else { $("#editor").hidden = false; }
 });
-$("#zoom").addEventListener("input", (e) => { $("#page-image").style.width = e.target.value + "%"; });
-
 $("#btn-save").addEventListener("click", () => savePage(false));
 $("#btn-save-next").addEventListener("click", () => savePage(true));
 $("#btn-prev").addEventListener("click", () => state.page > 1 && loadPage(state.page - 1));

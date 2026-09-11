@@ -10,86 +10,96 @@
 <a class="skip-link" href="#editor">Skip to editor</a>
 <header class="topbar">
   <h1>remediate</h1>
-  <div class="topbar-actions">
-    <button id="btn-open" type="button">Open PDF…</button>
-    <button id="btn-transcribe" type="button" disabled>Transcribe…</button>
-    <button id="btn-build" type="button" disabled>Build</button>
-    <button id="btn-validate" type="button" disabled>Validate</button>
-    <a id="lnk-html" class="button" hidden download>HTML</a>
-    <a id="lnk-epub" class="button" hidden download>EPUB</a>
-    <button id="btn-settings" type="button">Settings</button>
-  </div>
-  <output id="status" aria-live="polite"></output>
+  <button id="btn-open" type="button">Open PDF…</button>
+  <button id="btn-transcribe" type="button" disabled>Transcribe…</button>
+  <button id="btn-build" type="button" disabled>Build</button>
+  <button id="btn-validate" type="button" disabled>Validate</button>
+  <a id="lnk-html" class="button" hidden download>HTML</a>
+  <a id="lnk-epub" class="button" hidden download>EPUB</a>
+  <span class="spacer"></span>
+  <button id="btn-notes" type="button" aria-pressed="true" title="Show or hide the notes panel">Notes <span id="notes-warn" class="warn" role="img" aria-label="this page has notes" hidden>⚠</span></button>
+  <button id="btn-settings" type="button">Settings</button>
 </header>
 
-<div class="layout">
-  <nav class="sidebar" aria-label="Documents and pages">
+<div class="layout" id="layout">
+  <nav class="sidebar" id="sidebar" aria-label="Documents and pages">
     <label for="doc-select" class="visually-hidden">Document</label>
-    <select id="doc-select"><option value="">— choose a document —</option></select>
+    <select id="doc-select"><option value="">— document —</option></select>
     <div id="doc-meta" class="doc-meta"></div>
     <ol id="page-list" class="page-list" aria-label="Pages"></ol>
   </nav>
+  <div class="gutter" id="gutter-1" role="separator" aria-orientation="vertical" aria-label="Resize page list" tabindex="0"></div>
 
-  <main class="workspace">
-    <section class="pane pane-image" aria-label="Scanned page">
-      <div class="pane-toolbar">
-        <button id="btn-prev" type="button" title="Previous page (Alt+Left)">◀</button>
-        <span id="page-indicator">no page</span>
-        <button id="btn-next" type="button" title="Next page (Alt+Right)">▶</button>
-        <span class="spacer"></span>
-        <label>Zoom <input id="zoom" type="range" min="40" max="250" value="100"></label>
-      </div>
-      <div class="image-scroll"><img id="page-image" alt="Scanned page image" hidden></div>
-    </section>
+  <section class="pane pane-image" id="pane-image" aria-label="Scanned page">
+    <div class="pane-toolbar">
+      <button id="btn-prev" type="button" title="Previous page (Alt+Left)">◀</button>
+      <span id="page-indicator" aria-live="polite">–</span>
+      <button id="btn-next" type="button" title="Next page (Alt+Right)">▶</button>
+      <button id="btn-fit" type="button" class="small" title="Fit whole page in the pane" aria-pressed="true">Fit</button>
+      <button id="btn-fill" type="button" class="small" title="Fill the pane width" aria-pressed="false">Fill</button>
+      <span class="spacer"></span>
+      <label class="zoom-label"><span class="visually-hidden">Zoom</span><input id="zoom" type="range" min="25" max="300" value="100" title="Zoom"></label>
+    </div>
+    <div class="image-scroll" id="image-scroll"><img id="page-image" alt="Scanned page image" hidden></div>
+  </section>
+  <div class="gutter" id="gutter-2" role="separator" aria-orientation="vertical" aria-label="Resize page image" tabindex="0"></div>
 
-    <section class="pane pane-editor" aria-label="Transcription editor">
-      <div class="pane-toolbar" role="toolbar" aria-label="Formatting">
-        <select id="block-style" aria-label="Block style">
-          <option value="p">Paragraph</option>
-          <option value="h1">Heading 1</option>
-          <option value="h2">Heading 2</option>
-          <option value="h3">Heading 3</option>
-          <option value="h4">Heading 4</option>
-          <option value="blockquote">Block quote</option>
-        </select>
-        <button type="button" data-cmd="bold" title="Strong (Ctrl+B)"><strong>B</strong></button>
-        <button type="button" data-cmd="italic" title="Emphasis (Ctrl+I)"><em>I</em></button>
-        <button type="button" data-cmd="superscript" title="Superscript">x<sup>2</sup></button>
-        <button type="button" data-cmd="insertUnorderedList" title="Bullet list">• list</button>
-        <button type="button" data-cmd="insertOrderedList" title="Numbered list">1. list</button>
-        <button type="button" id="btn-alt" title="Edit alt text of the selected image">Alt text</button>
-        <button type="button" id="btn-lang" title="Mark selection as another language">Lang</button>
-        <button type="button" data-cmd="removeFormat" title="Clear formatting">Clear</button>
-        <span class="spacer"></span>
-        <label><input type="checkbox" id="toggle-source"> HTML source</label>
-        <label><input type="checkbox" id="toggle-draft"> OCR draft</label>
-      </div>
-      <div id="banner" class="banner" role="status" aria-live="polite" hidden>
-        <span id="banner-text"></span>
-        <button id="banner-primary" type="button" class="primary">Reload</button>
-        <button id="banner-secondary" type="button">Keep my edits</button>
-      </div>
-      <div id="editor" class="editor" contenteditable="true" spellcheck="true" aria-label="Page HTML" role="textbox" aria-multiline="true"></div>
-      <textarea id="source" class="source" hidden aria-label="Page HTML source" spellcheck="false"></textarea>
-      <pre id="draft" class="draft" hidden aria-label="OCR draft text"></pre>
-      <form id="page-form" class="page-form" onsubmit="return false">
-        <label>Printed page <input id="f-label" type="text" size="6"></label>
-        <label><input id="f-starts" type="checkbox"> starts mid-paragraph</label>
-        <label><input id="f-ends" type="checkbox"> ends mid-paragraph</label>
-        <label><input id="f-skip" type="checkbox"> skip page</label>
-        <label class="grow">Notes <input id="f-notes" type="text"></label>
-        <button id="btn-save" type="button" class="primary" disabled>Save (Ctrl+S)</button>
-        <button id="btn-save-next" type="button" disabled>Save &amp; next</button>
-      </form>
+  <section class="pane pane-editor" aria-label="Transcription editor">
+    <div class="pane-toolbar" role="toolbar" aria-label="Formatting">
+      <select id="block-style" aria-label="Block style">
+        <option value="p">Paragraph</option>
+        <option value="h1">Heading 1</option>
+        <option value="h2">Heading 2</option>
+        <option value="h3">Heading 3</option>
+        <option value="h4">Heading 4</option>
+        <option value="blockquote">Block quote</option>
+      </select>
+      <button type="button" data-cmd="bold" title="Strong (Ctrl+B)"><strong>B</strong></button>
+      <button type="button" data-cmd="italic" title="Emphasis (Ctrl+I)"><em>I</em></button>
+      <button type="button" data-cmd="superscript" title="Superscript">x<sup>2</sup></button>
+      <button type="button" data-cmd="insertUnorderedList" title="Bullet list">•</button>
+      <button type="button" data-cmd="insertOrderedList" title="Numbered list">1.</button>
+      <button type="button" id="btn-alt" title="Edit alt text of the selected image">Alt</button>
+      <button type="button" id="btn-lang" title="Mark selection as another language">Lang</button>
+      <button type="button" data-cmd="removeFormat" title="Clear formatting">Clear</button>
+      <span class="spacer"></span>
+      <label title="Edit the HTML source"><input type="checkbox" id="toggle-source"> Source</label>
+      <label title="Show the OCR draft text"><input type="checkbox" id="toggle-draft"> Draft</label>
+    </div>
+    <div id="banner" class="banner" role="status" aria-live="polite" hidden>
+      <span id="banner-text"></span>
+      <button id="banner-primary" type="button" class="primary">Reload</button>
+      <button id="banner-secondary" type="button">Keep my edits</button>
+    </div>
+    <div id="editor" class="editor" contenteditable="true" spellcheck="true" aria-label="Page HTML" role="textbox" aria-multiline="true"></div>
+    <textarea id="source" class="source" hidden aria-label="Page HTML source" spellcheck="false"></textarea>
+    <pre id="draft" class="draft" hidden aria-label="OCR draft text"></pre>
+    <section id="notes-panel" class="notes-panel" aria-labelledby="notes-label">
+      <label id="notes-label" for="f-notes">Notes</label>
+      <textarea id="f-notes" rows="2" placeholder="Model notes appear here; add anything a reviewer should know. A page with notes stays marked for review."></textarea>
     </section>
-  </main>
+    <form id="page-form" class="page-form" onsubmit="return false">
+      <label>p. <input id="f-label" type="text" size="5" title="Printed page number"></label>
+      <label title="First paragraph continues from the previous page"><input id="f-starts" type="checkbox"> starts mid-¶</label>
+      <label title="Last paragraph continues on the next page"><input id="f-ends" type="checkbox"> ends mid-¶</label>
+      <label><input id="f-skip" type="checkbox"> skip</label>
+      <span class="spacer"></span>
+      <button id="btn-save" type="button" class="primary" disabled title="Ctrl+S">Save</button>
+      <button id="btn-save-next" type="button" disabled>Save &amp; next</button>
+    </form>
+  </section>
 </div>
 
 <section id="results" class="results" aria-label="Results" hidden>
   <div class="pane-toolbar"><strong id="results-title">Results</strong><span class="spacer"></span>
-    <button id="btn-results-close" type="button">Close</button></div>
+    <button id="btn-results-close" type="button" class="small">Close</button></div>
   <div id="results-body"></div>
 </section>
+
+<footer class="statusbar" id="statusbar">
+  <output id="status" aria-live="polite"></output>
+  <button id="btn-status-expand" type="button" class="small" aria-expanded="false" title="Show full message" hidden>▲</button>
+</footer>
 
 <dialog id="dlg-open">
   <form method="dialog" id="form-open">

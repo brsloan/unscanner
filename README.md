@@ -74,6 +74,10 @@ amber needs review, grey pending, red error) and review pages opened first.
   edits (tables, footnotes), and "OCR draft" shows the baseline text.
 - **Page fields**: printed page number, starts/ends mid-paragraph flags, skip, notes. Save marks the
   page reviewed. Ctrl+S saves, Alt+Left/Right moves between pages, "Save & next" does both.
+- **Layout**: the scan opens scaled to fit; Fit and Fill buttons and a zoom slider sit next to the
+  page arrows. Drag the borders between the page list, the scan and the editor to resize them
+  (double-click a border to reset; the widths are remembered). Status and model notes appear in a
+  one-line bar at the bottom with an arrow to expand longer messages.
 - **Transcribe…** runs the configured model backend over a page range as a background job with
   live progress; **Build** writes the HTML and EPUB and shows download links plus a preview;
   **Validate** shows the checks in a panel with links that jump to the offending page.
