@@ -21,13 +21,14 @@ class AnthropicBackend(Backend):
     name = "anthropic"
 
     def __init__(self, model: str | None = None, effort: str = "medium", max_tokens: int = 16000,
-                 fallbacks: bool = True, client: anthropic.Anthropic | None = None):
+                 fallbacks: bool = True, client: anthropic.Anthropic | None = None,
+                 api_key: str | None = None):
         self.model = model or DEFAULT_MODEL
         self.effort = effort
         self.max_tokens = max_tokens
         self.use_fallbacks = fallbacks and self.model.startswith(_FALLBACK_MODELS)
         # Credentials resolve from ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN / an `ant auth login` profile.
-        self.client = client or anthropic.Anthropic()
+        self.client = client or anthropic.Anthropic(api_key=api_key)
 
     def _request_kwargs(self, image_png: bytes, user_prompt: str) -> dict:
         img = base64.standard_b64encode(image_png).decode()

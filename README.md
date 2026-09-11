@@ -57,6 +57,33 @@ Environment variables (CLI flags override them):
 | `ANTHROPIC_API_KEY` | for the Claude backend |
 | `REMEDIATE_WORK_DIR`, `REMEDIATE_OUT_DIR` | where the MCP server keeps state and writes output |
 
+## Local web UI
+
+```bash
+python -m remediate.cli ui          # opens http://127.0.0.1:8765 in your browser
+```
+
+The UI is for the review step, which is where the human time goes. It shows the scanned page next
+to an editor for that page's transcription, with the page list colour-coded by status (green done,
+amber needs review, grey pending, red error) and review pages opened first.
+
+- **Editor**: paragraphs, headings, lists, block quotes, strong/emphasis, superscript, alt text for a
+  selected image, `lang` marking for foreign-language passages. There is no way to produce inline
+  styles, fonts or layout tables: everything saved goes through the same sanitizer as model output
+  and is reduced to the accessible vocabulary. An "HTML source" toggle gives a raw view for precise
+  edits (tables, footnotes), and "OCR draft" shows the baseline text.
+- **Page fields**: printed page number, starts/ends mid-paragraph flags, skip, notes. Save marks the
+  page reviewed. Ctrl+S saves, Alt+Left/Right moves between pages, "Save & next" does both.
+- **Transcribe…** runs the configured model backend over a page range as a background job with
+  live progress; **Build** writes the HTML and EPUB and shows download links plus a preview;
+  **Validate** shows the checks in a panel with links that jump to the offending page.
+- **Open PDF…** takes a path on this computer or an upload (copied into `work/_inbox/`).
+- **Settings** stores the backend choice, model, effort, endpoint URL and keys in
+  `work/settings.json` (plain text, local to this machine).
+
+The UI is one FastAPI file (`webapp.py`) and one plain HTML/JS/CSS page under `web/`, with no build
+step, so a library can adapt it with Claude's help; see `CLAUDE.md`.
+
 ## MCP server
 
 Start with `remediate serve` (stdio). `.mcp.json` in this folder already registers it for Claude Code;

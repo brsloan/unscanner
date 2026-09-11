@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>remediate</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<a class="skip-link" href="#editor">Skip to editor</a>
+<header class="topbar">
+  <h1>remediate</h1>
+  <div class="topbar-actions">
+    <button id="btn-open" type="button">Open PDF…</button>
+    <button id="btn-transcribe" type="button" disabled>Transcribe…</button>
+    <button id="btn-build" type="button" disabled>Build</button>
+    <button id="btn-validate" type="button" disabled>Validate</button>
+    <a id="lnk-html" class="button" hidden download>HTML</a>
+    <a id="lnk-epub" class="button" hidden download>EPUB</a>
+    <button id="btn-settings" type="button">Settings</button>
+  </div>
+  <output id="status" aria-live="polite"></output>
+</header>
+
+<div class="layout">
+  <nav class="sidebar" aria-label="Documents and pages">
+    <label for="doc-select" class="visually-hidden">Document</label>
+    <select id="doc-select"><option value="">— choose a document —</option></select>
+    <div id="doc-meta" class="doc-meta"></div>
+    <ol id="page-list" class="page-list" aria-label="Pages"></ol>
+  </nav>
+
+  <main class="workspace">
+    <section class="pane pane-image" aria-label="Scanned page">
+      <div class="pane-toolbar">
+        <button id="btn-prev" type="button" title="Previous page (Alt+Left)">◀</button>
+        <span id="page-indicator">no page</span>
+        <button id="btn-next" type="button" title="Next page (Alt+Right)">▶</button>
+        <span class="spacer"></span>
+        <label>Zoom <input id="zoom" type="range" min="40" max="250" value="100"></label>
+      </div>
+      <div class="image-scroll"><img id="page-image" alt="Scanned page image" hidden></div>
+    </section>
+
+    <section class="pane pane-editor" aria-label="Transcription editor">
+      <div class="pane-toolbar" role="toolbar" aria-label="Formatting">
+        <select id="block-style" aria-label="Block style">
+          <option value="p">Paragraph</option>
+          <option value="h1">Heading 1</option>
+          <option value="h2">Heading 2</option>
+          <option value="h3">Heading 3</option>
+          <option value="h4">Heading 4</option>
+          <option value="blockquote">Block quote</option>
+        </select>
+        <button type="button" data-cmd="bold" title="Strong (Ctrl+B)"><strong>B</strong></button>
+        <button type="button" data-cmd="italic" title="Emphasis (Ctrl+I)"><em>I</em></button>
+        <button type="button" data-cmd="superscript" title="Superscript">x<sup>2</sup></button>
+        <button type="button" data-cmd="insertUnorderedList" title="Bullet list">• list</button>
+        <button type="button" data-cmd="insertOrderedList" title="Numbered list">1. list</button>
+        <button type="button" id="btn-alt" title="Edit alt text of the selected image">Alt text</button>
+        <button type="button" id="btn-lang" title="Mark selection as another language">Lang</button>
+        <button type="button" data-cmd="removeFormat" title="Clear formatting">Clear</button>
+        <span class="spacer"></span>
+        <label><input type="checkbox" id="toggle-source"> HTML source</label>
+        <label><input type="checkbox" id="toggle-draft"> OCR draft</label>
+      </div>
+      <div id="editor" class="editor" contenteditable="true" spellcheck="true" aria-label="Page HTML" role="textbox" aria-multiline="true"></div>
+      <textarea id="source" class="source" hidden aria-label="Page HTML source" spellcheck="false"></textarea>
+      <pre id="draft" class="draft" hidden aria-label="OCR draft text"></pre>
+      <form id="page-form" class="page-form" onsubmit="return false">
+        <label>Printed page <input id="f-label" type="text" size="6"></label>
+        <label><input id="f-starts" type="checkbox"> starts mid-paragraph</label>
+        <label><input id="f-ends" type="checkbox"> ends mid-paragraph</label>
+        <label><input id="f-skip" type="checkbox"> skip page</label>
+        <label class="grow">Notes <input id="f-notes" type="text"></label>
+        <button id="btn-save" type="button" class="primary" disabled>Save (Ctrl+S)</button>
+        <button id="btn-save-next" type="button" disabled>Save &amp; next</button>
+      </form>
+    </section>
+  </main>
+</div>
+
+<section id="results" class="results" aria-label="Results" hidden>
+  <div class="pane-toolbar"><strong id="results-title">Results</strong><span class="spacer"></span>
+    <button id="btn-results-close" type="button">Close</button></div>
+  <div id="results-body"></div>
+</section>
+
+<dialog id="dlg-open">
+  <form method="dialog" id="form-open">
+    <h2>Open a PDF</h2>
+    <p><label>Path on this computer <input name="pdf_path" type="text" size="50" placeholder="C:\scans\reading.pdf"></label></p>
+    <p>or upload: <input name="file" type="file" accept="application/pdf"></p>
+    <p><label>Title <input name="title" type="text" size="40"></label></p>
+    <p><label>Author <input name="author" type="text" size="40"></label>
+       <label>Language <input name="language" type="text" size="4" value="en"></label></p>
+    <menu><button value="cancel" type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Open</button></menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-transcribe">
+  <form method="dialog" id="form-transcribe">
+    <h2>Transcribe with the model</h2>
+    <p id="transcribe-backend"></p>
+    <p><label>Pages <input name="pages" type="text" value="all" size="16"></label>
+       <label><input name="force" type="checkbox"> redo pages already done</label></p>
+    <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Start</button></menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-settings">
+  <form method="dialog" id="form-settings">
+    <h2>Settings</h2>
+    <p><label>Backend
+      <select name="backend"><option value="anthropic">Claude API</option><option value="openai">Local / OpenAI-compatible</option></select></label></p>
+    <fieldset><legend>Claude API</legend>
+      <p><label>Model <input name="model" type="text" size="24"></label>
+         <label>Effort <select name="effort"><option>low</option><option>medium</option><option>high</option></select></label></p>
+      <p><label>API key <input name="anthropic_api_key" type="password" size="40" autocomplete="off"></label>
+         <small>Leave empty to use the ANTHROPIC_API_KEY environment variable. Stored in work/settings.json.</small></p>
+    </fieldset>
+    <fieldset><legend>Local / OpenAI-compatible endpoint</legend>
+      <p><label>Base URL <input name="openai_base_url" type="text" size="40"></label></p>
+      <p><label>Model <input name="openai_model" type="text" size="24"></label>
+         <label>API key <input name="openai_api_key" type="password" size="20" autocomplete="off"></label></p>
+    </fieldset>
+    <p><label>Parallel pages <input name="workers" type="number" min="1" max="16" size="3"></label></p>
+    <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Save</button></menu>
+  </form>
+</dialog>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

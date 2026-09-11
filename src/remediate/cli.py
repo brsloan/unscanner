@@ -9,6 +9,7 @@
   remediate page   <pdf|workdir> N            print a page's stored html
   remediate set-page <pdf|workdir> N file.html [--label L] [--starts-mid] [--ends-mid]
   remediate serve  [--work work]  (MCP server over stdio)
+  remediate ui     [--port 8765] [--no-browser]   (local web UI)
 """
 
 from __future__ import annotations
@@ -154,6 +155,12 @@ def cmd_serve(args) -> None:
     server.run(transport="stdio")
 
 
+def cmd_ui(args) -> None:
+    from .webapp import serve
+
+    serve(args.work, args.out, host=args.host, port=args.port, open_browser=not args.no_browser)
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(prog="remediate", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--work", default="work", help="work directory root (default: ./work)")
@@ -183,6 +190,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--label"); p.add_argument("--starts-mid", action="store_true"); p.add_argument("--ends-mid", action="store_true")
     p.set_defaults(func=cmd_set_page)
     p = sub.add_parser("serve"); p.set_defaults(func=cmd_serve)
+    p = sub.add_parser("ui"); p.add_argument("--host", default="127.0.0.1"); p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--no-browser", action="store_true"); p.set_defaults(func=cmd_ui)
 
     args = ap.parse_args(argv)
     args.func(args)
