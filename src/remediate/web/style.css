@@ -59,6 +59,15 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 /* caret marker: a red dot just left of the word the caret is on */
 .marker { position: absolute; width: 0; height: 0; pointer-events: none; transition: left 0.12s, top 0.12s; }
 .marker .dot { position: absolute; width: 8px; height: 8px; left: -4px; top: -4px; border-radius: 50%; background: #e11d48; box-shadow: 0 0 0 1px #fff; }
+/* crop box for the selected figure: drag the body to move, the handles to resize */
+.crop-box { position: absolute; border: 2px dashed var(--accent); box-sizing: border-box; cursor: move; background: rgba(29,78,216,0.06); }
+.crop-box .h { position: absolute; width: 10px; height: 10px; background: #fff; border: 2px solid var(--accent); box-sizing: border-box; }
+.crop-box .nw { left: -6px; top: -6px; cursor: nwse-resize; } .crop-box .se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+.crop-box .ne { right: -6px; top: -6px; cursor: nesw-resize; } .crop-box .sw { left: -6px; bottom: -6px; cursor: nesw-resize; }
+.crop-box .n { left: calc(50% - 5px); top: -6px; cursor: ns-resize; } .crop-box .s { left: calc(50% - 5px); bottom: -6px; cursor: ns-resize; }
+.crop-box .w { left: -6px; top: calc(50% - 5px); cursor: ew-resize; } .crop-box .e { right: -6px; top: calc(50% - 5px); cursor: ew-resize; }
+.image-scroll.drawing, .image-scroll.drawing #page-image { cursor: crosshair; }
+.hint { color: var(--muted); font-size: 0.9em; }
 /* short ticks on the outer edges of the preview pointing inward at the dot's row and column */
 .edge-ticks { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .etick { position: absolute; background: #e11d48; box-shadow: 0 0 0 1px rgba(255,255,255,0.8); }
@@ -93,11 +102,11 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 .figure-row label { display: inline-flex; align-items: center; gap: 0.3em; white-space: nowrap; }
 .figure-row textarea { flex: 1; resize: vertical; min-height: 2.4em; font: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0.3em 0.5em; }
 .editor figure { margin: 1em 0; } .editor figure img { max-width: 100%; }
-.editor figure.align-center { text-align: center; } .editor figure.align-right { text-align: right; }
-.editor figure.wrap.align-left { float: left; max-width: 45%; margin: 0.3em 1.2em 0.8em 0; }
-.editor figure.wrap.align-right { float: right; max-width: 45%; margin: 0.3em 0 0.8em 1.2em; }
+.editor .align-center { text-align: center; } .editor .align-right { text-align: right; }
+.editor .wrap.align-left { float: left; max-width: 45%; margin: 0.3em 1.2em 0.8em 0; }
+.editor .wrap.align-right { float: right; max-width: 45%; margin: 0.3em 0 0.8em 1.2em; }
 .editor h1, .editor h2, .editor h3, .editor table { clear: both; }
-.editor figure.selected-figure { outline: 2px dashed var(--accent); outline-offset: 2px; }
+.editor .selected-figure { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .page-form { display: flex; align-items: center; gap: 0.5em; padding: 0.3em 0.6em; border-top: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; flex: none; }
 .page-form label { display: inline-flex; align-items: center; gap: 0.25em; white-space: nowrap; }
 .page-form .grow { flex: 1; min-width: 8em; } .page-form .grow input { width: 100%; }

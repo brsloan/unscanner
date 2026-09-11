@@ -30,6 +30,10 @@ def test_sanitize_normalizes_editor_output():
     assert "javascript:" not in clean
     # block-wrapping div is unwrapped, not turned into a paragraph
     assert sanitize_fragment("<div><h2>T</h2><p>x</p></div>") == "<h2>T</h2><p>x</p>"
+    # an image-only paragraph (how browsers wrap an inserted image) becomes a figure, classes kept
+    assert sanitize_fragment('<p class="align-right wrap"><img src="fig:9-1" alt="x"><br></p>') == \
+        '<figure class="align-right wrap"><img src="fig:9-1" alt="x"></figure>'
+    assert sanitize_fragment('<p>caption <img src="fig:9-1" alt="x"></p>').startswith("<p>caption ")
 
 
 def test_open_edit_build_validate(client, tmp_path):
@@ -79,6 +83,14 @@ def test_figures_survive_editor_saves_and_can_be_previewed(client, tmp_path):
     fig = client.get(f"/api/documents/{doc_id}/pages/1/figure/1-1")
     assert fig.status_code == 200 and fig.content[:4] == b"\x89PNG"
     assert client.get(f"/api/documents/{doc_id}/pages/1/figure/nope").status_code == 404
+    # live preview of an adjusted crop, and the adjusted box persisted by a save that sends figures
+    live = client.get(f"/api/documents/{doc_id}/pages/1/figure/1-1", params={"bbox": "0,0,500,500"})
+    assert live.status_code == 200 and live.content[:4] == b"\x89PNG"
+    assert client.get(f"/api/documents/{doc_id}/pages/1/figure/1-1", params={"bbox": "9,9,1"}).status_code == 400
+    r = client.put(f"/api/documents/{doc_id}/pages/1", json={
+        "html": html, "version": 2, "figures": [{"id": "1-1", "alt": "A grey box.", "bbox": [50, 60, 400, 420], "caption": ""}]})
+    assert r.status_code == 200
+    assert client.get(f"/api/documents/{doc_id}/pages/1").json()["figures"][0]["bbox"] == [50, 60, 400, 420]
     # ...and the build crops it and the HTML references the file.
     r = client.post(f"/api/documents/{doc_id}/build")
     assert r.json()["figures"] == 1

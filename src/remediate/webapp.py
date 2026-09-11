@@ -223,8 +223,9 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         return FileResponse(cached_page_png(doc, n), media_type="image/png")
 
     @app.get("/api/documents/{doc_id}/pages/{n}/figure/{fid}")
-    def get_page_figure(doc_id: str, n: int, fid: str):
-        """Crop of a figure on this page (from its stored bbox), so the editor can show it before a build."""
+    def get_page_figure(doc_id: str, n: int, fid: str, bbox: str | None = None):
+        """Crop of a figure on this page, from its stored bbox or from ?bbox=x0,y0,x1,y1 (0-1000 page
+        coordinates) for a live preview while the user adjusts the crop in the editor."""
         from fastapi.responses import Response
 
         from .pdf import crop_png
@@ -234,10 +235,19 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             p = doc.page(n)
         except IndexError as e:
             raise HTTPException(404, str(e)) from e
-        fig = next((f for f in p.figures if f.id == fid), None)
-        if fig is None or not fig.bbox:
-            raise HTTPException(404, "no crop box for this figure")
-        return Response(crop_png(cached_page_png(doc, n).read_bytes(), fig.bbox), media_type="image/png")
+        box: list[float] | None = None
+        if bbox:
+            try:
+                box = [float(v) for v in bbox.split(",")]
+                assert len(box) == 4 and box[0] < box[2] and box[1] < box[3]
+            except (ValueError, AssertionError) as e:
+                raise HTTPException(400, "bbox must be x0,y0,x1,y1 with x0<x1 and y0<y1") from e
+        else:
+            fig = next((f for f in p.figures if f.id == fid), None)
+            if fig is None or not fig.bbox:
+                raise HTTPException(404, "no crop box for this figure")
+            box = fig.bbox
+        return Response(crop_png(cached_page_png(doc, n).read_bytes(), box), media_type="image/png")
 
     @app.post("/api/documents/{doc_id}/pages/{n}/figures/{fid}/describe")
     def describe_figure(doc_id: str, n: int, fid: str, req: DescribeRequest) -> dict[str, Any]:

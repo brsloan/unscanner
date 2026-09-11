@@ -100,6 +100,16 @@ def sanitize_fragment(fragment: str) -> str:
         if tag == "img" and el.get("alt") is None:
             el.set("alt", "")
 
+    # A paragraph holding nothing but an image (how browsers wrap an inserted image) is a figure.
+    for p in list(root.iter("p")):
+        kids = [c for c in p if isinstance(c.tag, str)]
+        imgs = [c for c in kids if c.tag == "img"]
+        if len(imgs) == 1 and all(c.tag in ("img", "br") for c in kids) and not p.text_content().strip():
+            for c in kids:
+                if c.tag == "br":
+                    c.drop_tree()
+            p.tag = "figure"
+
     # Remove paragraphs and headings that are completely empty.
     for el in reversed(list(root.iter("p", "h1", "h2", "h3", "h4", "h5", "h6", "li"))):
         if not el.text_content().strip() and not list(el.iter("img", "br", "math")):

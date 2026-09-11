@@ -47,6 +47,11 @@
         <div class="img-wrap" id="img-wrap">
           <img id="page-image" alt="Scanned page image" title="Click a word to jump to it in the editor" hidden>
           <div id="marker" class="marker" aria-hidden="true" hidden><i class="dot"></i></div>
+          <div id="crop-box" class="crop-box" role="group" aria-label="Figure crop box" hidden>
+            <i class="h nw" data-h="nw"></i><i class="h n" data-h="n"></i><i class="h ne" data-h="ne"></i>
+            <i class="h w" data-h="w"></i><i class="h e" data-h="e"></i>
+            <i class="h sw" data-h="sw"></i><i class="h s" data-h="s"></i><i class="h se" data-h="se"></i>
+          </div>
         </div>
       </div>
       <div id="edge-ticks" class="edge-ticks" aria-hidden="true" hidden>
@@ -72,6 +77,7 @@
       <button type="button" data-cmd="insertUnorderedList" title="Bullet list">•</button>
       <button type="button" data-cmd="insertOrderedList" title="Numbered list">1.</button>
       <button type="button" id="btn-alt" title="Edit alt text of the selected image">Alt</button>
+      <button type="button" id="btn-insert-figure" title="Insert a figure at the caret, then draw its crop box on the scan">+Fig</button>
       <button type="button" id="btn-lang" title="Mark selection as another language">Lang</button>
       <button type="button" data-cmd="removeFormat" title="Clear formatting">Clear</button>
       <span class="spacer"></span>
@@ -96,6 +102,8 @@
         <label>Align
           <select id="fig-align" aria-label="Figure alignment"><option value="">default</option><option value="align-left">left</option><option value="align-center">center</option><option value="align-right">right</option></select></label>
         <label title="Let text flow around the figure (left or right alignment)"><input id="fig-wrap" type="checkbox"> wrap text</label>
+        <button id="fig-draw" type="button" class="small" title="Draw the figure's crop box on the scan: click and drag over the image">Draw crop</button>
+        <span id="fig-crop-hint" class="hint"></span>
         <span class="spacer"></span>
         <button id="fig-close" type="button" class="small" title="Close figure panel">Close</button>
       </div>

@@ -177,6 +177,7 @@ function editorWords(ed) {
   return { words, point };
 }
 async function jumpToScanWord(evt) {
+  if (state.suppressClick) { state.suppressClick = false; return; }
   if (!state.doc || !state.page || !img.naturalWidth || $("#toggle-source").checked) return;
   const rect = img.getBoundingClientRect();
   const px = (evt.clientX - rect.left) / rect.width * 1000, py = (evt.clientY - rect.top) / rect.height * 1000;
@@ -420,8 +421,9 @@ function showFigures(ed) {
 function editorHtml() {
   const clone = $("#editor").cloneNode(true);
   clone.querySelectorAll("img[data-fig]").forEach((im) => { im.setAttribute("src", "fig:" + im.dataset.fig); delete im.dataset.fig; });
+  clone.querySelectorAll('img[src^="data:"]').forEach((im) => im.removeAttribute("src"));  // placeholder of a figure with no crop yet
   clone.querySelectorAll("img.selected").forEach((im) => im.removeAttribute("class"));
-  clone.querySelectorAll("figure.selected-figure").forEach((f) => { f.classList.remove("selected-figure"); if (!f.classList.length) f.removeAttribute("class"); });
+  clone.querySelectorAll(".selected-figure").forEach((f) => { f.classList.remove("selected-figure"); if (!f.classList.length) f.removeAttribute("class"); });
   return clone.innerHTML;
 }
 function currentHtml() {
@@ -435,6 +437,7 @@ async function savePage(andNext = false, overwrite = false) {
     starts_mid_paragraph: $("#f-starts").checked, ends_mid_paragraph: $("#f-ends").checked,
     skip: $("#f-skip").checked, notes: $("#f-notes").value.trim(), status: "done",
     version: overwrite ? null : state.pageData.version,
+    figures: state.pageData.figures || [],  // crop boxes as adjusted in the editor
   };
   try {
     const saved = await api(`/documents/${state.doc.doc_id}/pages/${state.page}`, { method: "PUT", body });
@@ -532,13 +535,23 @@ $("#source").addEventListener("input", markDirty);
 
 // ------------------------------------------------------------------ figure panel (alt text, AI autofill, alignment, wrap)
 let selectedImg = null;
+/* The element carrying a figure's layout classes: its <figure>, or the <p> a browser wraps an inserted
+   image in (the sanitizer turns such a paragraph into a <figure> on save). */
+function figureWrapper(imgEl) {
+  if (!imgEl) return null;
+  const f = imgEl.closest("figure");
+  if (f) return f;
+  const par = imgEl.parentElement;  // browsers may add a <br> beside an inserted image
+  return par && par.tagName === "P" && !par.textContent.trim() &&
+    [...par.children].every((c) => c === imgEl || c.tagName === "BR") ? par : null;
+}
 function selectFigure(imgEl) {
   document.querySelectorAll("#editor img.selected").forEach((i) => i.classList.remove("selected"));
   document.querySelectorAll("#editor figure.selected-figure").forEach((f) => f.classList.remove("selected-figure"));
   selectedImg = imgEl;
-  if (!imgEl) { $("#figure-panel").hidden = true; return; }
+  if (!imgEl) { $("#figure-panel").hidden = true; cropBox.hidden = true; return; }
   imgEl.classList.add("selected");
-  const fig = imgEl.closest("figure");
+  const fig = figureWrapper(imgEl);
   if (fig) fig.classList.add("selected-figure");
   $("#figure-label").textContent = "Figure" + (imgEl.dataset.fig ? " " + imgEl.dataset.fig : "");
   $("#fig-alt").value = imgEl.getAttribute("alt") || "";
@@ -549,14 +562,131 @@ function selectFigure(imgEl) {
   $("#fig-ai").title = imgEl.dataset.fig ? "Ask the configured model to write alt text from the cropped image"
     : "AI autofill needs a figure with a crop box on the scan";
   $("#figure-panel").hidden = false;
-  // Move the dot to the figure's box on the scan.
+  // Move the dot to the figure's box on the scan and show the crop handles.
   const box = figureBox(imgEl.dataset.fig);
   if (box && (state.mark || state.follow)) { lastLocateKey = "figure:" + imgEl.dataset.fig; placeMarker(box); }
+  showCropBox(box);
+  $("#fig-crop-hint").textContent = box ? "Drag the box or its handles on the scan to adjust the crop." : "No crop box yet.";
 }
 function figureBox(fid) {
   const f = fid && state.pageData && (state.pageData.figures || []).find((x) => x.id === fid);
   return f && f.bbox && f.bbox.length === 4 ? { x0: f.bbox[0], y0: f.bbox[1], x1: f.bbox[2], y1: f.bbox[3] } : null;
 }
+
+// ------------------------------------------------------------------ crop box: drag/resize the selected figure's bounds on the scan
+const cropBox = $("#crop-box");
+function showCropBox(box) {
+  if (!box) { cropBox.hidden = true; return; }
+  cropBox.style.left = box.x0 / 10 + "%"; cropBox.style.top = box.y0 / 10 + "%";
+  cropBox.style.width = (box.x1 - box.x0) / 10 + "%"; cropBox.style.height = (box.y1 - box.y0) / 10 + "%";
+  cropBox.hidden = false;
+}
+/* Store a new box for the selected figure (creating the record if needed), refresh the editor preview. */
+function commitCrop(box) {
+  if (!selectedImg) return;
+  let fid = selectedImg.dataset.fig;
+  const figs = state.pageData.figures || (state.pageData.figures = []);
+  if (!fid) {
+    fid = newFigureId();
+    selectedImg.dataset.fig = fid;
+  }
+  let f = figs.find((x) => x.id === fid);
+  if (!f) { f = { id: fid, alt: selectedImg.getAttribute("alt") || "", bbox: null, caption: "" }; figs.push(f); }
+  f.bbox = [box.x0, box.y0, box.x1, box.y1].map((v) => Math.round(v * 10) / 10);
+  selectedImg.src = `/api/documents/${state.doc.doc_id}/pages/${state.page}/figure/${encodeURIComponent(fid)}?bbox=${f.bbox.join(",")}`;
+  $("#figure-label").textContent = "Figure " + fid;
+  $("#fig-ai").disabled = false;
+  $("#fig-crop-hint").textContent = "Crop updated; Save to keep it.";
+  showCropBox(box);
+  if (state.mark || state.follow) { lastLocateKey = "figure:" + fid; placeMarker(box); }
+  markDirty();
+}
+function newFigureId() {
+  const label = (state.pageData && state.pageData.label) || ("page" + state.page);
+  const used = new Set((state.pageData.figures || []).map((f) => f.id));
+  $("#editor").querySelectorAll("img[data-fig]").forEach((im) => used.add(im.dataset.fig));
+  let n = 1;
+  while (used.has(`${label}-${n}`)) n++;
+  return `${label}-${n}`;
+}
+function pagePoint(evt) {  // pointer position in 0-1000 page coordinates
+  const r = img.getBoundingClientRect();
+  return { x: Math.max(0, Math.min(1000, (evt.clientX - r.left) / r.width * 1000)),
+           y: Math.max(0, Math.min(1000, (evt.clientY - r.top) / r.height * 1000)) };
+}
+let cropDrag = null;  // {mode, start, box} while dragging; suppresses the click-to-jump that follows a drag
+cropBox.addEventListener("mousedown", (e) => {
+  if (!selectedImg) return;
+  e.preventDefault(); e.stopPropagation();
+  const mode = e.target.dataset.h || "move";
+  cropDrag = { mode, start: pagePoint(e), box: { ...figureBox(selectedImg.dataset.fig) }, moved: false };
+  document.body.classList.add("dragging");
+});
+window.addEventListener("mousemove", (e) => {
+  if (!cropDrag) return;
+  const p = pagePoint(e), dx = p.x - cropDrag.start.x, dy = p.y - cropDrag.start.y;
+  const b = { ...cropDrag.box }, m = cropDrag.mode, MIN = 8;
+  if (m === "move") { const w = b.x1 - b.x0, h = b.y1 - b.y0; b.x0 = Math.max(0, Math.min(1000 - w, b.x0 + dx)); b.y0 = Math.max(0, Math.min(1000 - h, b.y0 + dy)); b.x1 = b.x0 + w; b.y1 = b.y0 + h; }
+  if (m === "draw") { b.x0 = Math.min(cropDrag.start.x, p.x); b.x1 = Math.max(cropDrag.start.x, p.x); b.y0 = Math.min(cropDrag.start.y, p.y); b.y1 = Math.max(cropDrag.start.y, p.y); }
+  if (m.includes("w")) b.x0 = Math.min(b.x0 + dx, b.x1 - MIN);
+  if (m.includes("e")) b.x1 = Math.max(b.x1 + dx, b.x0 + MIN);
+  if (m.includes("n")) b.y0 = Math.min(b.y0 + dy, b.y1 - MIN);
+  if (m.includes("s")) b.y1 = Math.max(b.y1 + dy, b.y0 + MIN);
+  ["x0", "y0", "x1", "y1"].forEach((k) => (b[k] = Math.max(0, Math.min(1000, b[k]))));
+  cropDrag.current = b; cropDrag.moved = true;
+  showCropBox(b);
+});
+window.addEventListener("mouseup", () => {
+  if (!cropDrag) return;
+  const d = cropDrag; cropDrag = null;
+  document.body.classList.remove("dragging"); scroller.classList.remove("drawing"); state.drawCrop = false;
+  if (d.moved && d.current && d.current.x1 - d.current.x0 >= 5 && d.current.y1 - d.current.y0 >= 5) commitCrop(d.current);
+  else if (d.mode === "draw") showCropBox(figureBox(selectedImg && selectedImg.dataset.fig));
+  state.suppressClick = d.moved;  // the click event that follows a drag must not jump to a word
+});
+/* Draw mode: the next drag on the scan defines the selected figure's box. */
+function armDrawCrop() {
+  if (!selectedImg) { setStatus("Select a figure in the editor first.", true); return; }
+  state.drawCrop = true; scroller.classList.add("drawing");
+  setStatus("Drag over the scan to draw the figure's crop box.");
+}
+$("#fig-draw").addEventListener("click", armDrawCrop);
+scroller.addEventListener("mousedown", (e) => {
+  if (!state.drawCrop || e.target !== img) return;
+  e.preventDefault();
+  cropDrag = { mode: "draw", start: pagePoint(e), box: null, moved: false };
+  document.body.classList.add("dragging");
+});
+/* Insert a new empty figure at the caret and arm draw mode for its crop box. */
+const PLACEHOLDER_SRC = "data:image/svg+xml," + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="60"><rect width="120" height="60" fill="#ddd"/><text x="60" y="35" font-size="12" text-anchor="middle" fill="#555">draw crop</text></svg>');
+$("#btn-insert-figure").addEventListener("click", () => {
+  const ed = $("#editor"); ed.focus();
+  const fid = newFigureId();
+  // Everything goes through execCommand so the browser's undo stack records it: move the caret to the
+  // end of the current block, open a new paragraph, and insert the image there. Ctrl+Z removes the
+  // image, a second Ctrl+Z the empty paragraph (an empty paragraph is dropped on save anyway).
+  // Inserting a <figure> directly is not an option: browsers rewrap block HTML on insertion.
+  const sel = window.getSelection();
+  const range = document.createRange();
+  let block = null;
+  if (sel && sel.rangeCount && ed.contains(sel.anchorNode)) {
+    block = sel.anchorNode.nodeType === Node.TEXT_NODE ? sel.anchorNode.parentElement : sel.anchorNode;
+    block = block.closest(BLOCK_SEL);
+    if (block === ed || !ed.contains(block)) block = null;
+  }
+  range.selectNodeContents(block || ed); range.collapse(false);
+  sel.removeAllRanges(); sel.addRange(range);
+  const html = `<img data-fig="${escapeHtml(fid)}" alt="" src="${PLACEHOLDER_SRC}">`;
+  if (block) document.execCommand("insertParagraph");
+  if (!document.execCommand("insertHTML", false, html)) {  // fallback for browsers without insertHTML
+    const t = document.createElement("template"); t.innerHTML = `<figure>${html}</figure>`; range.insertNode(t.content.firstChild);
+  }
+  const im = ed.querySelector(`img[data-fig="${CSS.escape(fid)}"]`);
+  markDirty(); if (im) { selectFigure(im); armDrawCrop(); }
+});
+// An undo (or any edit) that removes the selected figure closes its panel and crop box.
+$("#editor").addEventListener("input", () => { if (selectedImg && !$("#editor").contains(selectedImg)) selectFigure(null); });
 $("#editor").addEventListener("click", (e) => {
   const imgEl = e.target.tagName === "IMG" ? e.target : e.target.closest && e.target.closest("figure") ? e.target.closest("figure").querySelector("img") : null;
   selectFigure(imgEl || null);
@@ -568,7 +698,7 @@ $("#btn-alt").addEventListener("click", () => {
 $("#fig-close").addEventListener("click", () => selectFigure(null));
 $("#fig-alt").addEventListener("input", () => { if (selectedImg) { selectedImg.setAttribute("alt", $("#fig-alt").value); markDirty(); } });
 function applyFigureLayout() {
-  const fig = selectedImg && selectedImg.closest("figure");
+  const fig = figureWrapper(selectedImg);
   if (!fig) return;
   ["align-left", "align-center", "align-right", "wrap"].forEach((c) => fig.classList.remove(c));
   const align = $("#fig-align").value;
@@ -582,7 +712,7 @@ $("#fig-align").addEventListener("change", applyFigureLayout);
 $("#fig-wrap").addEventListener("change", applyFigureLayout);
 $("#fig-ai").addEventListener("click", async () => {
   if (!selectedImg || !selectedImg.dataset.fig) return;
-  const fig = selectedImg.closest("figure");
+  const fig = figureWrapper(selectedImg);
   const caption = fig && fig.querySelector("figcaption") ? fig.querySelector("figcaption").textContent.trim() : "";
   // A little context: the text of the blocks before and after the figure.
   const around = [];
