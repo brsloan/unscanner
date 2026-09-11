@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+from dataclasses import asdict
 import shutil
 import threading
 import time
@@ -48,6 +49,7 @@ class PageUpdate(BaseModel):
     notes: str = ""
     status: str = "done"  # a human save marks the page reviewed unless told otherwise
     version: int | None = None  # version the editor loaded; a stale value is rejected with 409
+    figures: list[dict] | None = None  # None keeps the page's stored figures (crop boxes) unchanged
 
 
 class ViewUpdate(BaseModel):
@@ -215,6 +217,23 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             raise HTTPException(404, str(e)) from e
         return FileResponse(cached_page_png(doc, n), media_type="image/png")
 
+    @app.get("/api/documents/{doc_id}/pages/{n}/figure/{fid}")
+    def get_page_figure(doc_id: str, n: int, fid: str):
+        """Crop of a figure on this page (from its stored bbox), so the editor can show it before a build."""
+        from fastapi.responses import Response
+
+        from .pdf import crop_png
+
+        doc = load_doc(doc_id)
+        try:
+            p = doc.page(n)
+        except IndexError as e:
+            raise HTTPException(404, str(e)) from e
+        fig = next((f for f in p.figures if f.id == fid), None)
+        if fig is None or not fig.bbox:
+            raise HTTPException(404, "no crop box for this figure")
+        return Response(crop_png(cached_page_png(doc, n).read_bytes(), fig.bbox), media_type="image/png")
+
     @app.get("/api/documents/{doc_id}/pages/{n}/words")
     def get_page_words(doc_id: str, n: int) -> list[dict[str, Any]]:
         """Word boxes on the scan (0-1000 page coordinates, reading order), for the follow/marker feature."""
@@ -250,8 +269,9 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             raise HTTPException(409, f"page {n} was changed by {p.changed_by or 'someone else'} while you were "
                                      f"editing (version {p.version}, you loaded {upd.version}); reload it first")
         clean = sanitize_fragment(upd.html)
+        figures = upd.figures if upd.figures is not None else [asdict(f) for f in p.figures]
         apply_result(p, {"label": upd.label, "skip": upd.skip, "starts_mid_paragraph": upd.starts_mid_paragraph,
-                         "ends_mid_paragraph": upd.ends_mid_paragraph, "html": clean, "figures": [],
+                         "ends_mid_paragraph": upd.ends_mid_paragraph, "html": clean, "figures": figures,
                          "notes": upd.notes}, model="editor", changed_by="editor")
         if upd.status in ("done", "needs_review", "pending"):
             p.status = upd.status if (clean or upd.skip) else "pending"

@@ -376,6 +376,7 @@ async function loadPage(n, opts = {}) {
   img.hidden = false;
   img.src = `/api/documents/${state.doc.doc_id}/pages/${n}/image`;
   $("#editor").innerHTML = d.html || "";
+  showFigures($("#editor"));
   $("#source").value = d.html || "";
   $("#draft").textContent = d.draft_text || "(no draft text)";
   $("#f-label").value = d.label || "";
@@ -395,8 +396,23 @@ async function loadPage(n, opts = {}) {
   reportView();
 }
 
+/* Figures are stored as <img src="fig:ID">; in the editor they are shown from the crop endpoint and
+   restored to fig:ID when the HTML is read back. */
+function showFigures(ed) {
+  ed.querySelectorAll('img[src^="fig:"]').forEach((im) => {
+    const id = im.getAttribute("src").slice(4);
+    im.dataset.fig = id;
+    im.src = `/api/documents/${state.doc.doc_id}/pages/${state.page}/figure/${encodeURIComponent(id)}`;
+  });
+}
+function editorHtml() {
+  const clone = $("#editor").cloneNode(true);
+  clone.querySelectorAll("img[data-fig]").forEach((im) => { im.setAttribute("src", "fig:" + im.dataset.fig); delete im.dataset.fig; });
+  clone.querySelectorAll("img.selected").forEach((im) => im.classList.remove("selected"));
+  return clone.innerHTML;
+}
 function currentHtml() {
-  return $("#toggle-source").checked ? $("#source").value : $("#editor").innerHTML;
+  return $("#toggle-source").checked ? $("#source").value : editorHtml();
 }
 
 async function savePage(andNext = false, overwrite = false) {
@@ -410,7 +426,7 @@ async function savePage(andNext = false, overwrite = false) {
   try {
     const saved = await api(`/documents/${state.doc.doc_id}/pages/${state.page}`, { method: "PUT", body });
     state.dirty = false; state.pageData = { ...state.pageData, ...saved };
-    $("#editor").innerHTML = saved.html; $("#source").value = saved.html;
+    $("#editor").innerHTML = saved.html; showFigures($("#editor")); $("#source").value = saved.html;
     const p = state.doc.pages.find((x) => x.index === state.page);
     Object.assign(p, saved);
     renderPages();
@@ -523,7 +539,7 @@ $("#btn-lang").addEventListener("click", () => {
 });
 $("#toggle-source").addEventListener("change", (e) => {
   const src = e.target.checked;
-  if (src) { $("#source").value = $("#editor").innerHTML; } else { $("#editor").innerHTML = $("#source").value; }
+  if (src) { $("#source").value = editorHtml(); } else { $("#editor").innerHTML = $("#source").value; showFigures($("#editor")); }
   $("#source").hidden = !src; $("#editor").hidden = src;
   if (src) { $("#toggle-draft").checked = false; $("#draft").hidden = true; }
 });

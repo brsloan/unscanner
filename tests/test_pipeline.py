@@ -103,12 +103,17 @@ def test_transcribe_build_validate(doc, tmp_path):
         assert "schema:accessibilityFeature" in opf and "printPageNumbers" in opf
         assert 'epub:type="page-list"' in nav and "#pg-38" in nav
         assert any(n.startswith("OEBPS/text/ch") for n in names)
-        # every xhtml is well-formed XML
+        # every xhtml is well-formed XML and every image it references exists at the resolved path
+        import posixpath
+
         from lxml import etree
 
         for n in names:
             if n.endswith(".xhtml"):
-                etree.fromstring(z.read(n))
+                root = etree.fromstring(z.read(n))
+                for im in root.iter("{http://www.w3.org/1999/xhtml}img"):
+                    target = posixpath.normpath(posixpath.join(posixpath.dirname(n), im.get("src")))
+                    assert target in names, f"{n} references missing {target}"
 
 
 def test_parse_model_json_tolerates_fences():

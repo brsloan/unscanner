@@ -66,6 +66,25 @@ def test_open_edit_build_validate(client, tmp_path):
     assert not [i for i in r.json()["issues"] if i["severity"] == "error"], r.json()["issues"]
 
 
+def test_figures_survive_editor_saves_and_can_be_previewed(client, tmp_path):
+    pdf = make_pdf(tmp_path / "fig sample.pdf")
+    doc_id = client.post("/api/documents", json={"pdf_path": str(pdf)}).json()["doc_id"]
+    html = '<figure><img src="fig:1-1" alt="A grey box."></figure><p>Text here for the page.</p>'
+    r = client.put(f"/api/documents/{doc_id}/pages/1", json={
+        "html": html, "figures": [{"id": "1-1", "alt": "A grey box.", "bbox": [100, 100, 300, 300], "caption": ""}]})
+    assert r.status_code == 200
+    # A later save from the editor (no figures field) keeps the crop box...
+    r = client.put(f"/api/documents/{doc_id}/pages/1", json={"html": html.replace("Text", "More text"), "version": 1})
+    assert r.status_code == 200
+    fig = client.get(f"/api/documents/{doc_id}/pages/1/figure/1-1")
+    assert fig.status_code == 200 and fig.content[:4] == b"\x89PNG"
+    assert client.get(f"/api/documents/{doc_id}/pages/1/figure/nope").status_code == 404
+    # ...and the build crops it and the HTML references the file.
+    r = client.post(f"/api/documents/{doc_id}/build")
+    assert r.json()["figures"] == 1
+    assert 'src="figures/p001-1-1.png"' in client.get(f"/api/documents/{doc_id}/preview").text
+
+
 def test_settings_roundtrip(client):
     r = client.put("/api/settings", json={"backend": "openai", "openai_model": "qwen2.5vl:7b", "junk": 1})
     assert r.json()["backend"] == "openai" and "junk" not in r.json()

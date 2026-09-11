@@ -78,6 +78,11 @@ def _chapter_title(chunk, fallback: str) -> str:
 def build_epub(a: Assembled, out_path: str | Path, author: str = "", source: str = "") -> Path:
     out_path = Path(out_path)
     main = copy.deepcopy(a.main)
+    # Chapter files live in OEBPS/text/, images in OEBPS/figures/: make the image paths relative to text/.
+    for im in main.iter("img"):
+        src = im.get("src", "")
+        if src.startswith("figures/"):
+            im.set("src", "../" + src)
     chunks = _split_chapters(main)
     files = [f"text/ch{i + 1:03d}.xhtml" for i in range(len(chunks))]
 
