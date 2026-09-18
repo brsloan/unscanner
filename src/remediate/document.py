@@ -93,6 +93,20 @@ class Document:
             raise IndexError(f"page {index} out of range 1..{len(self.pages)}")
         return self.pages[index - 1]
 
+    def set_properties(self, title: str | None = None, author: str | None = None,
+                       language: str | None = None) -> None:
+        """Change the output metadata; None leaves a field as it is. Raises ValueError on bad input."""
+        if title is not None:
+            if not title.strip():
+                raise ValueError("the title cannot be empty")
+            self.title = title.strip()
+        if author is not None:
+            self.author = author.strip()
+        if language is not None:
+            if not re.fullmatch(r"[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*", language.strip()):
+                raise ValueError(f"not a language code: {language!r} (use e.g. en, fr, en-GB)")
+            self.language = language.strip()
+
     def summary(self) -> dict:
         counts: dict[str, int] = {}
         for p in self.pages:

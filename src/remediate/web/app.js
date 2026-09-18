@@ -340,7 +340,7 @@ async function openDoc(docId, pageToShow) {
   state.doc = await api(`/documents/${docId}`);
   localStorage.setItem("remediate.lastDoc", docId);
   renderPages(); renderMeta();
-  ["#btn-transcribe", "#btn-build", "#btn-validate"].forEach((b) => ($(b).disabled = false));
+  ["#btn-transcribe", "#btn-build", "#btn-validate", "#btn-properties"].forEach((b) => ($(b).disabled = false));
   $("#lnk-html").href = `/api/documents/${docId}/output/html`;
   $("#lnk-epub").href = `/api/documents/${docId}/output/epub`;
   if (state.doc.job) pollJob(state.doc.job.id);
@@ -621,6 +621,7 @@ async function poll() {
     }
     const fresh = await api(`/documents/${state.doc.doc_id}`);
     state.doc.pages = fresh.pages; state.doc.status_counts = fresh.status_counts;
+    showProperties(fresh);
     renderPages(); renderMeta();
     const cur = fresh.pages.find((p) => p.index === state.page);
     if (cur && state.pageData && cur.version !== state.pageData.version && $("#banner").hidden) {
@@ -994,6 +995,7 @@ function wireDialog(id) {
   return dlg;
 }
 const dlgOpen = wireDialog("#dlg-open"), dlgTranscribe = wireDialog("#dlg-transcribe"), dlgSettings = wireDialog("#dlg-settings");
+const dlgProperties = wireDialog("#dlg-properties");
 
 $("#btn-open").addEventListener("click", () => dlgOpen.showModal());
 $("#form-open").addEventListener("submit", async (e) => {
@@ -1086,6 +1088,27 @@ function showResults(title, html) {
   $("#results").hidden = false; $("#results-title").textContent = title; $("#results-body").innerHTML = html;
 }
 $("#btn-results-close").addEventListener("click", () => ($("#results").hidden = true));
+
+$("#btn-properties").addEventListener("click", async () => {
+  const d = await api(`/documents/${state.doc.doc_id}`);  // fresh: Claude may have changed them
+  const f = $("#form-properties");
+  ["title", "author", "language"].forEach((k) => (f.elements[k].value = d[k] || ""));
+  dlgProperties.showModal();
+});
+function showProperties(d) {
+  Object.assign(state.doc, { title: d.title, author: d.author, language: d.language });
+  const opt = $(`#doc-select option[value="${d.doc_id}"]`);
+  if (opt) opt.textContent = d.title || d.doc_id;
+}
+$("#form-properties").addEventListener("submit", async (e) => {
+  const f = new FormData(e.target);
+  try {
+    const d = await api(`/documents/${state.doc.doc_id}/properties`, { method: "PUT",
+      body: { title: f.get("title"), author: f.get("author"), language: f.get("language") } });
+    showProperties(d);
+    setStatus(`Properties saved: ${d.title} · ${d.author || "no author"} · ${d.language}. Build again to update the output.`);
+  } catch (err) { setStatus("Properties not saved: " + err.message, true); }
+});
 
 $("#btn-settings").addEventListener("click", async () => {
   const s = await api("/settings");

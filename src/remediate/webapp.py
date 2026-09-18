@@ -77,6 +77,12 @@ class OpenRequest(BaseModel):
     language: str = "en"
 
 
+class PropertiesUpdate(BaseModel):
+    title: str
+    author: str = ""
+    language: str = "en"
+
+
 class DescribeRequest(BaseModel):
     caption: str = ""
     context: str = ""
@@ -251,6 +257,20 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
     @app.get("/api/documents/{doc_id}")
     def get_document(doc_id: str) -> dict[str, Any]:
         return doc_view(load_doc(doc_id))
+
+    @app.put("/api/documents/{doc_id}/properties")
+    def put_properties(doc_id: str, upd: PropertiesUpdate) -> dict[str, Any]:
+        """Title, author and language used for the HTML <title>/lang and the EPUB metadata."""
+        doc = load_doc(doc_id)
+        if active_job(doc_id):
+            # the job saves its own copy of the document after every page and would undo this change
+            raise HTTPException(409, "a transcription job is running for this document; try again when it finishes")
+        try:
+            doc.set_properties(upd.title, upd.author, upd.language)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        doc.save()
+        return doc_view(doc)
 
     @app.get("/api/documents/{doc_id}/pages/{n}")
     def get_page(doc_id: str, n: int) -> dict[str, Any]:

@@ -73,6 +73,22 @@ async def test_agent_sees_view_and_edits_show_up(env):
         assert "No page is open" in r.content[0].text
 
 
+@pytest.mark.anyio
+async def test_agent_sets_properties(env):
+    c, doc_id, work = env
+    from mcp.client.client import Client
+
+    mcp_server.configure(work, work.parent / "out")
+    async with Client(mcp_server.server) as agent:
+        r = await agent.call_tool("set_properties", {"doc_id": doc_id, "author": "B. Author", "language": "de"})
+        assert r.structured_content["title"] == "Collab"  # omitted fields are kept
+        d = c.get(f"/api/documents/{doc_id}").json()
+        assert (d["title"], d["author"], d["language"]) == ("Collab", "B. Author", "de")
+        r = await agent.call_tool("set_properties", {"doc_id": doc_id, "language": "not a code"})
+        assert r.is_error and "language code" in r.content[0].text
+    assert c.get(f"/api/documents/{doc_id}").json()["language"] == "de"
+
+
 def test_instructions_reach_the_prompt(env):
     c, doc_id, work = env
     from remediate.document import Document

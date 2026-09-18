@@ -182,3 +182,20 @@ def test_settings_max_tokens_reaches_openai_backend(client, tmp_path, monkeypatc
     doc_id = client.post("/api/documents", json={"pdf_path": str(pdf)}).json()["doc_id"]
     client.post(f"/api/documents/{doc_id}/transcribe", json={"pages": "1"})
     assert seen["name"] == "openai" and seen["max_tokens"] == 32000
+
+
+def test_document_properties(client, tmp_path):
+    pdf = make_pdf(tmp_path / "props.pdf")
+    doc_id = client.post("/api/documents", json={"pdf_path": str(pdf), "title": "Old"}).json()["doc_id"]
+    r = client.put(f"/api/documents/{doc_id}/properties",
+                   json={"title": " New Title ", "author": "A. Writer", "language": "fr-CA"})
+    assert r.status_code == 200, r.text
+    d = client.get(f"/api/documents/{doc_id}").json()
+    assert (d["title"], d["author"], d["language"]) == ("New Title", "A. Writer", "fr-CA")
+    assert client.put(f"/api/documents/{doc_id}/properties", json={"title": "  ", "language": "en"}).status_code == 400
+    assert client.put(f"/api/documents/{doc_id}/properties", json={"title": "T", "language": "english!"}).status_code == 400
+    # the build uses them
+    html = client.post(f"/api/documents/{doc_id}/build").json()["html"]
+    from pathlib import Path
+    out = Path(html).read_text(encoding="utf-8")
+    assert '<html lang="fr-CA">' in out and "<title>New Title</title>" in out

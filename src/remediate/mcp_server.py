@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.mcpserver.utilities.types import Image
 
 from .document import Document, parse_page_range, slugify
@@ -97,6 +98,23 @@ def open_document(pdf_path: str, title: str = "", author: str = "", language: st
     """
     doc = new_document(pdf_path, _work_root(), title=title, author=author, language=language)
     return {"doc_id": Path(doc.workdir).name, **doc.summary()}
+
+
+@server.tool()
+def set_properties(doc_id: str, title: str | None = None, author: str | None = None,
+                   language: str | None = None) -> dict[str, Any]:
+    """Change the document's title, author or language (a BCP-47 code such as "en", "fr", "en-GB");
+    omitted fields stay as they are. These become the HTML <title> and lang attribute, the EPUB
+    dc:title / dc:creator / dc:language, and the top heading when the scan has none. Run build
+    afterwards to update the output. Returns the document summary.
+    """
+    doc = _load(doc_id)
+    try:
+        doc.set_properties(title, author, language)
+    except ValueError as e:
+        raise ToolError(str(e)) from e  # a plain exception would reach Claude without its message
+    doc.save()
+    return {"doc_id": doc_id, **doc.summary()}
 
 
 @server.tool()

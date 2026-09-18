@@ -164,6 +164,7 @@ Tools:
 | Tool | Purpose |
 |---|---|
 | `open_document(pdf_path, title, author, language)` | create/reopen the work directory, returns `doc_id` |
+| `set_properties(doc_id, title, author, language)` | change the output metadata (omitted fields are kept); same as Properties… in the web UI |
 | `list_documents()`, `get_status(doc_id)` | progress per page |
 | `get_guidelines()` | the transcription contract (same rules the batch backends use) |
 | `get_page(doc_id, page)` | page image + OCR draft + neighbours' edges + any stored HTML |

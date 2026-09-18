@@ -19,6 +19,7 @@
   <a id="lnk-epub" class="button" hidden download>EPUB</a>
   <span class="spacer"></span>
   <button id="btn-notes" type="button" aria-pressed="true" title="Show or hide the notes panel">Notes <span id="notes-warn" class="warn" role="img" aria-label="this page has notes" hidden>⚠</span></button>
+  <button id="btn-properties" type="button" disabled title="Title, author and language of the output HTML and EPUB">Properties…</button>
   <button id="btn-settings" type="button">Settings</button>
 </header>
 
@@ -172,6 +173,18 @@
     <p><label>Author <input name="author" type="text" size="40"></label>
        <label>Language <input name="language" type="text" size="4" value="en"></label></p>
     <menu><button value="cancel" type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Open</button></menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-properties">
+  <form method="dialog" id="form-properties">
+    <h2>Document properties</h2>
+    <p><label>Title <input name="title" type="text" size="50" required></label></p>
+    <p><label>Author <input name="author" type="text" size="50"></label></p>
+    <p><label>Language <input name="language" type="text" size="8" required pattern="[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*"></label>
+      <small>The main language of the text as a code such as <code>en</code>, <code>fr</code> or <code>en-GB</code>. Screen readers use it to pick a voice.</small></p>
+    <p><small>These go into the HTML and EPUB the next time you Build. The title is also the document's top heading when the scan has none.</small></p>
+    <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Save</button></menu>
   </form>
 </dialog>
 
