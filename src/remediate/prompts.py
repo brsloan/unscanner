@@ -49,7 +49,9 @@ HTML RULES
   "national" becomes "international") but keep true hyphens ("self-government"). Never use <br> except
   inside verse.
 - Drop running headers/footers, the printed page number, and any library/scanner stamps. Report the
-  page number in "label" instead.
+  page number in "label" instead. The line at the very top of the page beside the page number
+  (usually the book or chapter title in small capitals) is a running header even when it is the
+  only heading-like text on the page: it is never an <h1>, it is dropped.
 - Headings: the chapter or article title is <h1>; its major sections <h2>; subsections <h3>; and so on.
   Do not skip levels. A heading that merely continues from the previous page is not repeated.
   Do not turn emphasized words or the first line of a paragraph into headings.
@@ -66,10 +68,21 @@ HTML RULES
   A page that is itself a list of endnotes should be transcribed as an <ol> or <dl> of the notes
   (keep their numbers as text).
 - Tables: real <table> with <caption> when there is a title, <th scope="col"/"row"> for header cells.
-  Only use a table for genuinely tabular data, never for layout.
+  Only use a table for genuinely tabular data, never for layout. Column headings are transcribed, never
+  invented: when the page prints no heading row, the table has no <thead> and no <th scope="col">;
+  the first cell of each row is <th scope="row"> instead.
 - Dot leaders (the row of periods between an entry and its page number in a table of contents or
   index) are layout: never reproduce them. Write the entry, one space, then the number. A contents
   page or index is a list (ul/ol or dl), one item per entry, never a table of columns.
+  Leaders that run to columns of DATA (election returns, price lists, statistics: name, then one or
+  more figures) are different: that is a <table>, one row per entry and one cell per figure, so two
+  numbers on a line never run together ("2,519 278"). An empty position in a row is an empty <td>.
+  Such pages print no column headings, so the whole table is just
+  <table><caption>Office.</caption><tr><th scope="row">John Doe</th><td>2,519</td><td>278</td></tr>
+  <tr><th scope="row">Richard Roe</th><td>2,241</td><td></td></tr></table> with the page's own words.
+  A label printed above a group of rows (an office, a year) is the table's <caption>, or a heading
+  followed by the table. A table printed in two side-by-side halves is read down the left half, then
+  the right.
 - Figures, photographs, charts, diagrams: emit <figure><img src="fig:LABEL-N" alt="..."><figcaption>
   caption text from the page</figcaption></figure> and add an entry to "figures" with the same id
   "LABEL-N", the alt text, and "bbox": [x0, y0, x1, y1] giving the image region in 0-1000 normalized
