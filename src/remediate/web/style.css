@@ -59,7 +59,7 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 #page-indicator { min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }
 .zoom-label input { width: 90px; vertical-align: middle; }
 .image-area { position: relative; flex: 1; min-height: 0; display: flex; }
-.image-scroll { flex: 1; overflow: auto; background: #6b6b6b; text-align: center; line-height: 0; }
+.image-scroll { flex: 1; min-width: 0; overflow: auto; background: #6b6b6b; text-align: center; line-height: 0; }
 .img-wrap { position: relative; display: inline-block; margin: 6px; line-height: 0; }
 #page-image { display: block; box-shadow: 0 0 8px rgba(0,0,0,0.5); background: #fff; max-width: none; cursor: text; }
 /* caret marker: a red dot just left of the word the caret is on */

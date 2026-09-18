@@ -258,9 +258,12 @@ function placeMarker(box) {
     const y = wrap.offsetTop + (yPct / 100) * img.clientHeight;
     const x = wrap.offsetLeft + (xPct / 100) * img.clientWidth;
     const top = scroller.scrollTop, h = scroller.clientHeight;
-    if (y < top + h * 0.2 || y > top + h * 0.8) scroller.scrollTo({ top: y - h / 2, behavior: "smooth" });
     const left = scroller.scrollLeft, w = scroller.clientWidth;
-    if (img.clientWidth > w && (x < left + w * 0.1 || x > left + w * 0.9)) scroller.scrollTo({ left: x - w / 2, behavior: "smooth" });
+    // One scrollTo for both axes: a second smooth scroll would cancel the first.
+    const to = { behavior: "smooth" };
+    if (y < top + h * 0.2 || y > top + h * 0.8) to.top = y - h / 2;
+    if (img.clientWidth > w && (x < left + w * 0.1 || x > left + w * 0.9)) to.left = x - w / 2;
+    if ("top" in to || "left" in to) scroller.scrollTo(to);
   }
 }
 $("#editor").addEventListener("keyup", locateCaret);
