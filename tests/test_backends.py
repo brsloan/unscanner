@@ -102,3 +102,12 @@ def test_anthropic_haiku_omits_effort_and_fallbacks():
     be.transcribe(b"\x89PNG", "This is PDF page 1 of 1.")
     assert "effort" not in seen["body"]["output_config"]
     assert "fallbacks" not in seen["body"] and "server-side-fallback" not in seen["beta"]
+
+
+def test_openai_compat_accepts_full_endpoint_url():
+    from remediate.backends.openai_compat import normalize_base_url
+    assert normalize_base_url("https://genai.example.edu/api/chat/completions") == "https://genai.example.edu/api"
+    assert normalize_base_url("https://genai.example.edu/api/chat/completions/") == "https://genai.example.edu/api"
+    assert normalize_base_url("http://localhost:11434/v1/") == "http://localhost:11434/v1"
+    be = OpenAICompatBackend(model="m", base_url="https://genai.example.edu/api/chat/completions")
+    assert be.base_url == "https://genai.example.edu/api"

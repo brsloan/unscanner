@@ -18,6 +18,21 @@ DEFAULT_BASE_URL = "http://localhost:11434/v1"  # Ollama
 DEFAULT_MODEL = "qwen2.5vl:7b"
 
 
+def normalize_base_url(url: str) -> str:
+    """Return the API root that ``/chat/completions`` is appended to.
+
+    People often paste the full endpoint from their provider's docs
+    (``https://host/api/chat/completions``); accept that too instead of producing
+    ``.../chat/completions/chat/completions`` and a 404/405.
+    """
+    url = url.strip().rstrip("/")
+    for suffix in ("/chat/completions", "/completions"):
+        if url.endswith(suffix):
+            url = url[: -len(suffix)]
+            break
+    return url.rstrip("/")
+
+
 class OpenAICompatBackend(Backend):
     name = "openai"
 
@@ -25,7 +40,7 @@ class OpenAICompatBackend(Backend):
                  max_tokens: int = 8000, temperature: float = 0.0, timeout: float = 600.0,
                  json_mode: bool = True):
         self.model = model or DEFAULT_MODEL
-        self.base_url = (base_url or DEFAULT_BASE_URL).rstrip("/")
+        self.base_url = normalize_base_url(base_url or DEFAULT_BASE_URL)
         self.api_key = api_key or "none"
         self.max_tokens = max_tokens
         self.temperature = temperature

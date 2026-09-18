@@ -176,7 +176,8 @@
          <small>Leave empty to use the ANTHROPIC_API_KEY environment variable. Stored in work/settings.json.</small></p>
     </fieldset>
     <fieldset><legend>Local / OpenAI-compatible endpoint</legend>
-      <p><label>Base URL <input name="openai_base_url" type="text" size="40"></label></p>
+      <p><label>Base URL <input name="openai_base_url" type="text" size="40" placeholder="http://localhost:11434/v1"></label>
+      <small>The API root; <code>/chat/completions</code> is added automatically (pasting the full endpoint is fine too).</small></p>
       <p><label>Model <input name="openai_model" type="text" size="24"></label>
          <label>API key <input name="openai_api_key" type="password" size="20" autocomplete="off"></label></p>
     </fieldset>
