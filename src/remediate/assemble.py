@@ -190,7 +190,8 @@ def resolve_figures(doc: Document, page: Page, section, out_dir: Path, figures: 
             # No crop available: replace the image with its description so nothing is lost.
             p = lhtml.Element("p")
             p.set("class", "figure-description")
-            strong = lhtml.SubElement(p, "strong")
+            strong = lhtml.Element("strong")
+            p.append(strong)
             strong.text = "Image: "
             strong.tail = alt or "(no description)"
             p.tail = img.tail

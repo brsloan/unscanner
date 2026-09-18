@@ -135,6 +135,20 @@ def test_heading_normalization(tmp_path, doc):
     assert "<h2" in html and "<h3" in html and "<h4" not in html  # demoted then skip closed
 
 
+def test_image_without_crop_becomes_description(tmp_path, doc):
+    doc.page(1).html = "<h1>T</h1><figure><img src=\"fig:1-1\" alt=\"A map of the region.\"></figure><p>a</p>"
+    doc.page(2).html = "<p>b</p><img src=\"fig:2-1\">"
+    doc.page(3).html = "<p>c</p>"
+    for p in doc.pages:
+        p.status = "done"
+    a = assemble(doc, tmp_path / "out")
+    html = a.html()
+    assert "<img" not in html
+    assert '<p class="figure-description"><strong>Image: </strong>A map of the region.</p>' in html
+    assert "(no description)" in html
+    assert any("image without description" in w for w in a.warnings)
+
+
 @pytest.mark.anyio
 async def test_mcp_server_roundtrip(tmp_path, monkeypatch):
     pdf = make_pdf(tmp_path / "mcp sample.pdf")
