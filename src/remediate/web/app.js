@@ -344,10 +344,20 @@ async function openDoc(docId, pageToShow) {
   $("#lnk-html").href = `/api/documents/${docId}/output/html`;
   $("#lnk-epub").href = `/api/documents/${docId}/output/epub`;
   if (state.doc.job) pollJob(state.doc.job.id);
-  const first = pageToShow || (state.doc.pages.find((p) => p.status === "needs_review") || state.doc.pages[0] || {}).index;
+  const last = lastPages()[docId];
+  const resume = state.doc.pages.some((p) => p.index === last) ? last : null;
+  const first = pageToShow || resume || (state.doc.pages.find((p) => p.status === "needs_review") || state.doc.pages[0] || {}).index;
   state.page = null; state.dirty = false;  // switching documents: the previous page's draft is already stored
   if (first) loadPage(first);
   startPolling();
+}
+
+// The page last shown in each document, so reopening the app (or the document) resumes there.
+function lastPages() {
+  try { return JSON.parse(localStorage.getItem("remediate.lastPage") || "{}"); } catch (_) { return {}; }
+}
+function rememberPage(docId, n) {
+  try { localStorage.setItem("remediate.lastPage", JSON.stringify({ ...lastPages(), [docId]: n })); } catch (_) { /* storage disabled */ }
 }
 
 const STATUS_LABEL = { done: "approved", needs_review: "needs review", pending: "not transcribed", error: "error" };
@@ -436,6 +446,7 @@ async function loadPage(n, opts = {}) {
   else if (opts.discardCurrent) clearDraft(state.page);
   const d = await api(`/documents/${state.doc.doc_id}/pages/${n}`);
   state.page = n; state.pageData = d; state.dirty = false;
+  rememberPage(state.doc.doc_id, n);
   hideBanner();
   const draft = opts.discardCurrent || opts.fresh ? null : getDraft(n);
   const ind = $("#page-indicator");

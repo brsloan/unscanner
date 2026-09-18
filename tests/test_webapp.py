@@ -49,6 +49,9 @@ def test_open_edit_build_validate(client, tmp_path):
 
     assert client.get("/").status_code == 200 and "remediate" in client.get("/").text
     assert client.get("/static/app.js").status_code == 200
+    # the UI code is revalidated on every load, so a restart picks up changes to it
+    assert client.get("/").headers["cache-control"] == "no-cache"
+    assert client.get("/static/app.js").headers["cache-control"] == "no-cache"
 
     r = client.get(f"/api/documents/{doc_id}/pages/1")
     assert "CHAPTER ONE" in r.json()["draft_text"]

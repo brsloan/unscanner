@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -201,9 +201,19 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         return backend_from_settings(s, name)
 
     # ---------------------------------------------------------------- pages
+    # The UI's own files are always revalidated: otherwise a browser keeps running an old app.js for
+    # hours after the code changes (StaticFiles sends no Cache-Control, so browsers guess).
     @app.get("/", response_class=HTMLResponse)
-    def index() -> str:
-        return (WEB_DIR / "index.html").read_text(encoding="utf-8")
+    def index() -> HTMLResponse:
+        return HTMLResponse((WEB_DIR / "index.html").read_text(encoding="utf-8"),
+                            headers={"Cache-Control": "no-cache"})
+
+    @app.middleware("http")
+    async def revalidate_static(request: Request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
 
     app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
 
