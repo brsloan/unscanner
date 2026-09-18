@@ -629,11 +629,72 @@ async function poll() {
 
 // ------------------------------------------------------------------ editor commands
 document.execCommand("defaultParagraphSeparator", false, "p");
+/* Chrome's block commands leave a new list inside the paragraph it replaced and wrap moved text in
+   spans carrying the old computed style; unwrap both, keeping the caret where it was. */
+function tidyAfterCommand() {
+  const unwrap = (el) => { while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el); el.remove(); };
+  const sel = window.getSelection();
+  const at = sel && sel.rangeCount ? [sel.anchorNode, sel.anchorOffset, sel.focusNode, sel.focusOffset] : null;
+  $("#editor").querySelectorAll("span[style]:not([lang])").forEach(unwrap);
+  $("#editor").querySelectorAll("p > ul, p > ol").forEach((list) => {
+    const par = list.parentElement;
+    if ([...par.childNodes].every((n) => n === list || !n.textContent.trim())) unwrap(par);
+  });
+  // Moving a node drops the selection out of it; the text nodes themselves survive, so put it back.
+  if (at && at[0].isConnected && at[2].isConnected) sel.setBaseAndExtent(...at);
+}
 document.querySelectorAll("[data-cmd]").forEach((b) => b.addEventListener("click", () => {
-  $("#editor").focus(); document.execCommand(b.dataset.cmd, false, null); markDirty();
+  $("#editor").focus(); document.execCommand(b.dataset.cmd, false, null); tidyAfterCommand(); markDirty(); updateBlockStyle();
 }));
+
+// The block-style dropdown shows the element type at the caret and converts the block when changed.
+// A list item reports its list, and text inside a block quote or footnote reports that container,
+// because that is the type a reader of the output will meet.
+const BLOCK_KINDS = "p, h1, h2, h3, h4, h5, h6, pre, td, th, caption, figcaption, figure, dt, dd";
+const LIST_CMD = { ul: "insertUnorderedList", ol: "insertOrderedList" };
+function blockKindAt(node) {
+  const ed = $("#editor");
+  const el = node && (node.nodeType === 1 ? node : node.parentElement);
+  if (!el || !ed.contains(el)) return "";
+  const inside = (sel) => { const hit = el.closest(sel); return hit && hit !== ed && ed.contains(hit) ? hit : null; };
+  const li = inside("li");
+  if (li && li.parentElement) return li.parentElement.tagName.toLowerCase();
+  if (inside("blockquote")) return "blockquote";
+  if (inside('aside[role="doc-footnote"]')) return "footnote";
+  const block = inside(BLOCK_KINDS);
+  return block ? block.tagName.toLowerCase() : "p";  // bare text in the editor is saved as a paragraph
+}
+function currentBlockKind() {
+  const sel = window.getSelection();
+  if (!sel || !sel.rangeCount || !$("#editor").contains(sel.anchorNode)) return null;
+  const range = sel.getRangeAt(0);
+  const start = blockKindAt(range.startContainer);
+  return sel.isCollapsed || blockKindAt(range.endContainer) === start ? start : "mixed";
+}
+function updateBlockStyle() {
+  const kind = currentBlockKind();
+  if (kind !== null) $("#block-style").value = kind;  // selection elsewhere: keep showing the last type
+}
+document.addEventListener("selectionchange", updateBlockStyle);
+
 $("#block-style").addEventListener("change", (e) => {
-  $("#editor").focus(); document.execCommand("formatBlock", false, e.target.value); markDirty();
+  const target = e.target.value;
+  $("#editor").focus();  // brings back the editor selection the dropdown took focus from
+  const from = currentBlockKind();
+  if (["caption", "figcaption", "dt", "figure"].includes(from)) {
+    setStatus("This text's type cannot be changed here; use Source to restructure it.", true);
+    updateBlockStyle(); return;
+  }
+  // Leave the current container first, so a heading does not end up inside a list item or a quote.
+  if (LIST_CMD[from] && !LIST_CMD[target]) document.execCommand(LIST_CMD[from], false, null);
+  if (from === "blockquote" && target !== "blockquote") document.execCommand("outdent", false, null);
+  if (LIST_CMD[target]) {
+    if (!LIST_CMD[from]) document.execCommand("formatBlock", false, "p");  // a heading would stay inside the item
+    if (currentBlockKind() !== target) document.execCommand(LIST_CMD[target], false, null);
+  } else {
+    document.execCommand("formatBlock", false, target);
+  }
+  tidyAfterCommand(); markDirty(); updateBlockStyle();
 });
 
 // Alignment is a class on the paragraph or heading (the sanitizer keeps only align-center / align-right

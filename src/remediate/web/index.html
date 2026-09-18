@@ -64,13 +64,31 @@
 
   <section class="pane pane-editor" aria-label="Transcription editor">
     <div class="pane-toolbar" role="toolbar" aria-label="Formatting">
-      <select id="block-style" aria-label="Block style">
+      <!-- Shows the element type at the caret; choosing another type converts the block. The disabled
+           options are display-only: types that are shown but cannot be made from here. -->
+      <select id="block-style" aria-label="Element type of the text at the caret; choose another to change it"
+              title="Element type of the text at the caret; choose another to change it">
         <option value="p">Paragraph</option>
         <option value="h1">Heading 1</option>
         <option value="h2">Heading 2</option>
         <option value="h3">Heading 3</option>
         <option value="h4">Heading 4</option>
+        <option value="h5">Heading 5</option>
+        <option value="h6">Heading 6</option>
         <option value="blockquote">Block quote</option>
+        <option value="ul">Bulleted list</option>
+        <option value="ol">Numbered list</option>
+        <option value="pre">Preformatted</option>
+        <option value="footnote" disabled>Footnote</option>
+        <option value="td" disabled>Table cell</option>
+        <option value="th" disabled>Table header cell</option>
+        <option value="caption" disabled>Table caption</option>
+        <option value="figcaption" disabled>Figure caption</option>
+        <option value="figure" disabled>Figure</option>
+        <option value="dt" disabled>Definition term</option>
+        <option value="dd" disabled>Definition</option>
+        <option value="mixed" disabled>Mixed</option>
+        <option value="" disabled>—</option>
       </select>
       <button type="button" data-cmd="bold" title="Strong (Ctrl+B)"><strong>B</strong></button>
       <button type="button" data-cmd="italic" title="Emphasis (Ctrl+I)"><em>I</em></button>
