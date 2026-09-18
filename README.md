@@ -19,8 +19,14 @@ It can be driven three ways:
 pip install -e .
 ```
 
-Python 3.11+. Optional for EPUB validation: Java 21 and the `epubcheck.jar` in `tools/epubcheck-*/`
-(both are present on this machine already; set `EPUBCHECK_JAR` to point elsewhere).
+Python 3.11+. Optional for EPUB validation: Java 21 and [EPUBCheck](https://www.w3.org/publishing/epubcheck/)
+unpacked into `tools/epubcheck-*/` (or set `EPUBCHECK_JAR` to point at `epubcheck.jar` elsewhere).
+
+**Before your first run, edit `CONTEXT` at the top of `src/unscanner/prompts.py`.** It tells the model
+who is doing the work and on what legal basis (a university library's accessibility service, source
+held lawfully, use reviewed by counsel) so that faithful transcription is not mistaken for a copyright
+problem. It is sent with every page. Those statements were true where this tool was written; make them
+true for your institution, or remove what does not apply.
 
 If the `unscanner` command is not on your PATH (pip's user Scripts folder often is not), use
 `python -m unscanner.cli` in its place everywhere below.
@@ -29,7 +35,7 @@ If the `unscanner` command is not on your PATH (pip's user Scripts folder often 
 
 ```bash
 # one shot: open + transcribe + build + validate
-unscanner run "pdfs/HIST 352 Cold Wars Killing Fields.pdf" --title "Cold War's Killing Fields (excerpt)" --author "Paul Thomas Chamberlin"
+unscanner run "pdfs/HIST 101 Harbor Towns.pdf" --title "Harbor Towns of the North (excerpt)" --author "Jane Q. Example"
 
 # or step by step
 unscanner open  pdfs/x.pdf --title "..." --author "..."
@@ -144,7 +150,7 @@ automatically, or run `claude mcp add --transport http unscanner http://127.0.0.
 Start with `unscanner serve` (stdio). `.mcp.json` in this folder already registers it for Claude Code;
 open this folder in Claude Code and ask, for example:
 
-> Remediate `pdfs/HONR310-PreludeToSpaceAge.pdf` into accessible HTML and EPUB. Use the unscanner tools.
+> Remediate `pdfs/HIST101-HarborTowns.pdf` into accessible HTML and EPUB. Use the unscanner tools.
 
 For Claude Desktop add to `claude_desktop_config.json`:
 
@@ -246,3 +252,7 @@ python -m pytest -q
 ```
 
 Tests use a synthetic PDF and mocked HTTP, so they run without an API key or network.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

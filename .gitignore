@@ -5,3 +5,15 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 pdfs/
+
+# virtual environments, local secrets, build output
+.venv/
+venv/
+.env
+build/
+dist/
+.claude/settings.local.json
+
+# exported projects hold full transcriptions of the (often copyrighted) source
+*.unscanner.json
+*.remediate.json

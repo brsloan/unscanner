@@ -6,6 +6,9 @@ build-backend = "setuptools.build_meta"
 name = "unscanner"
 version = "0.1.0"
 description = "Turn scanned PDFs into accessible HTML and EPUB using vision language models (CLI + MCP server)."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [{ name = "Ben Sloan" }]
 requires-python = ">=3.11"
 dependencies = [
     "pymupdf>=1.24",
