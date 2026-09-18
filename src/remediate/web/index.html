@@ -196,13 +196,16 @@
       <p><label>Model <input name="model" type="text" size="24"></label>
          <label>Effort <select name="effort"><option>low</option><option>medium</option><option>high</option></select></label></p>
       <p><label>API key <input name="anthropic_api_key" type="password" size="40" autocomplete="off"></label>
-         <small>Leave empty to use the ANTHROPIC_API_KEY environment variable. Stored in work/settings.json.</small></p>
+         <label><input name="anthropic_api_key_forget" type="checkbox"> forget the saved key</label>
+         <small>With no saved key the ANTHROPIC_API_KEY environment variable is used. <span class="key-storage"></span></small></p>
     </fieldset>
     <fieldset><legend>Local / OpenAI-compatible endpoint</legend>
       <p><label>Base URL <input name="openai_base_url" type="text" size="40" placeholder="http://localhost:11434/v1"></label>
       <small>The API root; <code>/chat/completions</code> is added automatically (pasting the full endpoint is fine too).</small></p>
       <p><label>Model <input name="openai_model" type="text" size="24"></label>
-         <label>API key <input name="openai_api_key" type="password" size="20" autocomplete="off"></label></p>
+         <label>API key <input name="openai_api_key" type="password" size="28" autocomplete="off"></label>
+         <label><input name="openai_api_key_forget" type="checkbox"> forget the saved key</label>
+         <small class="key-storage"></small></p>
       <p><label><input name="openai_disable_thinking" type="checkbox"> switch off the model's reasoning ("thinking")</label>
         <small>Reasoning models such as Qwen 3 otherwise spend their whole output on thinking and return nothing for a page. Leave ticked unless the endpoint rejects it.</small></p>
       <p><label>Max output tokens <input name="openai_max_tokens" type="number" min="1000" step="1000" size="7"></label>

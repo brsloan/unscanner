@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from . import keystore
 from .backends.openai_compat import DEFAULT_MODEL as DEFAULT_OPENAI_MODEL
 from .document import Document, parse_page_range, slugify
 from .pdf import cached_page_png, cached_page_words, new_document
@@ -128,7 +129,28 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
                 s.update(json.loads(settings_path.read_text(encoding="utf-8")))
             except json.JSONDecodeError:
                 pass
+        # A key left in the file in plain text moves to the OS credential store when there is one.
+        moved = [k for k in keystore.SECRET_KEYS if s.get(k) and keystore.set_secret(k, str(s[k]))]
+        if moved:
+            s.update(dict.fromkeys(moved, ""))
+            save_settings(s)
         return s
+
+    def save_settings(s: dict[str, Any]) -> None:
+        settings_path.write_text(json.dumps(s, indent=1), encoding="utf-8")
+
+    def secret(s: dict[str, Any], name: str) -> str:
+        """An API key: from settings.json (no credential store on this machine), else the store."""
+        return s.get(name) or keystore.get_secret(name)
+
+    def public_settings(s: dict[str, Any]) -> dict[str, Any]:
+        """Settings as the browser sees them: API keys never leave the server, only whether one is saved."""
+        out = dict(s)
+        for k in keystore.SECRET_KEYS:
+            out[k + "_set"] = bool(secret(s, k))
+            out[k] = ""
+        out["key_storage"] = "keyring" if keystore.available() else "file"
+        return out
 
     def load_doc(doc_id: str) -> Document:
         wd = work_root / doc_id
@@ -158,11 +180,11 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
 
         if name == "anthropic":
             kw: dict[str, Any] = {"effort": s.get("effort") or "medium"}
-            if s.get("anthropic_api_key"):
-                kw["api_key"] = s["anthropic_api_key"]
+            if secret(s, "anthropic_api_key"):
+                kw["api_key"] = secret(s, "anthropic_api_key")
             return make_backend("anthropic", s.get("model") or None, **kw)
         return make_backend("openai", s.get("openai_model") or None, base_url=s.get("openai_base_url") or None,
-                            api_key=s.get("openai_api_key") or None,
+                            api_key=secret(s, "openai_api_key") or None,
                             disable_thinking=bool(s.get("openai_disable_thinking", True)),
                             max_tokens=int(s.get("openai_max_tokens") or DEFAULT_SETTINGS["openai_max_tokens"]))
 
@@ -460,14 +482,22 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
     # ---------------------------------------------------------------- settings / misc
     @app.get("/api/settings")
     def get_settings() -> dict[str, Any]:
-        return load_settings()
+        return public_settings(load_settings())
 
     @app.put("/api/settings")
     def put_settings(s: dict[str, Any]) -> dict[str, Any]:
         cur = load_settings()
+        for k in keystore.SECRET_KEYS:
+            if k not in s:
+                continue
+            v = s.pop(k)
+            if v == "":
+                continue  # the browser never gets the saved key, so an empty field means "keep it"
+            v = "" if v is None else str(v)  # null forgets the saved key
+            cur[k] = "" if keystore.set_secret(k, v) else v  # no credential store: keep it in the file
         cur.update({k: v for k, v in s.items() if k in DEFAULT_SETTINGS})
-        settings_path.write_text(json.dumps(cur, indent=1), encoding="utf-8")
-        return cur
+        save_settings(cur)
+        return public_settings(cur)
 
     @app.get("/api/guidelines")
     def guidelines() -> JSONResponse:

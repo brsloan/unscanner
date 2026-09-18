@@ -22,6 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest"]
+keyring = ["keyring>=24"]  # keep API keys in the OS credential store instead of work/settings.json
 
 [project.scripts]
 remediate = "remediate.cli:main"

@@ -105,8 +105,14 @@ amber needs review, grey not transcribed, red error) and review pages opened fir
   live progress; **Build** writes the HTML and EPUB and shows download links plus a preview;
   **Validate** shows the checks in a panel with links that jump to the offending page.
 - **Open PDF…** takes a path on this computer or an upload (copied into `work/_inbox/`).
-- **Settings** stores the backend choice, model, effort, endpoint URL and keys in
-  `work/settings.json` (plain text, local to this machine).
+- **Settings** stores the backend choice, model, effort and endpoint URL in `work/settings.json`.
+  API keys go to the operating system's credential store (Windows Credential Manager, macOS
+  Keychain, GNOME Keyring/KWallet) when the optional `keyring` package is installed
+  (`pip install -e .[keyring]`); a key already in `settings.json` is moved there the next time the
+  UI starts. Without the package, or on a machine with no credential store (a headless server),
+  keys stay in `work/settings.json` in plain text, and the Settings dialog says so. Either way a
+  saved key is never sent back to the browser. The CLI and the stdio MCP server read keys from
+  environment variables only.
 
 The UI is one FastAPI file (`webapp.py`) and one plain HTML/JS/CSS page under `web/`, with no build
 step, so a library can adapt it with Claude's help; see `CLAUDE.md`.

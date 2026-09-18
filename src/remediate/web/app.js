@@ -1084,6 +1084,16 @@ $("#btn-settings").addEventListener("click", async () => {
     if (!el) return;
     if (el.type === "checkbox") el.checked = !!v; else el.value = v;
   });
+  // The server never sends a saved API key back: the field stays empty and only says one is saved.
+  ["anthropic_api_key", "openai_api_key"].forEach((k) => {
+    f.elements[k].placeholder = s[k + "_set"] ? "saved (type to replace)" : "";
+    f.elements[k + "_forget"].checked = false;
+    f.elements[k + "_forget"].disabled = !s[k + "_set"];
+  });
+  const where = s.key_storage === "keyring"
+    ? "Keys are kept in this computer's credential store (Windows Credential Manager, macOS Keychain, or the Linux keyring), not in a file."
+    : "Keys are kept in plain text in work/settings.json. Install the keyring package (pip install keyring) and restart to keep them in the operating system's credential store instead.";
+  f.querySelectorAll(".key-storage").forEach((el) => (el.textContent = where));
   dlgSettings.showModal();
 });
 $("#form-settings").addEventListener("submit", async (e) => {
@@ -1092,6 +1102,11 @@ $("#form-settings").addEventListener("submit", async (e) => {
   // An unticked checkbox is absent from FormData; send it explicitly.
   body.send_title = e.target.elements.send_title.checked;
   body.openai_disable_thinking = e.target.elements.openai_disable_thinking.checked;
+  // An empty key field keeps the saved key; null tells the server to forget it.
+  ["anthropic_api_key", "openai_api_key"].forEach((k) => {
+    if (body[k + "_forget"]) body[k] = null;
+    delete body[k + "_forget"];
+  });
   try { await api("/settings", { method: "PUT", body }); setStatus("Settings saved"); }
   catch (err) { setStatus("Settings not saved: " + err.message, true); }
 });
