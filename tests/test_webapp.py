@@ -137,6 +137,8 @@ def test_figure_alt_autofill_and_layout_classes(client, tmp_path, monkeypatch):
 
 
 def test_settings_roundtrip(client):
+    # untouched settings pre-fill the model the guidelines were tuned against
+    assert client.get("/api/settings").json()["openai_model"] == "qwen3.6:27b"
     r = client.put("/api/settings", json={"backend": "openai", "openai_model": "qwen2.5vl:7b", "junk": 1})
     assert r.json()["backend"] == "openai" and "junk" not in r.json()
     assert client.get("/api/settings").json()["openai_model"] == "qwen2.5vl:7b"

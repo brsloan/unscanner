@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .backends.openai_compat import DEFAULT_MODEL as DEFAULT_OPENAI_MODEL
 from .document import Document, parse_page_range, slugify
 from .pdf import cached_page_png, cached_page_words, new_document
 from .pipeline import apply_result, ensure_draft_text
@@ -35,7 +36,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "anthropic_api_key": "",
     "openai_base_url": "http://localhost:11434/v1",
     "openai_api_key": "",
-    "openai_model": "qwen2.5vl:7b",
+    "openai_model": DEFAULT_OPENAI_MODEL,
     "openai_disable_thinking": True,
     "openai_max_tokens": 8000,  # output budget per page; a page that hits it is usually a model looping
     "workers": 4,

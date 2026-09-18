@@ -34,7 +34,7 @@ remediate run "pdfs/HIST 352 Cold Wars Killing Fields.pdf" --title "Cold War's K
 # or step by step
 remediate open  pdfs/x.pdf --title "..." --author "..."
 remediate transcribe pdfs/x.pdf --pages 1-10 --backend anthropic --model claude-sonnet-5 --effort low
-remediate transcribe pdfs/x.pdf --backend openai --model qwen2.5vl:7b     # Ollama at localhost:11434
+remediate transcribe pdfs/x.pdf --backend openai --model qwen3.6:27b      # Ollama at localhost:11434
 remediate build pdfs/x.pdf            # out/<doc>/index.html + out/<doc>/<title>.epub
 remediate validate pdfs/x.pdf         # HTML checks + coverage check + epubcheck
 remediate status pdfs/x.pdf
@@ -51,7 +51,7 @@ Environment variables (CLI flags override them):
 | Variable | Meaning |
 |---|---|
 | `REMEDIATE_BACKEND` | `anthropic` (default) or `openai` |
-| `REMEDIATE_MODEL` | model id, e.g. `claude-opus-5`, `claude-sonnet-5`, `qwen2.5vl:7b` |
+| `REMEDIATE_MODEL` | model id, e.g. `claude-opus-5`, `claude-sonnet-5`, `qwen3.6:27b` (the default for `openai`; the guidelines were tuned against it) |
 | `REMEDIATE_OPENAI_BASE_URL` | e.g. `http://localhost:11434/v1` (Ollama), `http://gpu-box:8000/v1` (vLLM) |
 | `REMEDIATE_OPENAI_API_KEY` | only if the endpoint requires one |
 | `ANTHROPIC_API_KEY` | for the Claude backend |

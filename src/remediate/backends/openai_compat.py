@@ -15,7 +15,8 @@ from ..prompts import GUIDELINES, normalize_result, parse_model_json
 from .base import Backend, BackendError, RefusalError, looks_like_refusal
 
 DEFAULT_BASE_URL = "http://localhost:11434/v1"  # Ollama
-DEFAULT_MODEL = "qwen2.5vl:7b"
+# The model GUIDELINES in prompts.py were tuned against; also what the UI Settings dialog pre-fills.
+DEFAULT_MODEL = "qwen3.6:27b"
 # Output budget per page; the UI setting "openai_max_tokens" / CLI --max-tokens override it. Even a
 # dense page of tables is about 2000 tokens, so a page that hits this is nearly always a model stuck
 # repeating itself. A bigger budget only makes that slower (and gateways answer 504 meanwhile).
