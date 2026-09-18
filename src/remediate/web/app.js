@@ -890,8 +890,10 @@ $("#form-open").addEventListener("submit", async (e) => {
 $("#btn-transcribe").addEventListener("click", async () => {
   state.settings = await api("/settings");
   const s = state.settings;
-  $("#transcribe-backend").textContent = s.backend === "anthropic"
-    ? `Using Claude API, model ${s.model}, effort ${s.effort}.` : `Using local endpoint ${s.openai_base_url}, model ${s.openai_model}.`;
+  const fb = s.fallback_backend && s.fallback_backend !== "none" && s.fallback_backend !== s.backend
+    ? ` Refused pages are retried on ${s.fallback_backend === "anthropic" ? "Claude API, model " + s.model : "the local endpoint, model " + s.openai_model}.` : "";
+  $("#transcribe-backend").textContent = (s.backend === "anthropic"
+    ? `Using Claude API, model ${s.model}, effort ${s.effort}.` : `Using local endpoint ${s.openai_base_url}, model ${s.openai_model}.`) + fb;
   dlgTranscribe.showModal();
 });
 $("#form-transcribe").addEventListener("submit", async (e) => {
@@ -915,7 +917,9 @@ async function pollJob(jobId) {
     if (job.status === "error") setStatus("Transcription failed: " + job.error, true);
     else {
       const u = job.summary.usage || {};
-      setStatus(`Transcribed ${job.summary.done} pages (${job.summary.errors} errors) · ${u.input_tokens || 0} in / ${u.output_tokens || 0} out tokens`);
+      const refused = job.summary.refused
+        ? ` · ${job.summary.refused} refused by ${job.summary.model}${job.summary.fell_back ? `, ${job.summary.fell_back} redone by ${job.summary.fallback_model}` : ""}` : "";
+      setStatus(`Transcribed ${job.summary.done} pages (${job.summary.errors} errors)${refused} · ${u.input_tokens || 0} in / ${u.output_tokens || 0} out tokens`);
     }
     if (state.page && !state.dirty) loadPage(state.page, { fresh: true });
   }
@@ -962,12 +966,18 @@ $("#btn-results-close").addEventListener("click", () => ($("#results").hidden = 
 $("#btn-settings").addEventListener("click", async () => {
   const s = await api("/settings");
   const f = $("#form-settings");
-  Object.entries(s).forEach(([k, v]) => { if (f.elements[k]) f.elements[k].value = v; });
+  Object.entries(s).forEach(([k, v]) => {
+    const el = f.elements[k];
+    if (!el) return;
+    if (el.type === "checkbox") el.checked = !!v; else el.value = v;
+  });
   dlgSettings.showModal();
 });
 $("#form-settings").addEventListener("submit", async (e) => {
   const f = new FormData(e.target); const body = {};
   f.forEach((v, k) => (body[k] = k === "workers" ? +v : v));
+  // An unticked checkbox is absent from FormData; send it explicitly.
+  body.send_title = e.target.elements.send_title.checked;
   try { await api("/settings", { method: "PUT", body }); setStatus("Settings saved"); }
   catch (err) { setStatus("Settings not saved: " + err.message, true); }
 });

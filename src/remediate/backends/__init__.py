@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from .base import Backend, BackendError
+from .base import Backend, BackendError, RefusalError
 
 
 def make_backend(name: str | None = None, model: str | None = None, **kwargs) -> Backend:
@@ -33,4 +33,4 @@ def make_backend(name: str | None = None, model: str | None = None, **kwargs) ->
     raise BackendError(f"unknown backend {name!r}; use 'anthropic' or 'openai'")
 
 
-__all__ = ["Backend", "BackendError", "make_backend"]
+__all__ = ["Backend", "BackendError", "RefusalError", "make_backend"]

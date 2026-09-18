@@ -2,6 +2,7 @@
 
   remediate open   <pdf> [--work work] [--title T] [--author A] [--lang en]
   remediate transcribe <pdf|workdir> [--pages 1-5] [--backend anthropic|openai] [--model M] [--force]
+                       [--fallback anthropic|openai] [--fallback-model M] [--no-title]
   remediate build  <pdf|workdir> [--out out] [--no-epub]
   remediate validate <pdf|workdir>
   remediate status <pdf|workdir>
@@ -57,12 +58,16 @@ def cmd_transcribe(args) -> None:
     if args.backend in (None, "anthropic") and args.effort:
         kwargs["effort"] = args.effort
     backend = make_backend(args.backend, args.model, **kwargs)
+    fallback = None
+    if args.fallback and args.fallback != backend.name:
+        fallback = make_backend(args.fallback, args.fallback_model)
     pages = parse_page_range(args.pages, len(doc.pages))
 
     def progress(page, status):
         print(f"page {page.index:4d}  {status:13s} label={page.label!r}", file=sys.stderr)
 
-    summary = transcribe_pages(doc, backend, pages, force=args.force, workers=args.workers, on_progress=progress)
+    summary = transcribe_pages(doc, backend, pages, force=args.force, workers=args.workers, on_progress=progress,
+                               fallback=fallback, send_title=not args.no_title)
     print(json.dumps(summary, indent=1))
 
 
@@ -173,6 +178,11 @@ def main(argv: list[str] | None = None) -> None:
         p.add_argument("--model", default=None)
         p.add_argument("--effort", default=None, help="anthropic only: low|medium|high (default medium)")
         p.add_argument("--workers", type=int, default=4)
+        p.add_argument("--fallback", choices=["anthropic", "openai"], default=None,
+                       help="backend to retry a page on when the main backend refuses it")
+        p.add_argument("--fallback-model", default=None, help="model id for --fallback")
+        p.add_argument("--no-title", action="store_true",
+                       help="leave the document title out of the prompt (helps with refusals of well-known works)")
 
     p = sub.add_parser("open"); p.add_argument("pdf"); p.add_argument("--title"); p.add_argument("--author")
     p.add_argument("--lang", default="en"); p.set_defaults(func=cmd_open)

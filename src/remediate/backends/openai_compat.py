@@ -12,7 +12,7 @@ import time
 import httpx
 
 from ..prompts import GUIDELINES, normalize_result, parse_model_json
-from .base import Backend, BackendError
+from .base import Backend, BackendError, RefusalError, looks_like_refusal
 
 DEFAULT_BASE_URL = "http://localhost:11434/v1"  # Ollama
 DEFAULT_MODEL = "qwen2.5vl:7b"
@@ -68,9 +68,14 @@ class OpenAICompatBackend(Backend):
             raise BackendError(f"request failed: {last_err}")
         try:
             choice = data["choices"][0]
-            text = choice["message"]["content"]
+            msg = choice["message"]
+            text = msg["content"]
         except (KeyError, IndexError, TypeError) as e:
             raise BackendError(f"unexpected response shape: {data!r}"[:500]) from e
+        # OpenAI-style endpoints signal a refusal either with finish_reason="content_filter" or with a
+        # separate "refusal" field on the message; smaller local models just answer in prose.
+        if choice.get("finish_reason") == "content_filter" or msg.get("refusal"):
+            raise RefusalError(f"model refused: {msg.get('refusal') or 'content filter'}")
         if choice.get("finish_reason") == "length":
             raise BackendError("output truncated (finish_reason=length); raise max_tokens")
         u = data.get("usage") or {}
@@ -79,6 +84,8 @@ class OpenAICompatBackend(Backend):
         try:
             return normalize_result(parse_model_json(text)), usage
         except ValueError as e:
+            if looks_like_refusal(text):
+                raise RefusalError(f"model refused: {(text or '').strip()[:300]}") from e
             raise BackendError(f"model returned invalid JSON: {e}") from e
 
     def describe_image(self, image_png: bytes, prompt: str) -> str:

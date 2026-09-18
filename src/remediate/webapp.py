@@ -37,6 +37,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "openai_api_key": "",
     "openai_model": "qwen2.5vl:7b",
     "workers": 4,
+    # When the main backend refuses a page (safety/copyright), retry it once here: "anthropic",
+    # "openai" or "none". Typically the local model when Claude is the main backend, or vice versa.
+    "fallback_backend": "none",
+    # Send the document title with every page. A recognisable title of a well-known work makes some
+    # providers more likely to refuse; turn it off for a document that keeps getting refused.
+    "send_title": True,
 }
 
 
@@ -144,17 +150,28 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
                     return {k: v for k, v in j.items() if k != "thread"}
         return None
 
-    def make_backend_from_settings():
+    def backend_from_settings(s: dict[str, Any], name: str):
         from .backends import make_backend
 
-        s = load_settings()
-        if s["backend"] == "anthropic":
+        if name == "anthropic":
             kw: dict[str, Any] = {"effort": s.get("effort") or "medium"}
             if s.get("anthropic_api_key"):
                 kw["api_key"] = s["anthropic_api_key"]
             return make_backend("anthropic", s.get("model") or None, **kw)
         return make_backend("openai", s.get("openai_model") or None, base_url=s.get("openai_base_url") or None,
                             api_key=s.get("openai_api_key") or None)
+
+    def make_backend_from_settings():
+        s = load_settings()
+        return backend_from_settings(s, s["backend"])
+
+    def make_fallback_from_settings():
+        """The backend refused pages are retried on, or None when not configured (or same as main)."""
+        s = load_settings()
+        name = (s.get("fallback_backend") or "none").lower()
+        if name in ("", "none") or name == s["backend"]:
+            return None
+        return backend_from_settings(s, name)
 
     # ---------------------------------------------------------------- pages
     @app.get("/", response_class=HTMLResponse)
@@ -336,12 +353,14 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             raise HTTPException(409, "a transcription job is already running for this document")
         try:
             backend = make_backend_from_settings()
+            fallback = make_fallback_from_settings()
         except Exception as e:  # noqa: BLE001 - surface config problems to the UI
             raise HTTPException(400, f"backend not configured: {e}") from e
         idx = parse_page_range(req.pages, len(doc.pages))
         job_id = uuid.uuid4().hex[:8]
         job: dict[str, Any] = {"id": job_id, "doc_id": doc_id, "status": "running", "requested": len(idx),
-                               "completed": 0, "errors": 0, "last": "", "started": time.time(), "model": backend.model}
+                               "completed": 0, "errors": 0, "last": "", "started": time.time(), "model": backend.model,
+                               "fallback_model": fallback.model if fallback else None}
 
         def progress(page, status):
             job["completed"] += 1
@@ -351,9 +370,11 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
 
         def run():
             try:
+                s = load_settings()
                 job["summary"] = transcribe_pages(doc, backend, idx, force=req.force,
-                                                  workers=int(load_settings().get("workers") or 4),
-                                                  on_progress=progress, instructions=req.instructions)
+                                                  workers=int(s.get("workers") or 4),
+                                                  on_progress=progress, instructions=req.instructions,
+                                                  fallback=fallback, send_title=bool(s.get("send_title", True)))
                 job["status"] = "finished"
             except Exception as e:  # noqa: BLE001
                 job["status"] = "error"

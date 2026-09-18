@@ -7,7 +7,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
 
-from .backends import Backend, BackendError
+from .backends import Backend, BackendError, RefusalError
 from .document import Document, Figure, Page
 from .pdf import cached_page_png, draft_text_for_page
 from .prompts import build_user_prompt
@@ -32,12 +32,12 @@ def ensure_draft_text(doc: Document, indexes: list[int], save: bool = True) -> N
         doc.save()
 
 
-def page_prompt(doc: Document, index: int, instructions: str = "") -> str:
+def page_prompt(doc: Document, index: int, instructions: str = "", send_title: bool = True) -> str:
     page = doc.page(index)
     prev_tail = doc.page(index - 1).draft_text[-TAIL_CHARS:] if index > 1 else ""
     next_head = doc.page(index + 1).draft_text[:HEAD_CHARS] if index < len(doc.pages) else ""
     return build_user_prompt(index, len(doc.pages), page.draft_text, prev_tail, next_head,
-                             doc.title, doc.language, instructions=instructions)
+                             doc.title, doc.language, instructions=instructions, send_title=send_title)
 
 
 def apply_result(page: Page, result: dict, model: str = "", usage: dict | None = None,
@@ -64,41 +64,66 @@ def apply_result(page: Page, result: dict, model: str = "", usage: dict | None =
 
 def transcribe_pages(doc: Document, backend: Backend, indexes: list[int], force: bool = False,
                      workers: int = 4, on_progress: Callable[[Page, str], None] | None = None,
-                     instructions: str = "") -> dict:
+                     instructions: str = "", fallback: Backend | None = None,
+                     send_title: bool = True) -> dict:
     """Transcribe the given pages with `backend`. Skips pages already done unless force=True.
 
     `instructions` is free text appended to every page prompt (e.g. "the equations were transcribed
-    badly; write every display equation as MathML"). Returns a summary dict with counts and usage.
+    badly; write every display equation as MathML"). When `backend` refuses a page (a safety or
+    copyright refusal, not a technical error) and `fallback` is given, the page is retried once on
+    the fallback backend; the result is stored as needs_review with a note saying which model did
+    it. `send_title=False` keeps the document title out of the prompt. Returns a summary dict with
+    counts and usage, including how many pages were refused and how many the fallback rescued.
     """
     todo = [i for i in indexes if force or doc.page(i).status in ("pending", "error")]
     ensure_draft_text(doc, todo)
     lock = threading.Lock()
     usage_total = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0}
-    done = errors = 0
+    done = errors = refused = fell_back = 0
 
-    def work(i: int) -> tuple[int, dict | None, dict | None, str | None]:
+    def work(i: int) -> tuple[int, dict | None, dict | None, str | None, Backend, str]:
+        """Returns (index, result, usage, error, backend that produced the result, refusal note)."""
         png = cached_page_png(doc, i).read_bytes()
-        prompt = page_prompt(doc, i, instructions)
+        prompt = page_prompt(doc, i, instructions, send_title=send_title)
         try:
             result, usage = backend.transcribe(png, prompt)
-            return i, result, usage, None
+            return i, result, usage, None, backend, ""
+        except RefusalError as e:
+            refusal = f"{backend.model} refused this page: {e}"
+            if fallback is None:
+                return i, None, None, refusal, backend, refusal
+            try:
+                result, usage = fallback.transcribe(png, prompt)
+                return i, result, usage, None, fallback, refusal
+            except BackendError as e2:
+                return i, None, None, f"{refusal} | fallback {fallback.model}: {e2}", fallback, refusal
+            except Exception as e2:  # noqa: BLE001
+                return i, None, None, f"{refusal} | fallback {fallback.model}: {type(e2).__name__}: {e2}", fallback, refusal
         except BackendError as e:
-            return i, None, None, str(e)
+            return i, None, None, str(e), backend, ""
         except Exception as e:  # noqa: BLE001 - keep one bad page from killing the whole run
-            return i, None, None, f"{type(e).__name__}: {e}"
+            return i, None, None, f"{type(e).__name__}: {e}", backend, ""
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
         futures = [ex.submit(work, i) for i in todo]
         for fut in as_completed(futures):
-            i, result, usage, err = fut.result()
+            i, result, usage, err, used, refusal = fut.result()
             page = doc.page(i)
             with lock:
+                if refusal:
+                    refused += 1
                 if err:
                     page.status = "error"
                     page.notes = err
                     errors += 1
                 else:
-                    apply_result(page, result, backend.model, usage)
+                    if refusal:
+                        # A person should look at a page one model refused and another transcribed.
+                        result = dict(result)
+                        result["notes"] = " | ".join(
+                            s for s in (f"{refusal}; transcribed by {used.model} instead", result.get("notes", "")) if s)
+                        fell_back += 1
+                    apply_result(page, result, used.model, usage)
                     for k in usage_total:
                         usage_total[k] += int((usage or {}).get(k, 0) or 0)
                     done += 1
@@ -106,4 +131,5 @@ def transcribe_pages(doc: Document, backend: Backend, indexes: list[int], force:
             if on_progress:
                 on_progress(page, err or page.status)
     return {"requested": len(indexes), "processed": len(todo), "done": done, "errors": errors,
-            "usage": usage_total, "model": backend.model}
+            "refused": refused, "fell_back": fell_back, "usage": usage_total, "model": backend.model,
+            "fallback_model": fallback.model if fallback else None}

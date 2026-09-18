@@ -180,6 +180,14 @@
       <p><label>Model <input name="openai_model" type="text" size="24"></label>
          <label>API key <input name="openai_api_key" type="password" size="20" autocomplete="off"></label></p>
     </fieldset>
+    <fieldset><legend>When a model refuses a page</legend>
+      <p><label>Retry the page on
+        <select name="fallback_backend"><option value="none">nothing (leave the page as an error)</option>
+          <option value="openai">Local / OpenAI-compatible</option><option value="anthropic">Claude API</option></select></label>
+        <small>A page one model refused and another transcribed is marked needs review.</small></p>
+      <p><label><input name="send_title" type="checkbox"> send the document title with each page</label>
+        <small>The title helps with headings, but a well-known title makes some providers refuse. Untick for a document that keeps getting refused.</small></p>
+    </fieldset>
     <p><label>Parallel pages <input name="workers" type="number" min="1" max="16" size="3"></label></p>
     <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Save</button></menu>
   </form>

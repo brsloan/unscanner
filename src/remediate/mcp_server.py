@@ -203,23 +203,31 @@ def set_page(doc_id: str, page: int, html: str, label: str | None = None, starts
 
 @server.tool()
 def transcribe_pages(doc_id: str, pages: str = "all", backend: str | None = None, model: str | None = None,
-                     force: bool = False, workers: int = 4, instructions: str = "") -> dict[str, Any]:
+                     force: bool = False, workers: int = 4, instructions: str = "",
+                     fallback: str | None = None, fallback_model: str | None = None,
+                     send_title: bool = True) -> dict[str, Any]:
     """Run the configured model backend over pages (batch). pages: "all", "3", "1-5,9".
 
     backend: "anthropic" (Claude API; needs ANTHROPIC_API_KEY) or "openai" (any OpenAI-compatible
     endpoint such as Ollama/vLLM; set REMEDIATE_OPENAI_BASE_URL). Defaults come from REMEDIATE_BACKEND /
     REMEDIATE_MODEL. Pages already done are skipped unless force=true. instructions: extra guidance
     appended to every page prompt for this run, e.g. "write every display equation as MathML" or
-    "the two-column layout must be read left column first". Returns counts and token usage; check
-    get_status afterwards for needs_review pages.
+    "the two-column layout must be read left column first". fallback: a second backend ("anthropic"
+    or "openai") that a page is retried on when the main backend refuses it on safety/copyright
+    grounds; such pages come back as needs_review with a note. send_title=false leaves the document
+    title out of the prompt, which helps when a well-known title triggers refusals. Returns counts
+    (including "refused" and "fell_back") and token usage; check get_status afterwards for
+    needs_review pages.
     """
     from .backends import make_backend
     from .pipeline import transcribe_pages as _run
 
     doc = _load(doc_id)
     be = make_backend(backend, model)
+    fb = make_backend(fallback, fallback_model) if fallback and fallback != be.name else None
     idx = parse_page_range(pages, len(doc.pages))
-    return _run(doc, be, idx, force=force, workers=workers, instructions=instructions)
+    return _run(doc, be, idx, force=force, workers=workers, instructions=instructions, fallback=fb,
+                send_title=send_title)
 
 
 @server.tool()

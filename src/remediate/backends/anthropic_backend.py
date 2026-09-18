@@ -8,7 +8,7 @@ import time
 import anthropic
 
 from ..prompts import GUIDELINES, OUTPUT_SCHEMA, normalize_result, parse_model_json
-from .base import Backend, BackendError
+from .base import Backend, BackendError, RefusalError
 
 DEFAULT_MODEL = "claude-opus-5"
 # Models that accept output_config.effort (Haiku 4.5 and older models reject it).
@@ -94,7 +94,7 @@ class AnthropicBackend(Backend):
 
         if resp.stop_reason == "refusal":
             detail = getattr(resp, "stop_details", None)
-            raise BackendError(f"model refused: {getattr(detail, 'explanation', '') or 'no explanation'}")
+            raise RefusalError(f"model refused: {getattr(detail, 'explanation', '') or 'no explanation'}")
         if resp.stop_reason == "max_tokens":
             raise BackendError("output truncated at max_tokens; raise max_tokens")
         text = next((b.text for b in resp.content if b.type == "text"), "")
@@ -134,5 +134,5 @@ class AnthropicBackend(Backend):
         except (anthropic.AnthropicError, TypeError) as e:
             raise BackendError(_friendly(e)) from e
         if resp.stop_reason == "refusal":
-            raise BackendError("model declined to describe the image")
+            raise RefusalError("model declined to describe the image")
         return "".join(b.text for b in resp.content if b.type == "text").strip()

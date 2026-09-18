@@ -7,6 +7,40 @@ class BackendError(RuntimeError):
     pass
 
 
+class RefusalError(BackendError):
+    """The model declined to transcribe the page (a safety/copyright refusal, not a technical failure).
+
+    The pipeline treats this differently from other errors: it retries the page on the fallback
+    backend when one is configured, and records the refusal in the page notes so a person knows to
+    do that page by hand rather than chase a parsing bug.
+    """
+
+
+# Phrases that mark a refusal when a model answers in prose instead of the JSON we asked for.
+# Kept deliberately narrow: they must not match transcribed body text or a legitimate "notes" field.
+_REFUSAL_MARKERS = (
+    "i can't help with", "i cannot help with", "i can't assist with", "i cannot assist with",
+    "i'm not able to help with", "i am not able to help with", "i'm unable to help with",
+    "i can't transcribe", "i cannot transcribe", "i can't reproduce", "i cannot reproduce",
+    "i can't provide", "i cannot provide", "i won't be able to", "i'm sorry, but i can't",
+    "i'm sorry, but i cannot", "unable to comply", "against my guidelines", "copyright",
+    "copyrighted material", "copyrighted work", "intellectual property",
+)
+
+
+def looks_like_refusal(text: str) -> bool:
+    """True when a raw model reply reads as a refusal rather than a transcription result.
+
+    Only meant for replies that are NOT valid JSON (a JSON result with the word "copyright" in a
+    transcribed paragraph is fine). Short prose containing a refusal phrase counts; long text does
+    not, since a real transcription is never a refusal.
+    """
+    t = (text or "").strip().lower()
+    if not t or len(t) > 1500:
+        return False
+    return any(m in t for m in _REFUSAL_MARKERS)
+
+
 class Backend(ABC):
     name: str = "base"
     model: str = ""

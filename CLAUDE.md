@@ -44,6 +44,11 @@ changes small, plain, and covered by tests.
 
 - House style for headings, footnotes, figures, what to drop: edit `GUIDELINES` in `prompts.py`
   (used by both backends and returned by the MCP `get_guidelines` tool).
+- Who is doing the work and why (the institution, the legal basis): `CONTEXT` at the top of
+  `prompts.py`. It is there to stop copyright false positives; keep it truthful for your institution.
+- Model refusals: a backend raises `RefusalError` (not a plain `BackendError`) when a model declines
+  a page; `pipeline.transcribe_pages(fallback=...)` retries such pages once on a second backend and
+  marks them `needs_review`. Settings: `fallback_backend`, `send_title`; CLI `--fallback`, `--no-title`.
 - Different model or endpoint: `backends/__init__.py` `make_backend`, or the UI Settings dialog
   (`work/settings.json`).
 - Output look: `CSS` in `assemble.py` (shared by HTML and EPUB).
