@@ -11,6 +11,7 @@ from .backends import Backend, BackendError, RefusalError
 from .document import Document, Figure, Page
 from .pdf import cached_page_png, draft_text_for_page
 from .prompts import build_user_prompt
+from .sanitize import sanitize_fragment
 
 TAIL_CHARS = 400
 HEAD_CHARS = 250
@@ -115,9 +116,10 @@ def transcribe_pages(doc: Document, backend: Backend, indexes: list[int], force:
                         refused += 1
                     if not err:
                         try:
+                            # Model HTML is held to the same vocabulary as editor and MCP edits.
+                            result = dict(result, html=sanitize_fragment(result.get("html", "") or ""))
                             if refusal:
                                 # A person should look at a page one model refused and another transcribed.
-                                result = dict(result)
                                 result["notes"] = " | ".join(
                                     s for s in (f"{refusal}; transcribed by {used.model} instead",
                                                 result.get("notes", "")) if s)

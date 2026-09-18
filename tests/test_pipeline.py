@@ -123,6 +123,21 @@ def test_parse_model_json_tolerates_fences():
     assert d["html"] == "<p>y</p>"
 
 
+def test_batch_html_is_sanitized(doc):
+    """Batch results go through the sanitizer like editor and MCP edits (no stray attributes or styles)."""
+    class MessyBackend(FakeBackend):
+        results = {1: {"html": '<h1 style="color:red">T</h1><figure><img src="fig:1-1" alt="A map." '
+                               'bbox="[100, 180, 850, 650]"></figure><p class="junk" onclick="x()">Body.</p>',
+                       "figures": [{"id": "1-1", "alt": "A map.", "bbox": [100, 180, 850, 650], "caption": ""}]}}
+
+    summary = transcribe_pages(doc, MessyBackend(), [1])
+    assert summary["done"] == 1
+    html = Document.load(doc.workdir).page(1).html
+    for bad in ("bbox=", "style=", "onclick", "junk"):
+        assert bad not in html
+    assert 'src="fig:1-1"' in html and 'alt="A map."' in html and "<h1>T</h1>" in html
+
+
 def test_figure_id_drops_fig_prefix():
     """A model that repeats the src prefix in the figure id must still match <img src="fig:ID">."""
     from remediate.document import Figure, Page
