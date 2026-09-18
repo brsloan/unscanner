@@ -27,8 +27,9 @@ changes small, plain, and covered by tests.
 
 1. Every non-skipped page contributes exactly one `role="doc-pagebreak"` marker whose id is
    `pg-<label>`; when a paragraph spans pages the marker sits inline inside the joined paragraph.
-2. Output HTML only uses the vocabulary in `sanitize.ALLOWED_TAGS`; no inline styles or classes
-   (except `figure-description`). Everything the editor or a model produces goes through
+2. Output HTML only uses the vocabulary in `sanitize.ALLOWED_TAGS`; no inline styles, and only the
+   classes in `sanitize.ALLOWED_CLASSES` (figure placement, `align-center`/`align-right` on headings
+   and paragraphs, `figure-description`). Everything the editor or a model produces goes through
    `sanitize_fragment` before it is stored.
 3. Exactly one `<h1>` in the assembled document, no skipped heading levels.
 4. Every `<img>` has an `alt` attribute.

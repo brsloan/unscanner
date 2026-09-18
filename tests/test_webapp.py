@@ -34,6 +34,8 @@ def test_sanitize_normalizes_editor_output():
     assert sanitize_fragment('<p class="align-right wrap"><img src="fig:9-1" alt="x"><br></p>') == \
         '<figure class="align-right wrap"><img src="fig:9-1" alt="x"></figure>'
     assert sanitize_fragment('<p>caption <img src="fig:9-1" alt="x"></p>').startswith("<p>caption ")
+    # a heading that was centered in print keeps align-center; other classes and inline styles go
+    assert sanitize_fragment('<h2 class="align-center big" style="color:red">T</h2>') == '<h2 class="align-center">T</h2>'
 
 
 def test_open_edit_build_validate(client, tmp_path):

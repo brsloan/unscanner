@@ -81,7 +81,8 @@ amber needs review, grey not transcribed, red error) and review pages opened fir
   "+Fig" toolbar button inserts a new figure at the caret for an image the model missed. Crop
   changes are kept when you Save. Placement is stored as the classes
   `align-left|center|right` and `wrap` on the `<figure>`; these are the only classes the sanitizer
-  keeps, and the output CSS styles them in both HTML and EPUB.
+  keeps, and the output CSS styles them in both HTML and EPUB. A heading or paragraph may also carry
+  `align-center` (or `align-right`) when it was set that way in print.
 - **Editing and approval**: unsaved edits are kept per page in the browser, so you can move between
   pages freely and come back; pages with unsaved edits show a pencil in the page list. **Save** in the
   top bar (Ctrl+S) is document-level: it writes every page with unsaved edits without approving
