@@ -7,9 +7,9 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from remediate import cli, webapp
-from remediate.document import Document
-from remediate.project import ProjectError, import_project
+from unscanner import cli, webapp
+from unscanner.document import Document
+from unscanner.project import ProjectError, import_project
 from tests.test_pipeline import make_pdf
 
 
@@ -31,13 +31,13 @@ def test_export_then_import_on_another_machine(tmp_path):
     pdf = make_pdf(tmp_path / "a" / "moving sample.pdf")
     with make_client(tmp_path / "a") as a:
         doc_id, r = exported(a, pdf)
-    assert "moving%20sample.remediate.json" in r.headers["content-disposition"]
+    assert "moving%20sample.unscanner.json" in r.headers["content-disposition"]
     data = r.json()
-    assert data["format"] == "remediate-project" and data["pdf_name"] == "moving sample.pdf"
+    assert data["format"] == "unscanner-project" and data["pdf_name"] == "moving sample.pdf"
     assert "source" not in data and "workdir" not in data  # nothing machine-specific in the file
 
     with make_client(tmp_path / "b") as b:
-        files = {"project_file": ("p.remediate.json", r.content, "application/json"),
+        files = {"project_file": ("p.unscanner.json", r.content, "application/json"),
                  "pdf": ("moving sample.pdf", pdf.read_bytes(), "application/pdf")}
         r2 = b.post("/api/projects/import", files=files)
         assert r2.status_code == 200, r2.text
@@ -92,10 +92,10 @@ def test_import_sanitizes_html_and_ignores_unknown_fields(tmp_path):
     pdf = make_pdf(tmp_path / "hand edited.pdf")
     pages = [{"index": 9, "html": '<p style="color:red" onclick="x()">Hi</p><script>x()</script>', "from_the_future": 1},
              {"html": ""}, {"html": ""}]
-    doc = import_project({"format": "remediate-project", "version": 1, "title": "T", "pages": pages}, pdf, tmp_path / "work")
+    doc = import_project({"format": "unscanner-project", "version": 1, "title": "T", "pages": pages}, pdf, tmp_path / "work")
     assert doc.pages[0].html == "<p>Hi</p>" and [p.index for p in doc.pages] == [1, 2, 3]
     with pytest.raises(ProjectError):
-        import_project({"format": "remediate-project", "version": 1, "pages": pages, "language": "not a code"},
+        import_project({"format": "unscanner-project", "version": 1, "pages": pages, "language": "not a code"},
                        pdf, tmp_path / "work", replace=True)
 
 
@@ -103,9 +103,16 @@ def test_cli_export_writes_next_to_the_pdf_and_import_finds_it(tmp_path, capsys)
     pdf = make_pdf(tmp_path / "cli sample.pdf")
     cli.main(["--work", str(tmp_path / "w1"), "open", str(pdf), "--title", "CLI"])
     cli.main(["--work", str(tmp_path / "w1"), "export", str(pdf)])
-    project_file = tmp_path / "cli sample.remediate.json"
+    project_file = tmp_path / "cli sample.unscanner.json"
     assert project_file.exists()
     cli.main(["--work", str(tmp_path / "w2"), "import", str(project_file)])
     assert Document.load(tmp_path / "w2" / "cli-sample").title == "CLI"
     with pytest.raises(SystemExit):
         cli.main(["--work", str(tmp_path / "w2"), "import", str(project_file)])
+
+
+def test_project_file_from_the_old_program_name_still_imports(tmp_path):
+    pdf = make_pdf(tmp_path / "old name.pdf")
+    pages = [{"html": "<p>Hi</p>"}, {"html": ""}, {"html": ""}]
+    doc = import_project({"format": "remediate-project", "version": 1, "pages": pages}, pdf, tmp_path / "work")
+    assert doc.pages[0].html == "<p>Hi</p>"

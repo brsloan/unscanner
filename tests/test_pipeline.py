@@ -9,14 +9,14 @@ from pathlib import Path
 import pymupdf
 import pytest
 
-from remediate.assemble import assemble
-from remediate.backends.base import Backend
-from remediate.document import Document, parse_page_range
-from remediate.epub import build_epub
-from remediate.pdf import new_document
-from remediate.pipeline import transcribe_pages
-from remediate.prompts import normalize_result, parse_model_json
-from remediate.validate import coverage, validate_html
+from unscanner.assemble import assemble
+from unscanner.backends.base import Backend
+from unscanner.document import Document, parse_page_range
+from unscanner.epub import build_epub
+from unscanner.pdf import new_document
+from unscanner.pipeline import transcribe_pages
+from unscanner.prompts import normalize_result, parse_model_json
+from unscanner.validate import coverage, validate_html
 
 
 def make_pdf(path: Path, n_pages: int = 3) -> Path:
@@ -140,7 +140,7 @@ def test_batch_html_is_sanitized(doc):
 
 def test_figure_id_drops_fig_prefix():
     """A model that repeats the src prefix in the figure id must still match <img src="fig:ID">."""
-    from remediate.document import Figure, Page
+    from unscanner.document import Figure, Page
     assert Figure(id="fig:page-951-1", alt="x").id == "page-951-1"
     assert Page.from_dict({"index": 1, "figures": [{"id": "fig:1-1", "alt": ""}]}).figures[0].id == "1-1"
     assert Figure(id="1-1", alt="").id == "1-1"
@@ -175,11 +175,11 @@ def test_image_without_crop_becomes_description(tmp_path, doc):
 @pytest.mark.anyio
 async def test_mcp_server_roundtrip(tmp_path, monkeypatch):
     pdf = make_pdf(tmp_path / "mcp sample.pdf")
-    monkeypatch.setenv("REMEDIATE_WORK_DIR", str(tmp_path / "work"))
-    monkeypatch.setenv("REMEDIATE_OUT_DIR", str(tmp_path / "out"))
+    monkeypatch.setenv("UNSCANNER_WORK_DIR", str(tmp_path / "work"))
+    monkeypatch.setenv("UNSCANNER_OUT_DIR", str(tmp_path / "out"))
     from mcp.client.client import Client
 
-    from remediate.mcp_server import server
+    from unscanner.mcp_server import server
 
     async with Client(server) as client:
         tools = {t.name for t in (await client.list_tools()).tools}
@@ -204,7 +204,7 @@ async def test_mcp_server_roundtrip(tmp_path, monkeypatch):
 
 
 def test_page_load_failure_is_a_page_error(doc, monkeypatch):
-    import remediate.pipeline as pl
+    import unscanner.pipeline as pl
 
     real = pl.cached_page_png
 
@@ -221,7 +221,7 @@ def test_page_load_failure_is_a_page_error(doc, monkeypatch):
 
 
 def test_store_failure_marks_the_page_not_the_run(doc, monkeypatch):
-    import remediate.pipeline as pl
+    import unscanner.pipeline as pl
 
     real = pl.apply_result
 
@@ -239,7 +239,7 @@ def test_store_failure_marks_the_page_not_the_run(doc, monkeypatch):
 def test_fatal_error_cancels_the_queue(doc, monkeypatch):
     """If the state file cannot be written the run must stop, not transcribe every page into the void."""
     import time as _time
-    import remediate.pipeline as pl
+    import unscanner.pipeline as pl
 
     pl.ensure_draft_text(doc, [1, 2, 3])
     calls = []

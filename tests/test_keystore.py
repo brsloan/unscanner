@@ -7,8 +7,8 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-import remediate.backends as backends
-from remediate import keystore, webapp
+import unscanner.backends as backends
+from unscanner import keystore, webapp
 from tests.test_pipeline import make_pdf
 
 
@@ -41,7 +41,7 @@ def test_key_goes_to_the_credential_store_not_the_file(client, tmp_path, monkeyp
     r = client.put("/api/settings", json={"backend": "openai", "openai_api_key": "sk-secret"}).json()
     assert r["openai_api_key"] == "" and r["openai_api_key_set"] is True and r["key_storage"] == "keyring"
     assert stored(tmp_path)["openai_api_key"] == ""
-    assert memory_keyring.items == {("remediate", "openai_api_key"): "sk-secret"}
+    assert memory_keyring.items == {("unscanner", "openai_api_key"): "sk-secret"}
     assert key_reaching_backend(client, tmp_path, monkeypatch)["api_key"] == "sk-secret"
 
 
@@ -77,3 +77,10 @@ def test_store_that_fails_to_write_falls_back_to_the_file(client, tmp_path, memo
     monkeypatch.setattr(memory_keyring, "set_password", broken)
     client.put("/api/settings", json={"openai_api_key": "sk-x"})
     assert stored(tmp_path)["openai_api_key"] == "sk-x"
+
+
+def test_key_saved_under_the_old_program_name_is_still_found(memory_keyring):
+    memory_keyring.set_password("remediate", "openai_api_key", "sk-old")
+    assert keystore.get_secret("openai_api_key") == "sk-old"
+    keystore.set_secret("openai_api_key", "sk-new")
+    assert memory_keyring.items == {("unscanner", "openai_api_key"): "sk-new"}

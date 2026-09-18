@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from remediate import keystore
+from unscanner import keystore
 
 
 class MemoryKeyring:

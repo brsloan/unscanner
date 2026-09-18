@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from remediate.diff import word_diff
+from unscanner.diff import word_diff
 
 
 def boxes(lines: list[str]) -> list[dict]:

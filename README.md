@@ -1,4 +1,4 @@
-# remediate: scanned PDF to accessible HTML and EPUB
+# Unscanner: scanned PDF to accessible HTML and EPUB
 
 Turns scanned course readings (book chapters, articles) into semantic HTML and EPUB 3 that meet
 WCAG 2.1 AA, with the printed page numbers preserved as navigable markers so students can still
@@ -22,24 +22,24 @@ pip install -e .
 Python 3.11+. Optional for EPUB validation: Java 21 and the `epubcheck.jar` in `tools/epubcheck-*/`
 (both are present on this machine already; set `EPUBCHECK_JAR` to point elsewhere).
 
-If the `remediate` command is not on your PATH (pip's user Scripts folder often is not), use
-`python -m remediate.cli` in its place everywhere below.
+If the `unscanner` command is not on your PATH (pip's user Scripts folder often is not), use
+`python -m unscanner.cli` in its place everywhere below.
 
 ## Command line
 
 ```bash
 # one shot: open + transcribe + build + validate
-remediate run "pdfs/HIST 352 Cold Wars Killing Fields.pdf" --title "Cold War's Killing Fields (excerpt)" --author "Paul Thomas Chamberlin"
+unscanner run "pdfs/HIST 352 Cold Wars Killing Fields.pdf" --title "Cold War's Killing Fields (excerpt)" --author "Paul Thomas Chamberlin"
 
 # or step by step
-remediate open  pdfs/x.pdf --title "..." --author "..."
-remediate transcribe pdfs/x.pdf --pages 1-10 --backend anthropic --model claude-sonnet-5 --effort low
-remediate transcribe pdfs/x.pdf --backend openai --model qwen3.6:27b      # Ollama at localhost:11434
-remediate build pdfs/x.pdf            # out/<doc>/index.html + out/<doc>/<title>.epub
-remediate validate pdfs/x.pdf         # HTML checks + coverage check + epubcheck
-remediate status pdfs/x.pdf
-remediate page pdfs/x.pdf 7           # print the stored HTML for page 7
-remediate set-page pdfs/x.pdf 7 fixed.html --label 81   # replace a page by hand
+unscanner open  pdfs/x.pdf --title "..." --author "..."
+unscanner transcribe pdfs/x.pdf --pages 1-10 --backend anthropic --model claude-sonnet-5 --effort low
+unscanner transcribe pdfs/x.pdf --backend openai --model qwen3.6:27b      # Ollama at localhost:11434
+unscanner build pdfs/x.pdf            # out/<doc>/index.html + out/<doc>/<title>.epub
+unscanner validate pdfs/x.pdf         # HTML checks + coverage check + epubcheck
+unscanner status pdfs/x.pdf
+unscanner page pdfs/x.pdf 7           # print the stored HTML for page 7
+unscanner set-page pdfs/x.pdf 7 fixed.html --label 81   # replace a page by hand
 ```
 
 State lives in `work/<doc>/doc.json` (one record per page: label, HTML, flags, notes, OCR draft,
@@ -50,17 +50,17 @@ Environment variables (CLI flags override them):
 
 | Variable | Meaning |
 |---|---|
-| `REMEDIATE_BACKEND` | `anthropic` (default) or `openai` |
-| `REMEDIATE_MODEL` | model id, e.g. `claude-opus-5`, `claude-sonnet-5`, `qwen3.6:27b` (the default for `openai`; the guidelines were tuned against it) |
-| `REMEDIATE_OPENAI_BASE_URL` | e.g. `http://localhost:11434/v1` (Ollama), `http://gpu-box:8000/v1` (vLLM) |
-| `REMEDIATE_OPENAI_API_KEY` | only if the endpoint requires one |
+| `UNSCANNER_BACKEND` | `anthropic` (default) or `openai` |
+| `UNSCANNER_MODEL` | model id, e.g. `claude-opus-5`, `claude-sonnet-5`, `qwen3.6:27b` (the default for `openai`; the guidelines were tuned against it) |
+| `UNSCANNER_OPENAI_BASE_URL` | e.g. `http://localhost:11434/v1` (Ollama), `http://gpu-box:8000/v1` (vLLM) |
+| `UNSCANNER_OPENAI_API_KEY` | only if the endpoint requires one |
 | `ANTHROPIC_API_KEY` | for the Claude backend |
-| `REMEDIATE_WORK_DIR`, `REMEDIATE_OUT_DIR` | where the MCP server keeps state and writes output |
+| `UNSCANNER_WORK_DIR`, `UNSCANNER_OUT_DIR` | where the MCP server keeps state and writes output |
 
 ## Local web UI
 
 ```bash
-python -m remediate.cli ui          # opens http://127.0.0.1:8765 in your browser
+python -m unscanner.cli ui          # opens http://127.0.0.1:8765 in your browser
 ```
 
 The UI is for the review step, which is where the human time goes. It shows the scanned page next
@@ -121,7 +121,7 @@ step, so a library can adapt it with Claude's help; see `CLAUDE.md`.
 
 Keep the UI open and talk to Claude (Desktop or Code) in another window. Claude connects to the same
 document state through the MCP server, which is also mounted inside the UI at
-`http://127.0.0.1:8765/mcp` while `remediate ui` is running (the stdio server in `.mcp.json`
+`http://127.0.0.1:8765/mcp` while `unscanner ui` is running (the stdio server in `.mcp.json`
 works too; both share `work/session.json`).
 
 - The UI reports the page you are on, and any text you have selected, so "this table is wrong" or
@@ -137,23 +137,23 @@ works too; both share `work/session.json`).
 
 For Claude Desktop, add the running UI as a remote MCP server with URL `http://127.0.0.1:8765/mcp`,
 or use the stdio configuration shown below. For Claude Code, `.mcp.json` in this folder is picked up
-automatically, or run `claude mcp add --transport http remediate http://127.0.0.1:8765/mcp`.
+automatically, or run `claude mcp add --transport http unscanner http://127.0.0.1:8765/mcp`.
 
 ## MCP server
 
-Start with `remediate serve` (stdio). `.mcp.json` in this folder already registers it for Claude Code;
+Start with `unscanner serve` (stdio). `.mcp.json` in this folder already registers it for Claude Code;
 open this folder in Claude Code and ask, for example:
 
-> Remediate `pdfs/HONR310-PreludeToSpaceAge.pdf` into accessible HTML and EPUB. Use the remediate tools.
+> Remediate `pdfs/HONR310-PreludeToSpaceAge.pdf` into accessible HTML and EPUB. Use the unscanner tools.
 
 For Claude Desktop add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "remediate": {
+    "unscanner": {
       "command": "python",
-      "args": ["-m", "remediate.cli", "--work", "C:/path/to/pdf-to-html/work", "--out", "C:/path/to/pdf-to-html/out", "serve"]
+      "args": ["-m", "unscanner.cli", "--work", "C:/path/to/pdf-to-html/work", "--out", "C:/path/to/pdf-to-html/out", "serve"]
     }
   }
 }

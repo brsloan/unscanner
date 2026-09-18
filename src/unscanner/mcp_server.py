@@ -10,9 +10,9 @@ Collaboration with a person using the web UI: get_current_view tells the agent w
 has open (and what they selected); show_page makes the UI jump to a page. Edits made through
 set_page appear in the UI within a couple of seconds.
 
-Runs standalone on stdio (`remediate serve`) or mounted inside the web app at /mcp (`remediate ui`).
-Configuration: configure(work_root, out_root), else REMEDIATE_WORK_DIR / REMEDIATE_OUT_DIR
-(defaults ./work and ./out), plus the REMEDIATE_BACKEND / REMEDIATE_MODEL variables used by backends.
+Runs standalone on stdio (`unscanner serve`) or mounted inside the web app at /mcp (`unscanner ui`).
+Configuration: configure(work_root, out_root), else UNSCANNER_WORK_DIR / UNSCANNER_OUT_DIR
+(defaults ./work and ./out), plus the UNSCANNER_BACKEND / UNSCANNER_MODEL variables used by backends.
 """
 
 from __future__ import annotations
@@ -33,12 +33,12 @@ from .prompts import GUIDELINES, normalize_result
 from .session import Session
 
 server = MCPServer(
-    "remediate",
+    "unscanner",
     instructions=(
         "Converts scanned PDFs into accessible HTML/EPUB (WCAG 2.1 AA) while keeping printed page numbers "
         "citable. Typical flow: open_document -> (get_page + set_page for each page, or transcribe_pages) "
         "-> build -> validate -> fix flagged pages -> build again. Call get_guidelines once before writing "
-        "page HTML yourself. When a person is working in the remediate web UI, start with get_current_view "
+        "page HTML yourself. When a person is working in the unscanner web UI, start with get_current_view "
         "to see the page they are looking at; your set_page edits show up in their window automatically."
     ),
 )
@@ -53,11 +53,11 @@ def configure(work_root: str | Path, out_root: str | Path) -> None:
 
 
 def _work_root() -> Path:
-    return _config["work"] or Path(os.environ.get("REMEDIATE_WORK_DIR", "work")).resolve()
+    return _config["work"] or Path(os.environ.get("UNSCANNER_WORK_DIR", "work")).resolve()
 
 
 def _out_root() -> Path:
-    return _config["out"] or Path(os.environ.get("REMEDIATE_OUT_DIR", "out")).resolve()
+    return _config["out"] or Path(os.environ.get("UNSCANNER_OUT_DIR", "out")).resolve()
 
 
 def _session() -> Session:
@@ -161,13 +161,13 @@ def get_guidelines() -> str:
 
 @server.tool()
 def get_current_view(include_image: bool = True):
-    """What the person using the remediate web UI is looking at right now: document, page, printed
+    """What the person using the unscanner web UI is looking at right now: document, page, printed
     label, the text they have selected in the editor (if any), whether they have unsaved edits, plus
     the page image and the stored HTML for that page. Start here when they ask about "this page",
     "this table", etc. Returns a message if the UI is not open or has not shown a page yet."""
     view = _session().get().get("view")
     if not view:
-        return "No page is open in the remediate web UI (start it with `remediate ui`)."
+        return "No page is open in the unscanner web UI (start it with `unscanner ui`)."
     doc = _load(view["doc_id"])
     info = _page_info(doc, view["doc_id"], int(view["page"]))
     info["selection"] = view.get("selection") or ""
@@ -238,8 +238,8 @@ def transcribe_pages(doc_id: str, pages: str = "all", backend: str | None = None
     """Run the configured model backend over pages (batch). pages: "all", "3", "1-5,9".
 
     backend: "anthropic" (Claude API; needs ANTHROPIC_API_KEY) or "openai" (any OpenAI-compatible
-    endpoint such as Ollama/vLLM; set REMEDIATE_OPENAI_BASE_URL). Defaults come from REMEDIATE_BACKEND /
-    REMEDIATE_MODEL. Pages already done are skipped unless force=true. instructions: extra guidance
+    endpoint such as Ollama/vLLM; set UNSCANNER_OPENAI_BASE_URL). Defaults come from UNSCANNER_BACKEND /
+    UNSCANNER_MODEL. Pages already done are skipped unless force=true. instructions: extra guidance
     appended to every page prompt for this run, e.g. "write every display equation as MathML" or
     "the two-column layout must be read left column first". fallback: a second backend ("anthropic"
     or "openai") that a page is retried on when the main backend refuses it on safety/copyright

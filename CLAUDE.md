@@ -1,4 +1,4 @@
-# remediate — guide for Claude (and people) changing this code
+# Unscanner — guide for Claude (and people) changing this code
 
 Purpose: turn scanned PDFs into accessible HTML/EPUB (WCAG 2.1 AA) while keeping printed page
 numbers citable. Libraries adapt this tool to their own needs, often with Claude's help, so keep
@@ -8,23 +8,29 @@ changes small, plain, and covered by tests.
 
 | File | Role |
 |---|---|
-| `src/remediate/document.py` | on-disk state: `work/<doc>/doc.json`, one `Page` record per PDF page |
-| `src/remediate/pdf.py` | render pages, text layer, RapidOCR fallback, figure cropping |
-| `src/remediate/prompts.py` | **the transcription contract** (`GUIDELINES`), JSON schema, result normalization |
-| `src/remediate/backends/` | model backends: `anthropic_backend.py` (Claude API), `openai_compat.py` (Ollama/vLLM/etc.) |
-| `src/remediate/pipeline.py` | batch transcription, resumable, threaded |
-| `src/remediate/assemble.py` | per-page HTML -> one document: page markers, paragraph joins, heading normalization |
-| `src/remediate/epub.py` | EPUB 3 writer (TOC, page-list, accessibility metadata) |
-| `src/remediate/validate.py` | HTML checks, OCR coverage check, epubcheck runner |
-| `src/remediate/sanitize.py` | normalizes any HTML (editor or model) to the allowed semantic vocabulary |
-| `src/remediate/cli.py` | `remediate` command line |
-| `src/remediate/mcp_server.py` | MCP tools for agents |
-| `src/remediate/webapp.py` + `web/` | local web UI (FastAPI + one plain HTML/JS page, no build step); mounts the MCP server at `/mcp` |
-| `src/remediate/keystore.py` | API keys in the OS credential store (optional `keyring` package); the web UI falls back to `work/settings.json` without one. `GET /api/settings` never returns a key |
-| `src/remediate/locate.py` | maps editor caret context to a word box on the scan (Follow / Mark in the UI); word boxes come from `pdf.cached_page_words` |
-| `src/remediate/diff.py` | word-level diff of the scan's word boxes against the editor's words (the Diff button): `missing` / `changed` boxes on the scan, `extra` / `changed` words in the editor. Display only: the editor highlights use the CSS Custom Highlight API, so nothing is added to the page HTML |
-| `src/remediate/project.py` | Export project / Import project: a document's state as one portable `<pdf name>.remediate.json` (no paths, no PDF) to keep next to the PDF. Import needs the same PDF, sanitizes the HTML, refuses to overwrite an existing project without `replace`, and on a replace lifts every page version so open editors get a 409. UI buttons, `/api/documents/{id}/export`, `/api/projects/import`, CLI `export` / `import` |
-| `src/remediate/session.py` | `work/session.json`: what the UI shows (for `get_current_view`) and agent navigation requests (`show_page`) |
+| `src/unscanner/document.py` | on-disk state: `work/<doc>/doc.json`, one `Page` record per PDF page |
+| `src/unscanner/pdf.py` | render pages, text layer, RapidOCR fallback, figure cropping |
+| `src/unscanner/prompts.py` | **the transcription contract** (`GUIDELINES`), JSON schema, result normalization |
+| `src/unscanner/backends/` | model backends: `anthropic_backend.py` (Claude API), `openai_compat.py` (Ollama/vLLM/etc.) |
+| `src/unscanner/pipeline.py` | batch transcription, resumable, threaded |
+| `src/unscanner/assemble.py` | per-page HTML -> one document: page markers, paragraph joins, heading normalization |
+| `src/unscanner/epub.py` | EPUB 3 writer (TOC, page-list, accessibility metadata) |
+| `src/unscanner/validate.py` | HTML checks, OCR coverage check, epubcheck runner |
+| `src/unscanner/sanitize.py` | normalizes any HTML (editor or model) to the allowed semantic vocabulary |
+| `src/unscanner/cli.py` | `unscanner` command line |
+| `src/unscanner/mcp_server.py` | MCP tools for agents |
+| `src/unscanner/webapp.py` + `web/` | local web UI (FastAPI + one plain HTML/JS page, no build step); mounts the MCP server at `/mcp` |
+| `src/unscanner/keystore.py` | API keys in the OS credential store (optional `keyring` package); the web UI falls back to `work/settings.json` without one. `GET /api/settings` never returns a key |
+| `src/unscanner/locate.py` | maps editor caret context to a word box on the scan (Follow / Mark in the UI); word boxes come from `pdf.cached_page_words` |
+| `src/unscanner/diff.py` | word-level diff of the scan's word boxes against the editor's words (the Diff button): `missing` / `changed` boxes on the scan, `extra` / `changed` words in the editor. Display only: the editor highlights use the CSS Custom Highlight API, so nothing is added to the page HTML |
+| `src/unscanner/project.py` | Export project / Import project: a document's state as one portable `<pdf name>.unscanner.json` (no paths, no PDF) to keep next to the PDF. Import needs the same PDF, sanitizes the HTML, refuses to overwrite an existing project without `replace`, and on a replace lifts every page version so open editors get a 409. UI buttons, `/api/documents/{id}/export`, `/api/projects/import`, CLI `export` / `import` |
+| `src/unscanner/session.py` | `work/session.json`: what the UI shows (for `get_current_view`) and agent navigation requests (`show_page`) |
+
+The program was called `remediate` until September 2026. Three things still accept the old name so
+nobody loses work: `keystore.LEGACY_SERVICE` (saved API keys), `project.LEGACY_FORMATS` (exported
+project files), and the `remediate.*` to `unscanner.*` localStorage move at the top of `web/app.js`
+(unsaved drafts). "Remediate" as a verb (the `remediate_document` MCP prompt, prose) is the
+accessibility term and stays.
 
 ## Invariants — do not break
 
@@ -38,7 +44,7 @@ changes small, plain, and covered by tests.
 4. Every `<img>` has an `alt` attribute.
 5. `work/<doc>/doc.json` is the single source of truth; CLI, MCP server and web UI all read/write it
    through `Document`. Never store state anywhere else.
-6. The EPUB must pass epubcheck with zero errors (`remediate validate` runs it when Java is present).
+6. The EPUB must pass epubcheck with zero errors (`unscanner validate` runs it when Java is present).
 7. Every stored page change goes through `pipeline.apply_result`, which bumps `page.version` and sets
    `page.changed_by` ("editor" for a person, "claude" for MCP `set_page`, a model id for batch runs). Status `done` means a person approved the page in the UI; a plain Save keeps it `needs_review`.
    The UI sends the version it loaded on save and the server answers 409 on a mismatch; never bypass
@@ -68,8 +74,8 @@ changes small, plain, and covered by tests.
 ```bash
 pip install -e .[dev]
 python -m pytest -q          # synthetic PDF, mocked HTTP; no API key needed
-python -m remediate.cli ui   # web UI at http://127.0.0.1:8765
-python -m remediate.cli serve   # MCP server on stdio (see .mcp.json)
+python -m unscanner.cli ui   # web UI at http://127.0.0.1:8765
+python -m unscanner.cli serve   # MCP server on stdio (see .mcp.json)
 ```
 
 Sample scans live in `pdfs/` (not committed). `work/` and `out/` are generated.

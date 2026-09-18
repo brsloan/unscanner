@@ -1,11 +1,11 @@
 {
   "mcpServers": {
-    "remediate": {
+    "unscanner": {
       "command": "python",
-      "args": ["-m", "remediate.cli", "serve"],
+      "args": ["-m", "unscanner.cli", "serve"],
       "env": {
-        "REMEDIATE_BACKEND": "anthropic",
-        "REMEDIATE_MODEL": "claude-opus-5"
+        "UNSCANNER_BACKEND": "anthropic",
+        "UNSCANNER_MODEL": "claude-opus-5"
       }
     }
   }

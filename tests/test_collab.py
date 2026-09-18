@@ -11,9 +11,9 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from remediate import mcp_server, webapp
-from remediate.pipeline import page_prompt
-from remediate.session import Session
+from unscanner import mcp_server, webapp
+from unscanner.pipeline import page_prompt
+from unscanner.session import Session
 from tests.test_pipeline import make_pdf
 
 
@@ -114,7 +114,7 @@ async def test_agent_sees_why_a_tool_failed(env):
 
 def test_instructions_reach_the_prompt(env):
     c, doc_id, work = env
-    from remediate.document import Document
+    from unscanner.document import Document
 
     doc = Document.load(work / doc_id)
     prompt = page_prompt(doc, 1, "write every equation as MathML")

@@ -1,4 +1,4 @@
-/* remediate UI: plain JS, no build step. Talks to the JSON API in webapp.py.
+/* unscanner UI: plain JS, no build step. Talks to the JSON API in webapp.py.
    Collaboration: the UI reports what it shows to /api/session/view, polls the document every 2 s
    so edits made by Claude (through the MCP server) appear, follows show_page requests, and refuses
    to overwrite a page that changed underneath it (HTTP 409). */
@@ -41,9 +41,20 @@ $("#btn-status-expand").addEventListener("click", (e) => {
   e.target.textContent = open ? "▼" : "▲";
 });
 
+// ------------------------------------------------------------------ settings kept by the browser
+// The program used to be called "remediate": move what it stored (unsaved drafts, preferences) to the new keys.
+try {
+  for (const key of Object.keys(localStorage)) {
+    if (!key.startsWith("remediate.")) continue;
+    const renamed = "unscanner." + key.slice("remediate.".length);
+    if (localStorage.getItem(renamed) === null) localStorage.setItem(renamed, localStorage.getItem(key));
+    localStorage.removeItem(key);
+  }
+} catch (_) { /* storage disabled */ }
+
 // ------------------------------------------------------------------ page image scaling (fit / fill / manual)
 const img = $("#page-image"), scroller = $("#image-scroll");
-state.zoomMode = localStorage.getItem("remediate.zoomMode") || "fit";
+state.zoomMode = localStorage.getItem("unscanner.zoomMode") || "fit";
 function applyZoom() {
   if (!img.naturalWidth) return;
   const cw = scroller.clientWidth - 12, ch = scroller.clientHeight - 12;
@@ -56,7 +67,7 @@ function applyZoom() {
   $("#btn-fill").setAttribute("aria-pressed", String(state.zoomMode === "fill"));
 }
 function setZoomMode(mode) {
-  state.zoomMode = mode; localStorage.setItem("remediate.zoomMode", mode);
+  state.zoomMode = mode; localStorage.setItem("unscanner.zoomMode", mode);
   if (mode !== "manual") $("#zoom").value = 100;
   applyZoom();
 }
@@ -64,12 +75,12 @@ img.addEventListener("load", () => { applyZoom(); if (state.lastBox && (state.fo
 new ResizeObserver(applyZoom).observe(scroller);
 $("#btn-fit").addEventListener("click", () => setZoomMode("fit"));
 $("#btn-fill").addEventListener("click", () => setZoomMode("fill"));
-$("#zoom").addEventListener("input", () => { state.zoomMode = "manual"; localStorage.setItem("remediate.zoomMode", "manual"); applyZoom(); });
+$("#zoom").addEventListener("input", () => { state.zoomMode = "manual"; localStorage.setItem("unscanner.zoomMode", "manual"); applyZoom(); });
 
 // ------------------------------------------------------------------ follow / mark: locate the editor caret on the scan
 const marker = $("#marker"), edgeTicks = $("#edge-ticks");
-state.follow = localStorage.getItem("remediate.follow") === "true";
-state.mark = localStorage.getItem("remediate.mark") === "true";
+state.follow = localStorage.getItem("unscanner.follow") === "true";
+state.mark = localStorage.getItem("unscanner.mark") === "true";
 function renderFollowButtons() {
   $("#btn-follow").setAttribute("aria-pressed", String(state.follow));
   $("#btn-mark").setAttribute("aria-pressed", String(state.mark));
@@ -91,8 +102,8 @@ function updateEdgeTicks() {
 $("#image-scroll").addEventListener("scroll", updateEdgeTicks);
 new ResizeObserver(updateEdgeTicks).observe($("#image-scroll"));
 marker.addEventListener("transitionend", updateEdgeTicks);
-$("#btn-follow").addEventListener("click", () => { state.follow = !state.follow; localStorage.setItem("remediate.follow", state.follow); renderFollowButtons(); locateCaret(); });
-$("#btn-mark").addEventListener("click", () => { state.mark = !state.mark; localStorage.setItem("remediate.mark", state.mark); renderFollowButtons(); locateCaret(); });
+$("#btn-follow").addEventListener("click", () => { state.follow = !state.follow; localStorage.setItem("unscanner.follow", state.follow); renderFollowButtons(); locateCaret(); });
+$("#btn-mark").addEventListener("click", () => { state.mark = !state.mark; localStorage.setItem("unscanner.mark", state.mark); renderFollowButtons(); locateCaret(); });
 renderFollowButtons();
 
 const BLOCK_SEL = "p,li,h1,h2,h3,h4,h5,h6,td,th,dd,dt,figcaption,caption,blockquote,pre,aside";
@@ -277,7 +288,7 @@ $("#editor").addEventListener("focus", locateCaret);
 const diffLayer = $("#diff-layer");
 const canHighlight = !!(window.Highlight && window.CSS && CSS.highlights);
 const DIFF_TITLE = $("#btn-diff").title;
-state.diff = localStorage.getItem("remediate.diff") !== "false";
+state.diff = localStorage.getItem("unscanner.diff") !== "false";
 let diffTimer = null, diffSeq = 0;
 function clearDiff() {
   diffSeq++;  // an answer still on its way is dropped
@@ -324,18 +335,18 @@ async function refreshDiff() {
   $("#btn-diff").title = `${DIFF_TITLE}. This page: ${c.missing} on the scan but not transcribed, ${c.extra} transcribed but not on the scan, ${c.changed} spelled differently` +
     (canHighlight ? "" : ". This browser cannot highlight text in the editor; differences are shown on the scan only");
 }
-$("#btn-diff").addEventListener("click", () => { state.diff = !state.diff; localStorage.setItem("remediate.diff", state.diff); refreshDiff(); });
+$("#btn-diff").addEventListener("click", () => { state.diff = !state.diff; localStorage.setItem("unscanner.diff", state.diff); refreshDiff(); });
 $("#btn-diff").setAttribute("aria-pressed", String(state.diff));
 
 // ------------------------------------------------------------------ resizable panels (drag the gutters)
 function setupGutter(id, cssVar, measure, min) {
   const g = $(id);
-  const saved = localStorage.getItem("remediate." + cssVar);
+  const saved = localStorage.getItem("unscanner." + cssVar);
   if (saved) document.documentElement.style.setProperty(cssVar, saved);
   const apply = (px) => {
     const v = Math.max(min, Math.min(px, window.innerWidth - 300)) + "px";
     document.documentElement.style.setProperty(cssVar, v);
-    localStorage.setItem("remediate." + cssVar, v);
+    localStorage.setItem("unscanner." + cssVar, v);
   };
   g.addEventListener("mousedown", (e) => {
     e.preventDefault();
@@ -350,21 +361,21 @@ function setupGutter(id, cssVar, measure, min) {
     if (e.key === "ArrowLeft") { apply(measure() - 20); e.preventDefault(); }
     if (e.key === "ArrowRight") { apply(measure() + 20); e.preventDefault(); }
   });
-  g.addEventListener("dblclick", () => { localStorage.removeItem("remediate." + cssVar); document.documentElement.style.removeProperty(cssVar); });
+  g.addEventListener("dblclick", () => { localStorage.removeItem("unscanner." + cssVar); document.documentElement.style.removeProperty(cssVar); });
 }
 setupGutter("#gutter-1", "--sidebar-w", () => $("#sidebar").getBoundingClientRect().width, 90);
 setupGutter("#gutter-2", "--image-w", () => $("#pane-image").getBoundingClientRect().width, 120);
 
 // ------------------------------------------------------------------ notes panel (toggle + warning when hidden but non-empty)
 function updateNotesUI() {
-  const visible = localStorage.getItem("remediate.notesVisible") !== "false";
+  const visible = localStorage.getItem("unscanner.notesVisible") !== "false";
   $("#notes-panel").hidden = !visible;
   $("#btn-notes").setAttribute("aria-pressed", String(visible));
   $("#notes-warn").hidden = visible || !$("#f-notes").value.trim();
 }
 $("#btn-notes").addEventListener("click", () => {
-  const visible = localStorage.getItem("remediate.notesVisible") !== "false";
-  localStorage.setItem("remediate.notesVisible", String(!visible));
+  const visible = localStorage.getItem("unscanner.notesVisible") !== "false";
+  localStorage.setItem("unscanner.notesVisible", String(!visible));
   updateNotesUI();
   if (!visible) $("#f-notes").focus();
 });
@@ -399,7 +410,7 @@ async function openDoc(docId, pageToShow) {
   if ($("#dlg-properties").open) $("#dlg-properties").close("cancel");  // it belongs to the document we are leaving
   if (!docId) { state.doc = null; renderPages(); return; }
   state.doc = await api(`/documents/${docId}`);
-  localStorage.setItem("remediate.lastDoc", docId);
+  localStorage.setItem("unscanner.lastDoc", docId);
   renderPages(); renderMeta();
   ["#btn-transcribe", "#btn-build", "#btn-validate", "#btn-properties", "#btn-export"].forEach((b) => ($(b).disabled = false));
   $("#lnk-html").href = `/api/documents/${docId}/output/html`;
@@ -415,10 +426,10 @@ async function openDoc(docId, pageToShow) {
 
 // The page last shown in each document, so reopening the app (or the document) resumes there.
 function lastPages() {
-  try { return JSON.parse(localStorage.getItem("remediate.lastPage") || "{}"); } catch (_) { return {}; }
+  try { return JSON.parse(localStorage.getItem("unscanner.lastPage") || "{}"); } catch (_) { return {}; }
 }
 function rememberPage(docId, n) {
-  try { localStorage.setItem("remediate.lastPage", JSON.stringify({ ...lastPages(), [docId]: n })); } catch (_) { /* storage disabled */ }
+  try { localStorage.setItem("unscanner.lastPage", JSON.stringify({ ...lastPages(), [docId]: n })); } catch (_) { /* storage disabled */ }
 }
 
 const STATUS_LABEL = { done: "approved", needs_review: "needs review", pending: "not transcribed", error: "error" };
@@ -438,9 +449,9 @@ function renderMeta() {
 
 // ------------------------------------------------------------------ drafts: unsaved edits kept per page, in memory and localStorage
 function allDrafts() {
-  try { return JSON.parse(localStorage.getItem("remediate.drafts") || "{}"); } catch (_) { return {}; }
+  try { return JSON.parse(localStorage.getItem("unscanner.drafts") || "{}"); } catch (_) { return {}; }
 }
-function writeDrafts(d) { try { localStorage.setItem("remediate.drafts", JSON.stringify(d)); } catch (_) { /* storage full or disabled */ } }
+function writeDrafts(d) { try { localStorage.setItem("unscanner.drafts", JSON.stringify(d)); } catch (_) { /* storage full or disabled */ } }
 function docDrafts() { return (state.doc && allDrafts()[state.doc.doc_id]) || {}; }
 function getDraft(n) { return docDrafts()[n] || null; }
 function setDraft(n, draft) {
@@ -1328,4 +1339,4 @@ $("#form-settings").addEventListener("submit", async (e) => {
 function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
 // ------------------------------------------------------------------ start
-loadDocs(localStorage.getItem("remediate.lastDoc") || "").catch((e) => setStatus(e.message, true));
+loadDocs(localStorage.getItem("unscanner.lastDoc") || "").catch((e) => setStatus(e.message, true));

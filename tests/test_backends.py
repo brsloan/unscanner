@@ -9,10 +9,10 @@ import httpx
 import pytest
 import httpx2
 
-from remediate.backends.anthropic_backend import AnthropicBackend
-from remediate.backends.base import BackendError
-from remediate.backends.openai_compat import OpenAICompatBackend
-from remediate.prompts import GUIDELINES
+from unscanner.backends.anthropic_backend import AnthropicBackend
+from unscanner.backends.base import BackendError
+from unscanner.backends.openai_compat import OpenAICompatBackend
+from unscanner.prompts import GUIDELINES
 
 RESULT = {"label": "12", "skip": False, "starts_mid_paragraph": False, "ends_mid_paragraph": True,
           "html": "<p>Hello</p>", "figures": [], "notes": ""}
@@ -76,7 +76,7 @@ def test_anthropic_request_shape():
 def test_anthropic_missing_key_is_a_clear_backend_error(monkeypatch):
     import pytest
 
-    from remediate.backends.base import BackendError
+    from unscanner.backends.base import BackendError
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
@@ -107,7 +107,7 @@ def test_anthropic_haiku_omits_effort_and_fallbacks():
 
 
 def test_openai_compat_accepts_full_endpoint_url():
-    from remediate.backends.openai_compat import normalize_base_url
+    from unscanner.backends.openai_compat import normalize_base_url
     assert normalize_base_url("https://genai.example.edu/api/chat/completions") == "https://genai.example.edu/api"
     assert normalize_base_url("https://genai.example.edu/api/chat/completions/") == "https://genai.example.edu/api"
     assert normalize_base_url("http://localhost:11434/v1/") == "http://localhost:11434/v1"
@@ -170,7 +170,7 @@ def test_openai_compat_explains_reasoning_exhaustion():
 
 
 def test_openai_compat_retries_rate_limits(monkeypatch):
-    import remediate.backends.openai_compat as oc
+    import unscanner.backends.openai_compat as oc
 
     monkeypatch.setattr(oc.time, "sleep", lambda s: None)
     n = {"calls": 0}
@@ -190,7 +190,7 @@ def test_openai_compat_retries_rate_limits(monkeypatch):
 
 
 def test_openai_compat_gives_up_after_persistent_rate_limit(monkeypatch):
-    import remediate.backends.openai_compat as oc
+    import unscanner.backends.openai_compat as oc
 
     monkeypatch.setattr(oc.time, "sleep", lambda s: None)
     n = {"calls": 0}
@@ -207,7 +207,7 @@ def test_openai_compat_gives_up_after_persistent_rate_limit(monkeypatch):
 
 
 def test_dot_leaders_are_collapsed():
-    from remediate.prompts import collapse_dot_leaders, normalize_result
+    from unscanner.prompts import collapse_dot_leaders, normalize_result
 
     assert collapse_dot_leaders("<li>Allen, David....................898</li>") == "<li>Allen, David 898</li>"
     assert collapse_dot_leaders("<li>Allen, David . . . . . . . 898</li>") == "<li>Allen, David 898</li>"

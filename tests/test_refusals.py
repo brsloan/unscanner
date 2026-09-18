@@ -11,14 +11,14 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 
-from remediate import webapp
-from remediate.backends.anthropic_backend import AnthropicBackend
-from remediate.backends.base import Backend, BackendError, RefusalError, looks_like_refusal
-from remediate.backends.openai_compat import OpenAICompatBackend
-from remediate.document import Document
-from remediate.pdf import new_document
-from remediate.pipeline import transcribe_pages
-from remediate.prompts import CONTEXT, GUIDELINES, build_user_prompt
+from unscanner import webapp
+from unscanner.backends.anthropic_backend import AnthropicBackend
+from unscanner.backends.base import Backend, BackendError, RefusalError, looks_like_refusal
+from unscanner.backends.openai_compat import OpenAICompatBackend
+from unscanner.document import Document
+from unscanner.pdf import new_document
+from unscanner.pipeline import transcribe_pages
+from unscanner.prompts import CONTEXT, GUIDELINES, build_user_prompt
 from tests.test_backends import RESULT
 from tests.test_pipeline import FakeBackend, make_pdf
 
@@ -200,7 +200,7 @@ def test_transcribe_job_uses_fallback_from_settings(client, tmp_path, monkeypatc
         made.append(name)
         return RefusingBackend() if name == "anthropic" else FakeBackend()
 
-    monkeypatch.setattr("remediate.backends.make_backend", fake_make_backend)
+    monkeypatch.setattr("unscanner.backends.make_backend", fake_make_backend)
     client.put("/api/settings", json={"backend": "anthropic", "fallback_backend": "openai"})
     doc_id = client.post("/api/documents", json={"pdf_path": str(make_pdf(tmp_path / "job.pdf"))}).json()["doc_id"]
     r = client.post(f"/api/documents/{doc_id}/transcribe", json={"pages": "all"})
@@ -221,7 +221,7 @@ def test_transcribe_job_uses_fallback_from_settings(client, tmp_path, monkeypatc
 
 def test_fallback_same_as_main_backend_is_ignored(client, tmp_path, monkeypatch):
     made: list[str] = []
-    monkeypatch.setattr("remediate.backends.make_backend", lambda name=None, model=None, **kw: (made.append(name), FakeBackend())[1])
+    monkeypatch.setattr("unscanner.backends.make_backend", lambda name=None, model=None, **kw: (made.append(name), FakeBackend())[1])
     client.put("/api/settings", json={"backend": "openai", "fallback_backend": "openai"})
     doc_id = client.post("/api/documents", json={"pdf_path": str(make_pdf(tmp_path / "same.pdf"))}).json()["doc_id"]
     r = client.post(f"/api/documents/{doc_id}/transcribe", json={"pages": "1"})

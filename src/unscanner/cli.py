@@ -1,18 +1,18 @@
 """Command line interface.
 
-  remediate open   <pdf> [--work work] [--title T] [--author A] [--lang en]
-  remediate transcribe <pdf|workdir> [--pages 1-5] [--backend anthropic|openai] [--model M] [--force]
+  unscanner open   <pdf> [--work work] [--title T] [--author A] [--lang en]
+  unscanner transcribe <pdf|workdir> [--pages 1-5] [--backend anthropic|openai] [--model M] [--force]
                        [--fallback anthropic|openai] [--fallback-model M] [--no-title]
-  remediate build  <pdf|workdir> [--out out] [--no-epub]
-  remediate validate <pdf|workdir>
-  remediate status <pdf|workdir>
-  remediate run    <pdf> ...      (open + transcribe + build + validate)
-  remediate page   <pdf|workdir> N            print a page's stored html
-  remediate set-page <pdf|workdir> N file.html [--label L] [--starts-mid] [--ends-mid]
-  remediate export <pdf|workdir> [-o file]    write the project file (default: next to the PDF)
-  remediate import <file.remediate.json> [--pdf P] [--replace]
-  remediate serve  [--work work]  (MCP server over stdio)
-  remediate ui     [--port 8765] [--no-browser]   (local web UI)
+  unscanner build  <pdf|workdir> [--out out] [--no-epub]
+  unscanner validate <pdf|workdir>
+  unscanner status <pdf|workdir>
+  unscanner run    <pdf> ...      (open + transcribe + build + validate)
+  unscanner page   <pdf|workdir> N            print a page's stored html
+  unscanner set-page <pdf|workdir> N file.html [--label L] [--starts-mid] [--ends-mid]
+  unscanner export <pdf|workdir> [-o file]    write the project file (default: next to the PDF)
+  unscanner import <file.unscanner.json> [--pdf P] [--replace]
+  unscanner serve  [--work work]  (MCP server over stdio)
+  unscanner ui     [--port 8765] [--no-browser]   (local web UI)
 """
 
 from __future__ import annotations
@@ -182,8 +182,8 @@ def cmd_import(args) -> None:
 def cmd_serve(args) -> None:
     import os
 
-    os.environ.setdefault("REMEDIATE_WORK_DIR", str(Path(args.work).resolve()))
-    os.environ.setdefault("REMEDIATE_OUT_DIR", str(Path(args.out).resolve()))
+    os.environ.setdefault("UNSCANNER_WORK_DIR", str(Path(args.work).resolve()))
+    os.environ.setdefault("UNSCANNER_OUT_DIR", str(Path(args.out).resolve()))
     from .mcp_server import server
 
     server.run(transport="stdio")
@@ -196,7 +196,7 @@ def cmd_ui(args) -> None:
 
 
 def main(argv: list[str] | None = None) -> None:
-    ap = argparse.ArgumentParser(prog="remediate", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(prog="unscanner", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--work", default="work", help="work directory root (default: ./work)")
     ap.add_argument("--out", default="out", help="output directory root (default: ./out)")
     sub = ap.add_subparsers(dest="cmd", required=True)

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from remediate import webapp
-from remediate.locate import locate, norm
-from remediate.pdf import text_layer_words
+from unscanner import webapp
+from unscanner.locate import locate, norm
+from unscanner.pdf import text_layer_words
 from tests.test_pipeline import make_pdf
 
 WORDS = [{"text": t, "x0": i * 50.0, "y0": 100.0, "x1": i * 50.0 + 40, "y1": 110.0}

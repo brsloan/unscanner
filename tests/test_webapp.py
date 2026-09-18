@@ -7,8 +7,8 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from remediate import webapp
-from remediate.sanitize import sanitize_fragment
+from unscanner import webapp
+from unscanner.sanitize import sanitize_fragment
 from tests.test_pipeline import FakeBackend, make_pdf
 
 
@@ -58,7 +58,7 @@ def test_open_edit_build_validate(client, tmp_path):
     doc_id = r.json()["doc_id"]
     assert r.json()["page_count"] == 3
 
-    assert client.get("/").status_code == 200 and "remediate" in client.get("/").text
+    assert client.get("/").status_code == 200 and "Unscanner" in client.get("/").text
     assert client.get("/static/app.js").status_code == 200
     # the UI code is revalidated on every load, so a restart picks up changes to it
     assert client.get("/").headers["cache-control"] == "no-cache"
@@ -134,7 +134,7 @@ def test_figure_alt_autofill_and_layout_classes(client, tmp_path, monkeypatch):
             assert image_png[:4] == b"\x89PNG" and "Caption printed with the image: Figure 1" in prompt
             return "A grey rectangle standing in for a chart."
 
-    monkeypatch.setattr("remediate.backends.make_backend", lambda *a, **k: DescribingBackend())
+    monkeypatch.setattr("unscanner.backends.make_backend", lambda *a, **k: DescribingBackend())
     pdf = make_pdf(tmp_path / "alt sample.pdf")
     doc_id = client.post("/api/documents", json={"pdf_path": str(pdf)}).json()["doc_id"]
     client.put(f"/api/documents/{doc_id}/pages/1", json={
@@ -160,7 +160,7 @@ def test_settings_roundtrip(client):
 
 
 def test_transcribe_job(client, tmp_path, monkeypatch):
-    monkeypatch.setattr("remediate.backends.make_backend", lambda *a, **k: FakeBackend())
+    monkeypatch.setattr("unscanner.backends.make_backend", lambda *a, **k: FakeBackend())
     pdf = make_pdf(tmp_path / "job sample.pdf")
     doc_id = client.post("/api/documents", json={"pdf_path": str(pdf)}).json()["doc_id"]
     r = client.post(f"/api/documents/{doc_id}/transcribe", json={"pages": "all"})
@@ -179,7 +179,7 @@ def test_transcribe_job(client, tmp_path, monkeypatch):
 
 
 def test_settings_max_tokens_reaches_openai_backend(client, tmp_path, monkeypatch):
-    import remediate.backends as backends
+    import unscanner.backends as backends
 
     seen = {}
 

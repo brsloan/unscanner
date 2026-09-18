@@ -8,15 +8,15 @@ from .base import Backend, BackendError, RefusalError
 
 
 def make_backend(name: str | None = None, model: str | None = None, **kwargs) -> Backend:
-    """Build a backend from explicit args or REMEDIATE_* environment variables.
+    """Build a backend from explicit args or UNSCANNER_* environment variables.
 
-    REMEDIATE_BACKEND   anthropic | openai        (default: anthropic)
-    REMEDIATE_MODEL     model id for that backend
-    REMEDIATE_OPENAI_BASE_URL / REMEDIATE_OPENAI_API_KEY   for the OpenAI-compatible backend
+    UNSCANNER_BACKEND   anthropic | openai        (default: anthropic)
+    UNSCANNER_MODEL     model id for that backend
+    UNSCANNER_OPENAI_BASE_URL / UNSCANNER_OPENAI_API_KEY   for the OpenAI-compatible backend
                         (Ollama: http://localhost:11434/v1, vLLM: http://host:8000/v1)
     """
-    name = (name or os.environ.get("REMEDIATE_BACKEND") or "anthropic").lower()
-    model = model or os.environ.get("REMEDIATE_MODEL") or None
+    name = (name or os.environ.get("UNSCANNER_BACKEND") or "anthropic").lower()
+    model = model or os.environ.get("UNSCANNER_MODEL") or None
     if name == "anthropic":
         from .anthropic_backend import AnthropicBackend
 
@@ -26,8 +26,8 @@ def make_backend(name: str | None = None, model: str | None = None, **kwargs) ->
 
         return OpenAICompatBackend(
             model=model,
-            base_url=kwargs.pop("base_url", None) or os.environ.get("REMEDIATE_OPENAI_BASE_URL"),
-            api_key=kwargs.pop("api_key", None) or os.environ.get("REMEDIATE_OPENAI_API_KEY"),
+            base_url=kwargs.pop("base_url", None) or os.environ.get("UNSCANNER_OPENAI_BASE_URL"),
+            api_key=kwargs.pop("api_key", None) or os.environ.get("UNSCANNER_OPENAI_API_KEY"),
             **kwargs,
         )
     raise BackendError(f"unknown backend {name!r}; use 'anthropic' or 'openai'")

@@ -1,5 +1,5 @@
 """Local web UI: a FastAPI app serving the review/edit page and a small JSON API over the same
-document state the CLI and MCP server use. Run with `remediate ui`.
+document state the CLI and MCP server use. Run with `unscanner ui`.
 """
 
 from __future__ import annotations
@@ -128,7 +128,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         else:
             yield
 
-    app = FastAPI(title="remediate", docs_url="/api/docs", lifespan=lifespan)
+    app = FastAPI(title="unscanner", docs_url="/api/docs", lifespan=lifespan)
     if mcp_app is not None:
         app.mount("/mcp", mcp_app)
 
@@ -275,7 +275,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         try:
             data = json.loads(project_file.file.read().decode("utf-8-sig"))
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
-            raise HTTPException(400, "not a remediate project file") from e
+            raise HTTPException(400, "not an Unscanner project file") from e
         inbox = work_root / "_inbox"
         if pdf is not None and pdf.filename:
             if not pdf.filename.lower().endswith(".pdf"):
@@ -618,5 +618,5 @@ def serve(work_root: str = "work", out_root: str = "out", host: str = "127.0.0.1
     url = f"http://{host}:{port}/"
     if open_browser:
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
-    print(f"remediate UI at {url}  (Ctrl+C to stop)")
+    print(f"unscanner UI at {url}  (Ctrl+C to stop)")
     uvicorn.run(app, host=host, port=port, log_level="warning")

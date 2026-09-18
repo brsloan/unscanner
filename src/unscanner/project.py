@@ -13,9 +13,10 @@ from typing import Any
 from .document import Document, Page, slugify
 from .sanitize import sanitize_fragment
 
-FORMAT = "remediate-project"
+FORMAT = "unscanner-project"
+LEGACY_FORMATS = ("remediate-project",)  # written under the program's earlier name; still imported
 VERSION = 1
-SUFFIX = ".remediate.json"
+SUFFIX = ".unscanner.json"
 
 
 class ProjectError(ValueError):
@@ -61,8 +62,8 @@ def import_project(data: Any, pdf_path: str | Path, work_root: str | Path, repla
     On a replace every page gets a version above both copies, so an editor that still has the old
     page loaded is told about the change (409) instead of overwriting the imported one.
     """
-    if not isinstance(data, dict) or data.get("format") != FORMAT:
-        raise ProjectError("not a remediate project file")
+    if not isinstance(data, dict) or data.get("format") not in (FORMAT, *LEGACY_FORMATS):
+        raise ProjectError("not an Unscanner project file")
     if not isinstance(data.get("version"), int) or data["version"] > VERSION:
         raise ProjectError(f"project file version {data.get('version')!r} is newer than this program understands")
     raw_pages = data.get("pages")
