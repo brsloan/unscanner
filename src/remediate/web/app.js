@@ -267,6 +267,63 @@ $("#editor").addEventListener("keyup", locateCaret);
 $("#editor").addEventListener("mouseup", locateCaret);
 $("#editor").addEventListener("focus", locateCaret);
 
+// ------------------------------------------------------------------ word diff: the transcription against the words on the scan
+/* The server diffs the editor's words against the scan's word boxes (diff.py). Words the scan has and
+   the transcription lacks are boxed on the scan; words the transcription has and the scan lacks are
+   highlighted in the editor with the CSS Custom Highlight API, which leaves the edited HTML alone. */
+const diffLayer = $("#diff-layer");
+const canHighlight = !!(window.Highlight && window.CSS && CSS.highlights);
+const DIFF_TITLE = $("#btn-diff").title;
+state.diff = localStorage.getItem("remediate.diff") !== "false";
+let diffTimer = null, diffSeq = 0;
+function clearDiff() {
+  diffSeq++;  // an answer still on its way is dropped
+  diffLayer.replaceChildren();
+  if (canHighlight) { CSS.highlights.delete("diff-extra"); CSS.highlights.delete("diff-changed"); }
+  $("#diff-count").hidden = true;
+  $("#btn-diff").title = DIFF_TITLE;
+}
+function refreshDiffSoon(delay = 500) { clearTimeout(diffTimer); diffTimer = setTimeout(refreshDiff, delay); }
+async function refreshDiff() {
+  clearTimeout(diffTimer);
+  $("#btn-diff").setAttribute("aria-pressed", String(state.diff));
+  if (!state.diff || !state.doc || !state.page || $("#f-skip").checked) { clearDiff(); return; }
+  // In Source view the editor is stale: diff the source text instead, for the scan side only.
+  const live = !$("#toggle-source").checked;
+  const ed = live ? $("#editor") : new DOMParser().parseFromString($("#source").value, "text/html").body;
+  const { words, point } = editorWords(ed);
+  // A figure description is written by the transcriber, never printed on the page.
+  const shown = words.filter((w) => { const at = point(w.s); return !(at && at[0].parentElement.closest(".figure-description")); });
+  if (!shown.length) { clearDiff(); return; }  // nothing transcribed yet: the whole scan would light up
+  const seq = ++diffSeq, page = state.page;
+  let r;
+  try { r = await api(`/documents/${state.doc.doc_id}/pages/${page}/diff`, { method: "POST", body: { words: shown.map((w) => w.t) } }); }
+  catch (_) { return; }
+  if (seq !== diffSeq || page !== state.page) return;
+  diffLayer.replaceChildren(...r.scan.flatMap((t) => t.boxes.map((b) => {
+    const el = document.createElement("i");
+    el.className = t.kind;
+    el.style.cssText = `left:${b.x0 / 10}%;top:${b.y0 / 10}%;width:${(b.x1 - b.x0) / 10}%;height:${(b.y1 - b.y0) / 10}%`;
+    return el;
+  })));
+  if (canHighlight) {
+    const hl = { extra: new Highlight(), changed: new Highlight() };
+    if (live) for (const e of r.editor) {
+      const w = shown[e.index], a = w && point(w.s), b = w && point(w.e);
+      if (!a || !b) continue;
+      try { const range = document.createRange(); range.setStart(a[0], a[1]); range.setEnd(b[0], b[1]); hl[e.kind].add(range); }
+      catch (_) { /* the text changed while the diff was being made; the next one is already due */ }
+    }
+    CSS.highlights.set("diff-extra", hl.extra); CSS.highlights.set("diff-changed", hl.changed);
+  }
+  const c = r.counts, total = c.missing + c.extra + c.changed;
+  $("#diff-count").textContent = total; $("#diff-count").hidden = !total;
+  $("#btn-diff").title = `${DIFF_TITLE}. This page: ${c.missing} on the scan but not transcribed, ${c.extra} transcribed but not on the scan, ${c.changed} spelled differently` +
+    (canHighlight ? "" : ". This browser cannot highlight text in the editor; differences are shown on the scan only");
+}
+$("#btn-diff").addEventListener("click", () => { state.diff = !state.diff; localStorage.setItem("remediate.diff", state.diff); refreshDiff(); });
+$("#btn-diff").setAttribute("aria-pressed", String(state.diff));
+
 // ------------------------------------------------------------------ resizable panels (drag the gutters)
 function setupGutter(id, cssVar, measure, min) {
   const g = $(id);
@@ -455,6 +512,7 @@ async function loadPage(n, opts = {}) {
   ind.title = `PDF page ${n} of ${d.of}${d.label ? ", printed page " + d.label : ""}`;
   img.hidden = false;
   img.src = `/api/documents/${state.doc.doc_id}/pages/${n}/image`;
+  clearDiff();
   $("#editor").innerHTML = d.html || "";
   showFigures($("#editor"));
   setSource(d.html);
@@ -486,6 +544,7 @@ async function loadPage(n, opts = {}) {
   marker.hidden = true; edgeTicks.hidden = true; lastLocateKey = ""; state.lastBox = null;
   selectFigure(null);
   reportView();
+  refreshDiffSoon(0);
 }
 
 /* Figures are stored as <img src="fig:ID">; in the editor they are shown from the crop endpoint and
@@ -603,6 +662,7 @@ async function savePage(andNext = false, overwrite = false, approve = false) {
     const saved = await persistPage(n, formSnapshot(), { approve, overwrite });
     state.dirty = false; clearDraft(n); state.pageData = { ...state.pageData, ...saved };
     $("#editor").innerHTML = saved.html; showFigures($("#editor")); setSource(saved.html);
+    refreshDiffSoon(0);
     const p = state.doc.pages.find((x) => x.index === n);
     Object.assign(p, saved);
     renderPages(); renderMeta();
@@ -639,7 +699,7 @@ async function saveAll() {
   setStatus(msg, conflicts.length + failed.length > 0);
 }
 
-function markDirty() { if (!state.dirty) { state.dirty = true; reportView(); renderPages(); renderMeta(); } storeDraftSoon(); }
+function markDirty() { if (!state.dirty) { state.dirty = true; reportView(); renderPages(); renderMeta(); } storeDraftSoon(); refreshDiffSoon(); }
 
 // ------------------------------------------------------------------ collaboration: report view, poll, follow
 let reportTimer = null;
@@ -1031,6 +1091,7 @@ $("#toggle-source").addEventListener("change", (e) => {
   if (src) { setSource(editorHtml()); } else { $("#editor").innerHTML = $("#source").value; showFigures($("#editor")); }
   $("#source").hidden = !src; $("#editor").hidden = src;
   if (src) { $("#toggle-draft").checked = false; $("#draft").hidden = true; }
+  refreshDiffSoon(0);
 });
 $("#toggle-draft").addEventListener("change", (e) => {
   $("#draft").hidden = !e.target.checked;

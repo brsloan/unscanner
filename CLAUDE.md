@@ -22,6 +22,7 @@ changes small, plain, and covered by tests.
 | `src/remediate/webapp.py` + `web/` | local web UI (FastAPI + one plain HTML/JS page, no build step); mounts the MCP server at `/mcp` |
 | `src/remediate/keystore.py` | API keys in the OS credential store (optional `keyring` package); the web UI falls back to `work/settings.json` without one. `GET /api/settings` never returns a key |
 | `src/remediate/locate.py` | maps editor caret context to a word box on the scan (Follow / Mark in the UI); word boxes come from `pdf.cached_page_words` |
+| `src/remediate/diff.py` | word-level diff of the scan's word boxes against the editor's words (the Diff button): `missing` / `changed` boxes on the scan, `extra` / `changed` words in the editor. Display only: the editor highlights use the CSS Custom Highlight API, so nothing is added to the page HTML |
 | `src/remediate/session.py` | `work/session.json`: what the UI shows (for `get_current_view`) and agent navigation requests (`show_page`) |
 
 ## Invariants — do not break

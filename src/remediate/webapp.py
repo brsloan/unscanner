@@ -93,6 +93,10 @@ class LocateRequest(BaseModel):
     index: int
 
 
+class DiffRequest(BaseModel):
+    words: list[str]
+
+
 class TranscribeRequest(BaseModel):
     pages: str = "all"
     force: bool = False
@@ -382,6 +386,19 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             raise HTTPException(404, str(e)) from e
         box = locate(cached_page_words(doc, n), req.context, req.index)
         return {"found": box is not None, "box": box}
+
+    @app.post("/api/documents/{doc_id}/pages/{n}/diff")
+    def diff_page(doc_id: str, n: int, req: DiffRequest) -> dict[str, Any]:
+        """Word-level diff of the scan's words against req.words, the words now in the editor (saved
+        or not). See diff.word_diff for the result."""
+        from .diff import word_diff
+
+        doc = load_doc(doc_id)
+        try:
+            doc.page(n)
+        except IndexError as e:
+            raise HTTPException(404, str(e)) from e
+        return word_diff(cached_page_words(doc, n), req.words)
 
     @app.put("/api/documents/{doc_id}/pages/{n}")
     def put_page(doc_id: str, n: int, upd: PageUpdate) -> dict[str, Any]:

@@ -18,6 +18,7 @@
   <a id="lnk-html" class="button" hidden download>HTML</a>
   <a id="lnk-epub" class="button" hidden download>EPUB</a>
   <span class="spacer"></span>
+  <button id="btn-diff" type="button" aria-pressed="true" title="Highlight where the transcription differs from the text found on the scan">Diff <span id="diff-count" class="diff-count" hidden></span></button>
   <button id="btn-notes" type="button" aria-pressed="true" title="Show or hide the notes panel">Notes <span id="notes-warn" class="warn" role="img" aria-label="this page has notes" hidden>⚠</span></button>
   <button id="btn-properties" type="button" disabled title="Title, author and language of the output HTML and EPUB">Properties…</button>
   <button id="btn-settings" type="button">Settings</button>
@@ -48,6 +49,7 @@
       <div class="image-scroll" id="image-scroll">
         <div class="img-wrap" id="img-wrap">
           <img id="page-image" alt="Scanned page image" title="Click a word to jump to it in the editor" hidden>
+          <div id="diff-layer" class="diff-layer" aria-hidden="true"></div>
           <div id="marker" class="marker" aria-hidden="true" hidden><i class="dot"></i></div>
           <div id="crop-box" class="crop-box" role="group" aria-label="Figure crop box" hidden>
             <i class="h nw" data-h="nw"></i><i class="h n" data-h="n"></i><i class="h ne" data-h="ne"></i>

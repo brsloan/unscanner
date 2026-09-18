@@ -211,3 +211,17 @@ def test_document_properties(client, tmp_path):
     from pathlib import Path
     out = Path(html).read_text(encoding="utf-8")
     assert '<html lang="fr-CA">' in out and "<title>New Title</title>" in out
+
+
+def test_page_diff_reports_dropped_and_invented_words(client, tmp_path):
+    pdf = make_pdf(tmp_path / "diff sample.pdf")
+    doc_id = client.post("/api/documents", json={"pdf_path": str(pdf), "title": "Diff"}).json()["doc_id"]
+    # page 2 of the synthetic PDF: "38 / very long indeed. Here is a second paragraph. / A Section / ..."
+    words = "very long indeed. Here is a wholly invented paragraph. A Section Section text with a note.1".split()
+    r = client.post(f"/api/documents/{doc_id}/pages/2/diff", json={"words": words})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert [t["text"] for t in d["scan"] if t["kind"] == "missing"] == ["38", "second"]
+    assert [words[e["index"]] for e in d["editor"]] == ["wholly", "invented"]
+    assert all(0 <= b["x0"] < b["x1"] <= 1000 for t in d["scan"] for b in t["boxes"])
+    assert client.post(f"/api/documents/{doc_id}/pages/99/diff", json={"words": []}).status_code == 404

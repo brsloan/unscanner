@@ -65,6 +65,16 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 /* caret marker: a red dot just left of the word the caret is on */
 .marker { position: absolute; width: 0; height: 0; pointer-events: none; transition: left 0.12s, top 0.12s; }
 .marker .dot { position: absolute; width: 8px; height: 8px; left: -4px; top: -4px; border-radius: 50%; background: #e11d48; box-shadow: 0 0 0 1px #fff; }
+/* word diff (Diff button): on the scan, words the transcription lacks (solid red) or has differently
+   (dashed amber); in the editor, words the scan lacks or has differently. Line style as well as
+   color tells the two kinds apart. */
+.diff-layer { position: absolute; inset: 0; pointer-events: none; }
+.diff-layer i { position: absolute; box-sizing: content-box; margin: -2px; padding: 1px; border-radius: 2px; }
+.diff-layer .missing { background: rgba(225,29,72,0.25); border: 1px solid #be123c; }
+.diff-layer .changed { background: rgba(245,158,11,0.2); border: 1px dashed #92400e; }
+::highlight(diff-extra) { background-color: rgba(225,29,72,0.25); text-decoration: underline solid #be123c 2px; }
+::highlight(diff-changed) { background-color: rgba(245,158,11,0.3); text-decoration: underline dashed #b45309 2px; }
+.diff-count { font-size: 0.85em; font-variant-numeric: tabular-nums; padding: 0 0.35em; border-radius: 0.7em; background: var(--warn); color: #fff; }
 /* crop box for the selected figure: drag the body to move, the handles to resize */
 .crop-box { position: absolute; border: 2px dashed var(--accent); box-sizing: border-box; cursor: move; background: rgba(29,78,216,0.06); }
 .crop-box .h { position: absolute; width: 10px; height: 10px; background: #fff; border: 2px solid var(--accent); box-sizing: border-box; }
