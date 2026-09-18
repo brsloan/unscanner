@@ -214,3 +214,37 @@ def test_dot_leaders_are_collapsed():
     assert collapse_dot_leaders("<p>Wait... no. The end.</p>") == "<p>Wait... no. The end.</p>"
     r = normalize_result({"html": "<p>Entry.........12</p>"})
     assert r["html"] == "<p>Entry 12</p>"
+
+
+def test_openai_compat_retries_truncated_page_with_sampling():
+    """A model looping under greedy decoding hits the budget; the page is asked for again, warmer."""
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        if len(seen) == 1:
+            return httpx.Response(200, json={"choices": [{"message": {"content": '{"html": "<p>a a a a'},
+                                                          "finish_reason": "length"}], "usage": {}})
+        return _ok_response()
+
+    be = OpenAICompatBackend(model="m", base_url="http://ollama.local:11434/v1", max_tokens=24000)
+    be.client = httpx.Client(transport=httpx.MockTransport(handler))
+    result, _ = be.transcribe(b"\x89PNG", "p")
+    assert result["label"] == "12"
+    assert [b["temperature"] for b in seen] == [0.0, 0.3]
+    assert seen[0]["max_tokens"] == 24000
+
+
+def test_openai_compat_reports_truncation_after_retries():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": '{"html": "<table>'},
+                                                      "finish_reason": "length"}], "usage": {}})
+
+    be = OpenAICompatBackend(model="m", base_url="http://ollama.local:11434/v1", max_tokens=24000)
+    be.client = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(BackendError, match="24000 tokens.*repeating itself"):
+        be.transcribe(b"\x89PNG", "p")
+    assert len(seen) == 3

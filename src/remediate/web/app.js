@@ -1027,7 +1027,7 @@ $("#btn-settings").addEventListener("click", async () => {
 });
 $("#form-settings").addEventListener("submit", async (e) => {
   const f = new FormData(e.target); const body = {};
-  f.forEach((v, k) => (body[k] = k === "workers" ? +v : v));
+  f.forEach((v, k) => (body[k] = k === "workers" || k === "openai_max_tokens" ? +v : v));
   // An unticked checkbox is absent from FormData; send it explicitly.
   body.send_title = e.target.elements.send_title.checked;
   body.openai_disable_thinking = e.target.elements.openai_disable_thinking.checked;

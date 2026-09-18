@@ -187,6 +187,8 @@
          <label>API key <input name="openai_api_key" type="password" size="20" autocomplete="off"></label></p>
       <p><label><input name="openai_disable_thinking" type="checkbox"> switch off the model's reasoning ("thinking")</label>
         <small>Reasoning models such as Qwen 3 otherwise spend their whole output on thinking and return nothing for a page. Leave ticked unless the endpoint rejects it.</small></p>
+      <p><label>Max output tokens <input name="openai_max_tokens" type="number" min="1000" step="1000" size="7"></label>
+        <small>A page is rarely over 3000. "Output truncated" usually means the model got stuck repeating itself; the page is retried automatically, and a higher number here only makes a stuck page slower.</small></p>
     </fieldset>
     <fieldset><legend>When a model refuses a page</legend>
       <p><label>Retry the page on

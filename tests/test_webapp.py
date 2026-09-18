@@ -159,3 +159,21 @@ def test_transcribe_job(client, tmp_path, monkeypatch):
     d = client.get(f"/api/documents/{doc_id}").json()
     assert d["status_counts"].get("pending", 0) == 0
     assert d["pages"][1]["label"] == "38"
+
+
+def test_settings_max_tokens_reaches_openai_backend(client, tmp_path, monkeypatch):
+    import remediate.backends as backends
+
+    seen = {}
+
+    def fake_make_backend(name=None, model=None, **kw):
+        seen.update(kw, name=name)
+        raise backends.BackendError("stop here")
+
+    monkeypatch.setattr(backends, "make_backend", fake_make_backend)
+    assert client.get("/api/settings").json()["openai_max_tokens"] == 8000
+    client.put("/api/settings", json={"backend": "openai", "openai_max_tokens": 32000})
+    pdf = make_pdf(tmp_path / "tokens sample.pdf")
+    doc_id = client.post("/api/documents", json={"pdf_path": str(pdf)}).json()["doc_id"]
+    client.post(f"/api/documents/{doc_id}/transcribe", json={"pages": "1"})
+    assert seen["name"] == "openai" and seen["max_tokens"] == 32000

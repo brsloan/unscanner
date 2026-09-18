@@ -59,6 +59,8 @@ def cmd_transcribe(args) -> None:
         kwargs["effort"] = args.effort
     if args.backend == "openai" and args.think:
         kwargs["disable_thinking"] = False
+    if args.max_tokens:
+        kwargs["max_tokens"] = args.max_tokens
     backend = make_backend(args.backend, args.model, **kwargs)
     fallback = None
     if args.fallback and args.fallback != backend.name:
@@ -187,6 +189,8 @@ def main(argv: list[str] | None = None) -> None:
                        help="leave the document title out of the prompt (helps with refusals of well-known works)")
         p.add_argument("--think", action="store_true",
                        help="openai only: let a reasoning model think first (off by default: it eats the output budget)")
+        p.add_argument("--max-tokens", type=int, default=None,
+                       help="output budget per page; raise it when dense table pages come back truncated")
 
     p = sub.add_parser("open"); p.add_argument("pdf"); p.add_argument("--title"); p.add_argument("--author")
     p.add_argument("--lang", default="en"); p.set_defaults(func=cmd_open)

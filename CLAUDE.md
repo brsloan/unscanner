@@ -52,6 +52,10 @@ changes small, plain, and covered by tests.
   marks them `needs_review`. Settings: `fallback_backend`, `send_title`; CLI `--fallback`, `--no-title`.
 - Different model or endpoint: `backends/__init__.py` `make_backend`, or the UI Settings dialog
   (`work/settings.json`).
+- Page fails with "output truncated": nearly always a local model stuck repeating itself, not a long
+  page (a dense table page is ~2000 tokens). `openai_compat.py` retries such a page at
+  `TRUNCATION_RETRY_TEMPERATURES`. The budget is `openai_max_tokens` (UI Settings, CLI `--max-tokens`,
+  default 8000); raising it makes loops slower and gateways time out (504).
 - Output look: `CSS` in `assemble.py` (shared by HTML and EPUB).
 - New validation rule: add to `validate_html` in `validate.py` and cover it in `tests/`.
 - New UI feature: `web/app.js` talks only to `/api/...` routes in `webapp.py`. Keep it vanilla JS.
