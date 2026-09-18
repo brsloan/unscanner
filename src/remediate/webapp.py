@@ -13,13 +13,14 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import keystore
+from . import keystore, project
 from .backends.openai_compat import DEFAULT_MODEL as DEFAULT_OPENAI_MODEL
 from .document import Document, parse_page_range, slugify
 from .pdf import cached_page_png, cached_page_words, new_document
@@ -256,6 +257,57 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         with dest.open("wb") as fh:
             shutil.copyfileobj(file.file, fh)
         doc = new_document(dest, work_root, title=title, author=author, language=language)
+        return doc_view(doc)
+
+    @app.get("/api/documents/{doc_id}/export")
+    def export_document(doc_id: str) -> JSONResponse:
+        """The whole project as one JSON file to keep next to the PDF (backup, or another machine)."""
+        doc = load_doc(doc_id)
+        name = project.project_filename(doc)
+        disposition = f"attachment; filename=\"{slugify(Path(doc.source).stem)}{project.SUFFIX}\"; filename*=UTF-8''{quote(name)}"
+        return JSONResponse(project.export_project(doc), headers={"Content-Disposition": disposition})
+
+    @app.post("/api/projects/import")
+    def import_document(project_file: UploadFile = File(...), pdf: UploadFile | None = File(None),
+                        pdf_path: str = Form(""), replace: bool = Form(False)) -> dict[str, Any]:
+        """Restore an exported project. The PDF comes as an upload or a path; with neither, a copy
+        this work directory already has (same file name) is used."""
+        try:
+            data = json.loads(project_file.file.read().decode("utf-8-sig"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as e:
+            raise HTTPException(400, "not a remediate project file") from e
+        inbox = work_root / "_inbox"
+        if pdf is not None and pdf.filename:
+            if not pdf.filename.lower().endswith(".pdf"):
+                raise HTTPException(400, "upload a .pdf file")
+            src = inbox / Path(pdf.filename).name
+        elif pdf_path.strip():
+            src = Path(pdf_path.strip())
+            if not src.exists() or src.suffix.lower() != ".pdf":
+                raise HTTPException(400, f"not a PDF file: {pdf_path}")
+        else:
+            name = Path(str(data.get("pdf_name") or "") if isinstance(data, dict) else "").name
+            wd = work_root / slugify(Path(name).stem)
+            known = [Path(Document.load(wd).source)] if name and Document.exists(wd) else []
+            src = next((p for p in [*known, inbox / name] if name and p.is_file()), None)
+            if src is None:
+                raise HTTPException(400, f"choose the PDF this project was made from{f' ({name})' if name else ''}")
+        doc_id = slugify(src.stem)
+        if Document.exists(work_root / doc_id):
+            if not replace:
+                raise HTTPException(409, f"{src.name} already has a project here")
+            if active_job(doc_id):
+                raise HTTPException(409, "a transcription job is running for this document; try again when it finishes")
+        if pdf is not None and pdf.filename:
+            inbox.mkdir(exist_ok=True)
+            with src.open("wb") as fh:
+                shutil.copyfileobj(pdf.file, fh)
+        try:
+            doc = project.import_project(data, src, work_root, replace=replace)
+        except project.ProjectExistsError as e:
+            raise HTTPException(409, str(e)) from e
+        except project.ProjectError as e:
+            raise HTTPException(400, str(e)) from e
         return doc_view(doc)
 
     @app.get("/api/documents/{doc_id}")

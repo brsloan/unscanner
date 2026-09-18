@@ -401,7 +401,7 @@ async function openDoc(docId, pageToShow) {
   state.doc = await api(`/documents/${docId}`);
   localStorage.setItem("remediate.lastDoc", docId);
   renderPages(); renderMeta();
-  ["#btn-transcribe", "#btn-build", "#btn-validate", "#btn-properties"].forEach((b) => ($(b).disabled = false));
+  ["#btn-transcribe", "#btn-build", "#btn-validate", "#btn-properties", "#btn-export"].forEach((b) => ($(b).disabled = false));
   $("#lnk-html").href = `/api/documents/${docId}/output/html`;
   $("#lnk-epub").href = `/api/documents/${docId}/output/epub`;
   if (state.doc.job) pollJob(state.doc.job.id);
@@ -1153,6 +1153,42 @@ $("#form-open").addEventListener("submit", async (e) => {
     await loadDocs(doc.doc_id);
     setStatus(`Opened ${doc.title} (${doc.page_count} pages)`);
   } catch (err) { setStatus("Open failed: " + err.message, true); }
+});
+
+// Export / import: the whole project as one file, for backups and for moving to another computer.
+$("#btn-export").addEventListener("click", async () => {
+  if (state.dirty) await savePage(false);
+  if (Object.keys(docDrafts()).length) await saveAll();
+  const left = Object.keys(docDrafts()).length;
+  const a = document.createElement("a");
+  a.href = `/api/documents/${state.doc.doc_id}/export`; a.download = "";
+  document.body.append(a); a.click(); a.remove();
+  setStatus(left ? `Exported the project without ${left} page(s) whose edits could not be saved` : "Exported the project; keep the file next to the PDF", !!left);
+});
+
+const dlgImport = wireDialog("#dlg-import");
+$("#btn-import").addEventListener("click", () => { $("#form-import").reset(); dlgImport.showModal(); });
+$("#form-import").addEventListener("submit", async (e) => {
+  const f = new FormData(e.target);
+  const send = (replace) => {
+    const fd = new FormData();
+    fd.append("project_file", f.get("project_file"));
+    if (f.get("pdf") && f.get("pdf").size > 0) fd.append("pdf", f.get("pdf"));
+    fd.append("pdf_path", f.get("pdf_path") || "");
+    fd.append("replace", replace ? "true" : "false");
+    return api("/projects/import", { method: "POST", body: fd });
+  };
+  try {
+    let doc;
+    try { doc = await send(false); } catch (err) {
+      if (err.status !== 409 || !confirm(`${err.message}. Replace it with the imported project? The pages stored here now, and any unsaved edits to them, will be lost.`)) throw err;
+      doc = await send(true);
+      const d = allDrafts(); delete d[doc.doc_id]; writeDrafts(d);  // they were edits to the replaced pages
+      if (state.doc && state.doc.doc_id === doc.doc_id) state.dirty = false;
+    }
+    await loadDocs(doc.doc_id);
+    setStatus(`Imported ${doc.title} (${doc.page_count} pages)`);
+  } catch (err) { setStatus("Import failed: " + err.message, true); }
 });
 
 $("#btn-transcribe").addEventListener("click", async () => {

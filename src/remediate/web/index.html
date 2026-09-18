@@ -17,6 +17,8 @@
   <button id="btn-validate" type="button" disabled>Validate</button>
   <a id="lnk-html" class="button" hidden download>HTML</a>
   <a id="lnk-epub" class="button" hidden download>EPUB</a>
+  <button id="btn-export" type="button" disabled title="Download this project as a file to keep next to the PDF: a backup, or to continue on another computer">Export project</button>
+  <button id="btn-import" type="button" title="Load a project file exported here or on another computer">Import project…</button>
   <span class="spacer"></span>
   <button id="btn-diff" type="button" aria-pressed="true" title="Highlight where the transcription differs from the text found on the scan">Diff <span id="diff-count" class="diff-count" hidden></span></button>
   <button id="btn-notes" type="button" aria-pressed="true" title="Show or hide the notes panel">Notes <span id="notes-warn" class="warn" role="img" aria-label="this page has notes" hidden>⚠</span></button>
@@ -191,6 +193,17 @@
     <p><label>Author <input name="author" type="text" size="40"></label>
        <label>Language <input name="language" type="text" size="4" value="en"></label></p>
     <menu><button value="cancel" type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Open</button></menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-import">
+  <form method="dialog" id="form-import">
+    <h2>Import a project</h2>
+    <p><label>Project file (.remediate.json) <input name="project_file" type="file" accept=".json,application/json" required></label></p>
+    <p><label>The PDF it was made from <input name="pdf" type="file" accept="application/pdf"></label></p>
+    <p><label>or the PDF's path on this computer <input name="pdf_path" type="text" size="50" placeholder="C:\scans\reading.pdf"></label></p>
+    <p>The PDF can be left out when it has been opened here before.</p>
+    <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Import</button></menu>
   </form>
 </dialog>
 

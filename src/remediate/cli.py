@@ -9,6 +9,8 @@
   remediate run    <pdf> ...      (open + transcribe + build + validate)
   remediate page   <pdf|workdir> N            print a page's stored html
   remediate set-page <pdf|workdir> N file.html [--label L] [--starts-mid] [--ends-mid]
+  remediate export <pdf|workdir> [-o file]    write the project file (default: next to the PDF)
+  remediate import <file.remediate.json> [--pdf P] [--replace]
   remediate serve  [--work work]  (MCP server over stdio)
   remediate ui     [--port 8765] [--no-browser]   (local web UI)
 """
@@ -154,6 +156,29 @@ def cmd_set_page(args) -> None:
     print(json.dumps(doc.summary(), indent=1))
 
 
+def cmd_export(args) -> None:
+    from .project import export_project, project_filename
+
+    doc = _resolve_doc(args.target, args.work)
+    dest = Path(args.output) if args.output else Path(doc.source).with_name(project_filename(doc))
+    dest.write_text(json.dumps(export_project(doc), indent=1, ensure_ascii=False), encoding="utf-8")
+    print(f"wrote {dest}")
+
+
+def cmd_import(args) -> None:
+    from .project import SUFFIX, ProjectError, import_project
+
+    pf = Path(args.project)
+    pdf = Path(args.pdf) if args.pdf else pf.with_name(pf.name.removesuffix(SUFFIX) + ".pdf")
+    if not pdf.is_file():
+        raise SystemExit(f"PDF not found: {pdf} (pass --pdf)")
+    try:
+        doc = import_project(json.loads(pf.read_text(encoding="utf-8-sig")), pdf, args.work, replace=args.replace)
+    except (ProjectError, json.JSONDecodeError) as e:
+        raise SystemExit(f"import failed: {e}" + ("" if args.replace else " (use --replace to overwrite)")) from e
+    print(json.dumps(doc.summary(), indent=1))
+
+
 def cmd_serve(args) -> None:
     import os
 
@@ -207,6 +232,11 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("set-page"); p.add_argument("target"); p.add_argument("page", type=int); p.add_argument("file")
     p.add_argument("--label"); p.add_argument("--starts-mid", action="store_true"); p.add_argument("--ends-mid", action="store_true")
     p.set_defaults(func=cmd_set_page)
+    p = sub.add_parser("export"); p.add_argument("target"); p.add_argument("-o", "--output", help="default: next to the PDF")
+    p.set_defaults(func=cmd_export)
+    p = sub.add_parser("import"); p.add_argument("project"); p.add_argument("--pdf", help="default: the PDF next to the project file")
+    p.add_argument("--replace", action="store_true", help="overwrite the project this PDF already has")
+    p.set_defaults(func=cmd_import)
     p = sub.add_parser("serve"); p.set_defaults(func=cmd_serve)
     p = sub.add_parser("ui"); p.add_argument("--host", default="127.0.0.1"); p.add_argument("--port", type=int, default=8765)
     p.add_argument("--no-browser", action="store_true"); p.set_defaults(func=cmd_ui)
