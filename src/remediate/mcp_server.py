@@ -64,15 +64,24 @@ def _session() -> Session:
     return Session(_work_root())
 
 
+# Anticipated failures raise ToolError: any other exception reaches the agent only as
+# "Error executing tool <name>", without the message that says what to do instead.
 def _load(doc_id: str) -> Document:
     wd = _work_root() / doc_id
     if not Document.exists(wd):
-        raise ValueError(f"unknown document {doc_id!r}; call open_document or list_documents")
+        raise ToolError(f"unknown document {doc_id!r}; call open_document or list_documents")
     return Document.load(wd)
 
 
+def _page(doc: Document, page: int):
+    try:
+        return doc.page(page)
+    except IndexError as e:
+        raise ToolError(str(e)) from e
+
+
 def _page_info(doc: Document, doc_id: str, page: int, include_draft: bool = True) -> dict[str, Any]:
-    p = doc.page(page)
+    p = _page(doc, page)
     ensure_draft_text(doc, [page])
     info: dict[str, Any] = {
         "doc_id": doc_id, "page": page, "of": len(doc.pages), "label": p.label, "status": p.status,
@@ -96,6 +105,8 @@ def open_document(pdf_path: str, title: str = "", author: str = "", language: st
     document (defaults come from the PDF metadata or file name). language: BCP-47 code, e.g. "en".
     Returns doc_id (use it for every other tool), page_count and per-page status counts.
     """
+    if not Path(pdf_path).is_file() or Path(pdf_path).suffix.lower() != ".pdf":
+        raise ToolError(f"not a PDF file: {pdf_path}")
     doc = new_document(pdf_path, _work_root(), title=title, author=author, language=language)
     return {"doc_id": Path(doc.workdir).name, **doc.summary()}
 
@@ -112,7 +123,7 @@ def set_properties(doc_id: str, title: str | None = None, author: str | None = N
     try:
         doc.set_properties(title, author, language)
     except ValueError as e:
-        raise ToolError(str(e)) from e  # a plain exception would reach Claude without its message
+        raise ToolError(str(e)) from e
     doc.save()
     return {"doc_id": doc_id, **doc.summary()}
 
@@ -173,7 +184,7 @@ def show_page(doc_id: str, page: int, note: str = "") -> dict[str, Any]:
     check). note: short text shown to them in the UI status bar. The UI follows within a couple of
     seconds; any unsaved edits on the page they were on are kept as a draft."""
     doc = _load(doc_id)
-    doc.page(page)  # validates the index
+    _page(doc, page)  # validates the index
     _session().request_view(doc_id, page, note)
     return {"requested": {"doc_id": doc_id, "page": page, "note": note}}
 
@@ -212,7 +223,7 @@ def set_page(doc_id: str, page: int, html: str, label: str | None = None, starts
     result = normalize_result({"label": label, "skip": skip, "starts_mid_paragraph": starts_mid_paragraph,
                                "ends_mid_paragraph": ends_mid_paragraph, "html": sanitize_fragment(html),
                                "figures": figures or [], "notes": notes})
-    apply_result(doc.page(page), result, model="agent", changed_by="claude")
+    apply_result(_page(doc, page), result, model="agent", changed_by="claude")
     doc.save()
     p = doc.page(page)
     return {"page": page, "status": p.status, "label": p.label, "words": len(p.html.split()), "version": p.version,
@@ -237,13 +248,16 @@ def transcribe_pages(doc_id: str, pages: str = "all", backend: str | None = None
     (including "refused" and "fell_back") and token usage; check get_status afterwards for
     needs_review pages.
     """
-    from .backends import make_backend
+    from .backends import BackendError, make_backend
     from .pipeline import transcribe_pages as _run
 
     doc = _load(doc_id)
-    be = make_backend(backend, model)
-    fb = make_backend(fallback, fallback_model) if fallback and fallback != be.name else None
-    idx = parse_page_range(pages, len(doc.pages))
+    try:
+        be = make_backend(backend, model)
+        fb = make_backend(fallback, fallback_model) if fallback and fallback != be.name else None
+        idx = parse_page_range(pages, len(doc.pages))
+    except (BackendError, ValueError) as e:
+        raise ToolError(str(e)) from e
     return _run(doc, be, idx, force=force, workers=workers, instructions=instructions, fallback=fb,
                 send_title=send_title)
 
@@ -275,7 +289,7 @@ def get_output_html(doc_id: str, max_chars: int = 200000) -> str:
     """Return the assembled HTML from the last build (truncated to max_chars) for review."""
     p = _out_root() / slugify(Path(_load(doc_id).source).stem) / "index.html"
     if not p.exists():
-        raise ValueError("no build yet; call build first")
+        raise ToolError("no build yet; call build first")
     return p.read_text(encoding="utf-8")[:max_chars]
 
 

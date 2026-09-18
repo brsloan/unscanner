@@ -89,6 +89,29 @@ async def test_agent_sets_properties(env):
     assert c.get(f"/api/documents/{doc_id}").json()["language"] == "de"
 
 
+@pytest.mark.anyio
+async def test_agent_sees_why_a_tool_failed(env):
+    c, doc_id, work = env
+    from mcp.client.client import Client
+
+    mcp_server.configure(work, work.parent / "out")
+    async with Client(mcp_server.server) as agent:
+        async def error(tool, args):
+            r = await agent.call_tool(tool, args)
+            assert r.is_error
+            return r.content[0].text
+
+        assert "unknown document 'nope'" in await error("get_status", {"doc_id": "nope"})
+        assert "list_documents" in await error("get_page", {"doc_id": "nope", "page": 1})
+        for tool, args in [("get_page", {}), ("show_page", {}), ("set_page", {"html": "<p>x</p>"})]:
+            assert "page 9 out of range 1..3" in await error(tool, {"doc_id": doc_id, "page": 9, **args})
+        assert "not a PDF file" in await error("open_document", {"pdf_path": str(work / "missing.pdf")})
+        assert "unknown backend" in await error("transcribe_pages", {"doc_id": doc_id, "backend": "nope"})
+        assert "no build yet" in await error("get_output_html", {"doc_id": doc_id})
+    # nothing was stored by the failed set_page
+    assert c.get(f"/api/documents/{doc_id}").json()["pages"][0]["version"] == 0
+
+
 def test_instructions_reach_the_prompt(env):
     c, doc_id, work = env
     from remediate.document import Document
