@@ -85,6 +85,19 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 
 .editor, .source, .draft { flex: 1; overflow: auto; padding: 1em 1.3em; margin: 0; border: 0; background: var(--panel); font-family: Georgia, "Times New Roman", serif; font-size: 1.05rem; line-height: 1.5; }
 .source { font-family: ui-monospace, Consolas, monospace; font-size: 0.9rem; resize: none; white-space: pre; }
+/* Source view colors: the textarea's own text is transparent and sits exactly over a <pre> holding
+   the same text with colored spans (colorSource in app.js). Both must keep identical text metrics. */
+.source-wrap { flex: 1; min-height: 0; position: relative; --sx-tag: #0550ae; --sx-attr: #6f3fc4; --sx-str: #0a3069; --sx-ent: #953800; }
+@media (prefers-color-scheme: dark) { .source-wrap { --sx-tag: #79c0ff; --sx-attr: #d2a8ff; --sx-str: #a5d6ff; --sx-ent: #ffa657; } }
+.source-wrap:has(> textarea[hidden]) { display: none; }
+.source-wrap > .source { position: absolute; inset: 0; width: 100%; height: 100%; tab-size: 2;
+  /* long paragraphs wrap; the reserved scrollbar gutter keeps both layers wrapping at the same width */
+  white-space: pre-wrap; overflow-wrap: break-word; scrollbar-gutter: stable; }
+.source-wrap > pre { overflow: hidden; pointer-events: none; }
+.source-wrap > textarea { background: transparent; color: transparent; caret-color: var(--fg); }
+.source-wrap > textarea::selection { color: transparent; background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.sx-p { color: var(--muted); } .sx-tag { color: var(--sx-tag); } .sx-attr { color: var(--sx-attr); }
+.sx-str { color: var(--sx-str); } .sx-ent { color: var(--sx-ent); } .sx-com { color: var(--muted); font-style: italic; }
 .draft { font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem; white-space: pre-wrap; color: var(--muted); }
 .editor:empty::before { content: "No transcription yet. Type here, or run Transcribe."; color: var(--muted); }
 .editor h1, .editor h2, .editor h3, .editor h4 { font-family: system-ui, sans-serif; }

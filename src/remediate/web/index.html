@@ -129,7 +129,10 @@
         <button id="banner-tertiary" type="button" hidden>Stay</button>
     </div>
     <div id="editor" class="editor" contenteditable="true" spellcheck="true" aria-label="Page HTML" role="textbox" aria-multiline="true"></div>
-    <textarea id="source" class="source" hidden aria-label="Page HTML source" spellcheck="false"></textarea>
+    <div class="source-wrap">
+      <pre id="source-colors" class="source" aria-hidden="true"></pre>
+      <textarea id="source" class="source" hidden aria-label="Page HTML source" spellcheck="false"></textarea>
+    </div>
     <pre id="draft" class="draft" hidden aria-label="OCR draft text"></pre>
     <section id="notes-panel" class="notes-panel" aria-labelledby="notes-label">
       <label id="notes-label" for="f-notes">Notes</label>

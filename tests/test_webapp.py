@@ -40,6 +40,17 @@ def test_sanitize_normalizes_editor_output():
     assert sanitize_fragment('<p class="align-right" style="text-align:right">x</p>') == '<p class="align-right">x</p>'
 
 
+def test_sanitize_drops_source_view_indentation():
+    flat = ('<ul><li>one <em>a</em> <strong>b</strong></li><li>two<ul><li>y</li></ul></li></ul>'
+            '<figure><img src="fig:1-1" alt="x"><figcaption>cap</figcaption></figure>'
+            '<table><tbody><tr><th scope="col">h</th><td>d</td></tr></tbody></table><pre>a\n  b</pre>')
+    pretty = ('<ul>\n  <li>one <em>a</em> <strong>b</strong></li>\n  <li>\n    two\n    <ul>\n      <li>y</li>\n    </ul>\n  </li>\n</ul>\n'
+              '<figure>\n  <img src="fig:1-1" alt="x">\n  <figcaption>cap</figcaption>\n</figure>\n'
+              '<table>\n  <tbody>\n    <tr>\n      <th scope="col">h</th>\n      <td>d</td>\n    </tr>\n  </tbody>\n</table>\n'
+              '<pre>a\n  b</pre>')
+    assert sanitize_fragment(pretty) == sanitize_fragment(flat) == flat
+
+
 def test_open_edit_build_validate(client, tmp_path):
     pdf = make_pdf(tmp_path / "ui sample.pdf")
     r = client.post("/api/documents", json={"pdf_path": str(pdf), "title": "UI Sample"})

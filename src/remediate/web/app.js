@@ -407,7 +407,7 @@ function storeDraftNow() {
 }
 function applyDraft(d) {
   $("#editor").innerHTML = d.html || ""; showFigures($("#editor"));
-  $("#source").value = d.html || "";
+  setSource(d.html);
   $("#f-label").value = d.label || "";
   $("#f-starts").checked = !!d.starts_mid_paragraph; $("#f-ends").checked = !!d.ends_mid_paragraph;
   $("#f-skip").checked = !!d.skip; $("#f-notes").value = d.notes || "";
@@ -457,7 +457,7 @@ async function loadPage(n, opts = {}) {
   img.src = `/api/documents/${state.doc.doc_id}/pages/${n}/image`;
   $("#editor").innerHTML = d.html || "";
   showFigures($("#editor"));
-  $("#source").value = d.html || "";
+  setSource(d.html);
   $("#draft").textContent = d.draft_text || "(no draft text)";
   $("#f-label").value = d.label || "";
   $("#f-starts").checked = !!d.starts_mid_paragraph;
@@ -519,6 +519,67 @@ function editorHtml() {
   clone.querySelectorAll(".selected-figure").forEach((f) => { f.classList.remove("selected-figure"); if (!f.classList.length) f.removeAttribute("class"); });
   return clone.innerHTML;
 }
+/* The Source view shows the page HTML indented, one block per line. Only whitespace next to block
+   elements is added, which the server drops again on save (sanitize.py LINE_TAGS; keep in step),
+   so the stored HTML is unchanged. Text inside a paragraph, and all of a <pre>, is left alone. */
+const LINE_TAGS = new Set(["H1", "H2", "H3", "H4", "H5", "H6", "P", "UL", "OL", "LI", "BLOCKQUOTE", "TABLE", "FIGURE",
+  "DL", "PRE", "HR", "ASIDE", "SECTION", "DIV", "CAPTION", "THEAD", "TBODY", "TFOOT", "TR", "TH", "TD", "FIGCAPTION", "DT", "DD"]);
+function prettyHtml(html) {
+  const t = document.createElement("template");
+  t.innerHTML = html || "";
+  const isLine = (n) => n.nodeType === 1 && LINE_TAGS.has(n.tagName);
+  const lines = [];
+  const walk = (parent, indent) => {
+    const holder = document.createElement("div");  // collects a run of text and inline elements
+    const flush = () => {
+      const s = holder.innerHTML.trim();
+      if (s) lines.push(indent + s);
+      holder.textContent = "";
+    };
+    parent.childNodes.forEach((n) => {
+      if (!isLine(n)) { holder.appendChild(n.cloneNode(true)); return; }
+      flush();
+      if (n.tagName !== "PRE" && [...n.children].some(isLine)) {
+        const [open, close] = n.cloneNode(false).outerHTML.split(/(?=<\/[^>]+>$)/);
+        lines.push(indent + open);
+        walk(n, indent + "  ");
+        lines.push(indent + close);
+      } else lines.push(indent + n.outerHTML);
+    });
+    flush();
+  };
+  walk(t.content, "");
+  return lines.join("\n");
+}
+function setSource(html) { $("#source").value = prettyHtml(html); colorSource(); }
+/* Syntax colors for the Source view: the same text as the textarea, as colored spans in the <pre>
+   underneath it (see .source-wrap in style.css). Pages are small, so it is redone on every input. */
+const SX = /(<!--[\s\S]*?-->)|(<\/?)([a-zA-Z][\w:-]*)((?:"[^"]*"|'[^']*'|[^<>"'])*)(>)|(&[#\w]+;)/g;
+const SX_ATTR = /([^\s=\/"']+)(?:(\s*=\s*)("[^"]*"|'[^']*'|[^\s"']+))?/g;
+function colorSource() {
+  const span = (cls, s) => `<span class="sx-${cls}">${escapeHtml(s)}</span>`;
+  const src = $("#source").value;
+  let out = "", last = 0;
+  for (const m of src.matchAll(SX)) {
+    out += escapeHtml(src.slice(last, m.index)); last = m.index + m[0].length;
+    if (m[1]) out += span("com", m[1]);
+    else if (m[6]) out += span("ent", m[6]);
+    else {
+      let attrs = "", at = 0;
+      for (const a of m[4].matchAll(SX_ATTR)) {
+        attrs += escapeHtml(m[4].slice(at, a.index)) + span("attr", a[1]) + (a[2] ? span("p", a[2]) + span("str", a[3]) : "");
+        at = a.index + a[0].length;
+      }
+      out += span("p", m[2]) + span("tag", m[3]) + attrs + escapeHtml(m[4].slice(at)) + span("p", m[5]);
+    }
+  }
+  $("#source-colors").innerHTML = out + escapeHtml(src.slice(last)) + "\n";  // a final newline needs a line to show on
+  syncSourceScroll();
+}
+function syncSourceScroll() {
+  const ta = $("#source"), pre = $("#source-colors");
+  pre.scrollTop = ta.scrollTop; pre.scrollLeft = ta.scrollLeft;
+}
 function currentHtml() {
   return $("#toggle-source").checked ? $("#source").value : editorHtml();
 }
@@ -541,7 +602,7 @@ async function savePage(andNext = false, overwrite = false, approve = false) {
   try {
     const saved = await persistPage(n, formSnapshot(), { approve, overwrite });
     state.dirty = false; clearDraft(n); state.pageData = { ...state.pageData, ...saved };
-    $("#editor").innerHTML = saved.html; showFigures($("#editor")); $("#source").value = saved.html;
+    $("#editor").innerHTML = saved.html; showFigures($("#editor")); setSource(saved.html);
     const p = state.doc.pages.find((x) => x.index === n);
     Object.assign(p, saved);
     renderPages(); renderMeta();
@@ -749,6 +810,8 @@ document.addEventListener("selectionchange", updateAlignButtons);
 
 $("#editor").addEventListener("input", markDirty);
 $("#source").addEventListener("input", markDirty);
+$("#source").addEventListener("input", colorSource);
+$("#source").addEventListener("scroll", syncSourceScroll);
 ["#f-label", "#f-starts", "#f-ends", "#f-skip", "#f-notes"].forEach((s) => $(s).addEventListener("change", markDirty));
 
 // ------------------------------------------------------------------ figure panel (alt text, AI autofill, alignment, wrap)
@@ -965,7 +1028,7 @@ $("#btn-lang").addEventListener("click", () => {
 });
 $("#toggle-source").addEventListener("change", (e) => {
   const src = e.target.checked;
-  if (src) { $("#source").value = editorHtml(); } else { $("#editor").innerHTML = $("#source").value; showFigures($("#editor")); }
+  if (src) { setSource(editorHtml()); } else { $("#editor").innerHTML = $("#source").value; showFigures($("#editor")); }
   $("#source").hidden = !src; $("#editor").hidden = src;
   if (src) { $("#toggle-draft").checked = false; $("#draft").hidden = true; }
 });

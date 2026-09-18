@@ -116,13 +116,41 @@ def sanitize_fragment(fragment: str) -> str:
         if not el.text_content().strip() and not list(el.iter("img", "br", "math")):
             el.drop_tree()
 
+    _drop_layout_whitespace(root)
     _wrap_top_level_inline(root)
     parts = [root.text or ""]
     parts += [lhtml.tostring(c, encoding="unicode", method="html") for c in root]
     return "".join(parts).strip()
 
 
-TOP_LEVEL_BLOCKS = BLOCKS | {"table", "figure", "hr", "math", "dl"}
+# Elements the Source view (prettyHtml in web/app.js) puts on a line of their own. Keep in step.
+LINE_TAGS = BLOCKS | {"caption", "thead", "tbody", "tfoot", "tr", "th", "td", "figcaption", "dt", "dd"}
+
+
+def _drop_layout_whitespace(root) -> None:
+    """Remove whitespace-only text between the children of an element that holds block content
+    (<ul>, <tr>, <figure>, ...): it is only source indentation, and dropping it keeps the stored
+    HTML the same whether a page was saved from the editor or from the indented Source view."""
+    for el in root.iter():
+        if not isinstance(el.tag, str) or el.tag == "pre":
+            continue
+        if not any(isinstance(c.tag, str) and c.tag in LINE_TAGS for c in el):
+            continue
+        kids = list(el)
+        line = [isinstance(c.tag, str) and c.tag in LINE_TAGS for c in kids]
+        # between two inline elements a space is a real space; at the edge of a block it is not
+        text = (el.text or "").lstrip()
+        el.text = (text.rstrip() if line[0] else text) or None
+        for i, c in enumerate(kids):
+            tail = c.tail or ""
+            if line[i]:
+                tail = tail.lstrip()
+            if i + 1 == len(kids) or line[i + 1]:
+                tail = tail.rstrip()
+            c.tail = tail or None
+
+
+TOP_LEVEL_BLOCKS = BLOCKS |{"table", "figure", "hr", "math", "dl"}
 
 
 def _wrap_top_level_inline(root) -> None:
