@@ -180,6 +180,8 @@
       <small>The API root; <code>/chat/completions</code> is added automatically (pasting the full endpoint is fine too).</small></p>
       <p><label>Model <input name="openai_model" type="text" size="24"></label>
          <label>API key <input name="openai_api_key" type="password" size="20" autocomplete="off"></label></p>
+      <p><label><input name="openai_disable_thinking" type="checkbox"> switch off the model's reasoning ("thinking")</label>
+        <small>Reasoning models such as Qwen 3 otherwise spend their whole output on thinking and return nothing for a page. Leave ticked unless the endpoint rejects it.</small></p>
     </fieldset>
     <fieldset><legend>When a model refuses a page</legend>
       <p><label>Retry the page on

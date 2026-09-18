@@ -57,6 +57,8 @@ def cmd_transcribe(args) -> None:
     kwargs = {}
     if args.backend in (None, "anthropic") and args.effort:
         kwargs["effort"] = args.effort
+    if args.backend == "openai" and args.think:
+        kwargs["disable_thinking"] = False
     backend = make_backend(args.backend, args.model, **kwargs)
     fallback = None
     if args.fallback and args.fallback != backend.name:
@@ -183,6 +185,8 @@ def main(argv: list[str] | None = None) -> None:
         p.add_argument("--fallback-model", default=None, help="model id for --fallback")
         p.add_argument("--no-title", action="store_true",
                        help="leave the document title out of the prompt (helps with refusals of well-known works)")
+        p.add_argument("--think", action="store_true",
+                       help="openai only: let a reasoning model think first (off by default: it eats the output budget)")
 
     p = sub.add_parser("open"); p.add_argument("pdf"); p.add_argument("--title"); p.add_argument("--author")
     p.add_argument("--lang", default="en"); p.set_defaults(func=cmd_open)

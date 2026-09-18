@@ -978,6 +978,7 @@ $("#form-settings").addEventListener("submit", async (e) => {
   f.forEach((v, k) => (body[k] = k === "workers" ? +v : v));
   // An unticked checkbox is absent from FormData; send it explicitly.
   body.send_title = e.target.elements.send_title.checked;
+  body.openai_disable_thinking = e.target.elements.openai_disable_thinking.checked;
   try { await api("/settings", { method: "PUT", body }); setStatus("Settings saved"); }
   catch (err) { setStatus("Settings not saved: " + err.message, true); }
 });

@@ -6,9 +6,11 @@ import json
 
 import anthropic
 import httpx
+import pytest
 import httpx2
 
 from remediate.backends.anthropic_backend import AnthropicBackend
+from remediate.backends.base import BackendError
 from remediate.backends.openai_compat import OpenAICompatBackend
 from remediate.prompts import GUIDELINES
 
@@ -111,3 +113,57 @@ def test_openai_compat_accepts_full_endpoint_url():
     assert normalize_base_url("http://localhost:11434/v1/") == "http://localhost:11434/v1"
     be = OpenAICompatBackend(model="m", base_url="https://genai.example.edu/api/chat/completions")
     assert be.base_url == "https://genai.example.edu/api"
+
+
+def _ok_response():
+    return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(RESULT)}, "finish_reason": "stop"}],
+                                     "usage": {"prompt_tokens": 1, "completion_tokens": 1}, "model": "m"})
+
+
+def test_openai_compat_disables_thinking_by_default():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return _ok_response()
+
+    be = OpenAICompatBackend(model="qwen3.6:27b", base_url="http://ollama.local:11434/v1")
+    be.client = httpx.Client(transport=httpx.MockTransport(handler))
+    be.transcribe(b"\x89PNG", "p")
+    assert seen[0]["chat_template_kwargs"] == {"enable_thinking": False}
+    assert seen[0]["reasoning_effort"] == "none"
+
+    be = OpenAICompatBackend(model="qwen3.6:27b", base_url="http://ollama.local:11434/v1", disable_thinking=False)
+    be.client = httpx.Client(transport=httpx.MockTransport(handler))
+    be.transcribe(b"\x89PNG", "p")
+    assert "chat_template_kwargs" not in seen[1] and "reasoning_effort" not in seen[1]
+
+
+def test_openai_compat_drops_thinking_fields_when_server_rejects_them():
+    seen = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        seen.append(body)
+        if "chat_template_kwargs" in body:
+            return httpx.Response(400, json={"error": "unknown field chat_template_kwargs"})
+        return _ok_response()
+
+    be = OpenAICompatBackend(model="m", base_url="http://ollama.local:11434/v1")
+    be.client = httpx.Client(transport=httpx.MockTransport(handler))
+    result, _ = be.transcribe(b"\x89PNG", "p")
+    assert result["label"] == "12"
+    assert len(seen) == 2 and "reasoning_effort" not in seen[1]
+    be.transcribe(b"\x89PNG", "p")
+    assert len(seen) == 3 and "chat_template_kwargs" not in seen[2]  # remembered for later pages
+
+
+def test_openai_compat_explains_reasoning_exhaustion():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"choices": [{"message": {"content": "", "reasoning_content": "Let me think..."},
+                                                      "finish_reason": "length"}], "usage": {}})
+
+    be = OpenAICompatBackend(model="m", base_url="http://ollama.local:11434/v1")
+    be.client = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(BackendError, match="reasoning"):
+        be.transcribe(b"\x89PNG", "p")

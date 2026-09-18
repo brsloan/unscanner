@@ -36,6 +36,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "openai_base_url": "http://localhost:11434/v1",
     "openai_api_key": "",
     "openai_model": "qwen2.5vl:7b",
+    "openai_disable_thinking": True,
     "workers": 4,
     # When the main backend refuses a page (safety/copyright), retry it once here: "anthropic",
     # "openai" or "none". Typically the local model when Claude is the main backend, or vice versa.
@@ -159,7 +160,8 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
                 kw["api_key"] = s["anthropic_api_key"]
             return make_backend("anthropic", s.get("model") or None, **kw)
         return make_backend("openai", s.get("openai_model") or None, base_url=s.get("openai_base_url") or None,
-                            api_key=s.get("openai_api_key") or None)
+                            api_key=s.get("openai_api_key") or None,
+                            disable_thinking=bool(s.get("openai_disable_thinking", True)))
 
     def make_backend_from_settings():
         s = load_settings()

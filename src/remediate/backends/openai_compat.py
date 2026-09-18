@@ -38,14 +38,23 @@ class OpenAICompatBackend(Backend):
 
     def __init__(self, model: str | None = None, base_url: str | None = None, api_key: str | None = None,
                  max_tokens: int = 8000, temperature: float = 0.0, timeout: float = 600.0,
-                 json_mode: bool = True):
+                 json_mode: bool = True, disable_thinking: bool = True):
         self.model = model or DEFAULT_MODEL
         self.base_url = normalize_base_url(base_url or DEFAULT_BASE_URL)
         self.api_key = api_key or "none"
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.json_mode = json_mode
+        # Reasoning models (Qwen 3.x, DeepSeek, ...) think before answering by default and spend the
+        # whole output budget on it for a page transcription. These two fields switch that off on
+        # vLLM / SGLang / llama.cpp / Ollama; a server that rejects them gets a retry without.
+        self.disable_thinking = disable_thinking
         self.client = httpx.Client(timeout=timeout)
+
+    def _thinking_fields(self) -> dict:
+        if not self.disable_thinking:
+            return {}
+        return {"chat_template_kwargs": {"enable_thinking": False}, "reasoning_effort": "none"}
 
     def transcribe(self, image_png: bytes, user_prompt: str) -> tuple[dict, dict]:
         img = base64.standard_b64encode(image_png).decode()
@@ -63,6 +72,7 @@ class OpenAICompatBackend(Backend):
         }
         if self.json_mode:
             body["response_format"] = {"type": "json_object"}
+        body.update(self._thinking_fields())
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         last_err: Exception | None = None
         data = None
@@ -72,6 +82,12 @@ class OpenAICompatBackend(Backend):
                 if r.status_code == 400 and self.json_mode and "response_format" in r.text:
                     self.json_mode = False  # server does not support JSON mode; rely on the prompt
                     body.pop("response_format", None)
+                    continue
+                if r.status_code == 400 and self.disable_thinking and (
+                        "chat_template_kwargs" in r.text or "reasoning_effort" in r.text):
+                    for k in self._thinking_fields():
+                        body.pop(k, None)
+                    self.disable_thinking = False  # server does not know these fields
                     continue
                 r.raise_for_status()
                 data = r.json()
@@ -92,6 +108,9 @@ class OpenAICompatBackend(Backend):
         if choice.get("finish_reason") == "content_filter" or msg.get("refusal"):
             raise RefusalError(f"model refused: {msg.get('refusal') or 'content filter'}")
         if choice.get("finish_reason") == "length":
+            if msg.get("reasoning_content") and not (text or "").strip():
+                raise BackendError("model spent the whole output budget on reasoning (finish_reason=length); "
+                                   "its thinking could not be switched off")
             raise BackendError("output truncated (finish_reason=length); raise max_tokens")
         u = data.get("usage") or {}
         usage = {"input_tokens": u.get("prompt_tokens", 0), "output_tokens": u.get("completion_tokens", 0),
@@ -111,6 +130,7 @@ class OpenAICompatBackend(Backend):
                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img}"}},
                 {"type": "text", "text": prompt},
             ]}],
+            **self._thinking_fields(),
         }
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         try:
