@@ -621,6 +621,44 @@ document.querySelectorAll("[data-cmd]").forEach((b) => b.addEventListener("click
 $("#block-style").addEventListener("change", (e) => {
   $("#editor").focus(); document.execCommand("formatBlock", false, e.target.value); markDirty();
 });
+
+// Alignment is a class on the paragraph or heading (the sanitizer keeps only align-center / align-right
+// there); left is the default, so it just removes the class.
+const ALIGNABLE = "p, h1, h2, h3, h4, h5, h6";
+function selectedAlignBlocks() {
+  const sel = window.getSelection();
+  const ed = $("#editor");
+  if (!sel || !sel.rangeCount || !ed.contains(sel.anchorNode)) return [];
+  const range = sel.getRangeAt(0);
+  if (!sel.isCollapsed) {
+    const hit = [...ed.querySelectorAll(ALIGNABLE)].filter((b) => range.intersectsNode(b));
+    if (hit.length) return hit;
+  }
+  const node = range.startContainer;
+  const block = (node.nodeType === 1 ? node : node.parentElement).closest(ALIGNABLE);
+  return block && ed.contains(block) ? [block] : [];
+}
+function updateAlignButtons() {
+  const blocks = selectedAlignBlocks();
+  const current = (b) => ["align-center", "align-right"].find((c) => b.classList.contains(c)) || "";
+  document.querySelectorAll("[data-align]").forEach((btn) => btn.setAttribute("aria-pressed",
+    String(blocks.length > 0 && blocks.every((b) => current(b) === btn.dataset.align))));
+}
+document.querySelectorAll("[data-align]").forEach((btn) => {
+  btn.addEventListener("mousedown", (e) => e.preventDefault());  // keep the editor selection
+  btn.addEventListener("click", () => {
+    const blocks = selectedAlignBlocks();
+    if (!blocks.length) { setStatus("Put the caret in a paragraph or heading to align it."); return; }
+    blocks.forEach((b) => {
+      b.classList.remove("align-left", "align-center", "align-right");
+      if (btn.dataset.align) b.classList.add(btn.dataset.align);
+      if (!b.classList.length) b.removeAttribute("class");
+    });
+    updateAlignButtons(); markDirty();
+  });
+});
+document.addEventListener("selectionchange", updateAlignButtons);
+
 $("#editor").addEventListener("input", markDirty);
 $("#source").addEventListener("input", markDirty);
 ["#f-label", "#f-starts", "#f-ends", "#f-skip", "#f-notes"].forEach((s) => $(s).addEventListener("change", markDirty));
