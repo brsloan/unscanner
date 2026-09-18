@@ -57,6 +57,7 @@ def test_open_edit_build_validate(client, tmp_path):
     assert "CHAPTER ONE" in r.json()["draft_text"]
     img = client.get(f"/api/documents/{doc_id}/pages/1/image")
     assert img.status_code == 200 and img.content[:4] == b"\x89PNG"
+    assert img.headers["cache-control"] == "no-cache"  # a page's scan can change under the same URL
 
     for n, html in [(1, "<div><b>Chapter One</b></div><div>First page words here for coverage counts.</div>"),
                     (2, "<p>Second page words here for coverage counts.</p>"),

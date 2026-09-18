@@ -294,7 +294,10 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             doc.page(n)
         except IndexError as e:
             raise HTTPException(404, str(e)) from e
-        return FileResponse(cached_page_png(doc, n), media_type="image/png")
+        # Revalidated (cheap: ETag) so a page whose render changes, e.g. pages inserted into the
+        # PDF, never shows a stale scan from the browser cache.
+        return FileResponse(cached_page_png(doc, n), media_type="image/png",
+                            headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/documents/{doc_id}/pages/{n}/figure/{fid}")
     def get_page_figure(doc_id: str, n: int, fid: str, bbox: str | None = None):
