@@ -164,3 +164,59 @@ async def test_mcp_server_roundtrip(tmp_path, monkeypatch):
         r = await client.call_tool("validate", {"doc_id": doc_id, "epubcheck": False})
         errors = [i for i in r.structured_content["issues"] if i["severity"] == "error"]
         assert not errors, errors
+
+
+def test_page_load_failure_is_a_page_error(doc, monkeypatch):
+    import remediate.pipeline as pl
+
+    real = pl.cached_page_png
+
+    def boom(d, i):
+        if i == 2:
+            raise RuntimeError("render failed")
+        return real(d, i)
+
+    monkeypatch.setattr(pl, "cached_page_png", boom)
+    summary = transcribe_pages(doc, FakeBackend(), [1, 2, 3], workers=2)
+    assert summary["done"] == 2 and summary["errors"] == 1
+    assert doc.page(2).status == "error" and "render failed" in doc.page(2).notes
+    assert doc.page(1).status in ("done", "needs_review") and doc.page(3).status in ("done", "needs_review")
+
+
+def test_store_failure_marks_the_page_not_the_run(doc, monkeypatch):
+    import remediate.pipeline as pl
+
+    real = pl.apply_result
+
+    def bad(page, result, model="", usage=None, changed_by=None):
+        if page.index == 2:
+            raise ValueError("bad figure")
+        return real(page, result, model, usage, changed_by)
+
+    monkeypatch.setattr(pl, "apply_result", bad)
+    summary = transcribe_pages(doc, FakeBackend(), [1, 2, 3], workers=2)
+    assert summary["done"] == 2 and summary["errors"] == 1
+    assert doc.page(2).status == "error" and "bad figure" in doc.page(2).notes
+
+
+def test_fatal_error_cancels_the_queue(doc, monkeypatch):
+    """If the state file cannot be written the run must stop, not transcribe every page into the void."""
+    import time as _time
+    import remediate.pipeline as pl
+
+    pl.ensure_draft_text(doc, [1, 2, 3])
+    calls = []
+
+    class Slow(FakeBackend):
+        def transcribe(self, png, prompt):
+            calls.append(prompt)
+            _time.sleep(0.05)
+            return super().transcribe(png, prompt)
+
+    def bad_save():
+        raise PermissionError("doc.json is locked")
+
+    monkeypatch.setattr(doc, "save", bad_save)
+    with pytest.raises(PermissionError):
+        transcribe_pages(doc, Slow(), [1, 2, 3], workers=1)
+    assert len(calls) < 3

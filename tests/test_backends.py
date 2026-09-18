@@ -167,3 +167,50 @@ def test_openai_compat_explains_reasoning_exhaustion():
     be.client = httpx.Client(transport=httpx.MockTransport(handler))
     with pytest.raises(BackendError, match="reasoning"):
         be.transcribe(b"\x89PNG", "p")
+
+
+def test_openai_compat_retries_rate_limits(monkeypatch):
+    import remediate.backends.openai_compat as oc
+
+    monkeypatch.setattr(oc.time, "sleep", lambda s: None)
+    n = {"calls": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        n["calls"] += 1
+        if n["calls"] == 1:
+            return httpx.Response(400, json={"detail": "Rate limit exceeded. Please try again later."})
+        if n["calls"] == 2:
+            return httpx.Response(429, text="slow down")
+        return _ok_response()
+
+    be = OpenAICompatBackend(model="m", base_url="http://ollama.local:11434/v1")
+    be.client = httpx.Client(transport=httpx.MockTransport(handler))
+    result, _ = be.transcribe(b"\x89PNG", "p")
+    assert result["label"] == "12" and n["calls"] == 3
+
+
+def test_openai_compat_gives_up_after_persistent_rate_limit(monkeypatch):
+    import remediate.backends.openai_compat as oc
+
+    monkeypatch.setattr(oc.time, "sleep", lambda s: None)
+    n = {"calls": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        n["calls"] += 1
+        return httpx.Response(429, text="slow down")
+
+    be = OpenAICompatBackend(model="m", base_url="http://ollama.local:11434/v1")
+    be.client = httpx.Client(transport=httpx.MockTransport(handler))
+    with pytest.raises(BackendError, match="rate limited"):
+        be.transcribe(b"\x89PNG", "p")
+    assert n["calls"] == oc.MAX_ATTEMPTS
+
+
+def test_dot_leaders_are_collapsed():
+    from remediate.prompts import collapse_dot_leaders, normalize_result
+
+    assert collapse_dot_leaders("<li>Allen, David....................898</li>") == "<li>Allen, David 898</li>"
+    assert collapse_dot_leaders("<li>Allen, David . . . . . . . 898</li>") == "<li>Allen, David 898</li>"
+    assert collapse_dot_leaders("<p>Wait... no. The end.</p>") == "<p>Wait... no. The end.</p>"
+    r = normalize_result({"html": "<p>Entry.........12</p>"})
+    assert r["html"] == "<p>Entry 12</p>"

@@ -83,9 +83,9 @@ def transcribe_pages(doc: Document, backend: Backend, indexes: list[int], force:
 
     def work(i: int) -> tuple[int, dict | None, dict | None, str | None, Backend, str]:
         """Returns (index, result, usage, error, backend that produced the result, refusal note)."""
-        png = cached_page_png(doc, i).read_bytes()
-        prompt = page_prompt(doc, i, instructions, send_title=send_title)
         try:
+            png = cached_page_png(doc, i).read_bytes()
+            prompt = page_prompt(doc, i, instructions, send_title=send_title)
             result, usage = backend.transcribe(png, prompt)
             return i, result, usage, None, backend, ""
         except RefusalError as e:
@@ -106,30 +106,41 @@ def transcribe_pages(doc: Document, backend: Backend, indexes: list[int], force:
 
     with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
         futures = [ex.submit(work, i) for i in todo]
-        for fut in as_completed(futures):
-            i, result, usage, err, used, refusal = fut.result()
-            page = doc.page(i)
-            with lock:
-                if refusal:
-                    refused += 1
-                if err:
-                    page.status = "error"
-                    page.notes = err
-                    errors += 1
-                else:
+        try:
+            for fut in as_completed(futures):
+                i, result, usage, err, used, refusal = fut.result()
+                page = doc.page(i)
+                with lock:
                     if refusal:
-                        # A person should look at a page one model refused and another transcribed.
-                        result = dict(result)
-                        result["notes"] = " | ".join(
-                            s for s in (f"{refusal}; transcribed by {used.model} instead", result.get("notes", "")) if s)
-                        fell_back += 1
-                    apply_result(page, result, used.model, usage)
-                    for k in usage_total:
-                        usage_total[k] += int((usage or {}).get(k, 0) or 0)
-                    done += 1
-                doc.save()
-            if on_progress:
-                on_progress(page, err or page.status)
+                        refused += 1
+                    if not err:
+                        try:
+                            if refusal:
+                                # A person should look at a page one model refused and another transcribed.
+                                result = dict(result)
+                                result["notes"] = " | ".join(
+                                    s for s in (f"{refusal}; transcribed by {used.model} instead",
+                                                result.get("notes", "")) if s)
+                                fell_back += 1
+                            apply_result(page, result, used.model, usage)
+                            for k in usage_total:
+                                usage_total[k] += int((usage or {}).get(k, 0) or 0)
+                            done += 1
+                        except Exception as e:  # noqa: BLE001 - a bad result must not end the whole run
+                            err = f"could not store result: {type(e).__name__}: {e}"
+                    if err:
+                        page.status = "error"
+                        page.notes = err
+                        errors += 1
+                    doc.save()
+                if on_progress:
+                    on_progress(page, err or page.status)
+        except BaseException:
+            # Something outside per-page handling failed (e.g. the state file cannot be written).
+            # Without this the executor's exit would quietly transcribe every queued page and
+            # throw the results away while the job looks alive.
+            ex.shutdown(wait=False, cancel_futures=True)
+            raise
     return {"requested": len(indexes), "processed": len(todo), "done": done, "errors": errors,
             "refused": refused, "fell_back": fell_back, "usage": usage_total, "model": backend.model,
             "fallback_model": fallback.model if fallback else None}

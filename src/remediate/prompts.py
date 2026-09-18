@@ -67,6 +67,9 @@ HTML RULES
   (keep their numbers as text).
 - Tables: real <table> with <caption> when there is a title, <th scope="col"/"row"> for header cells.
   Only use a table for genuinely tabular data, never for layout.
+- Dot leaders (the row of periods between an entry and its page number in a table of contents or
+  index) are layout: never reproduce them. Write the entry, one space, then the number. A contents
+  page or index is a list (ul/ol or dl), one item per entry, never a table of columns.
 - Figures, photographs, charts, diagrams: emit <figure><img src="fig:LABEL-N" alt="..."><figcaption>
   caption text from the page</figcaption></figure> and add an entry to "figures" with the same id
   "LABEL-N", the alt text, and "bbox": [x0, y0, x1, y1] giving the image region in 0-1000 normalized
@@ -153,6 +156,14 @@ def parse_model_json(text: str) -> dict:
         raise
 
 
+_DOT_LEADERS = re.compile(r"(?:\s*[.\u2024\u2025\u2026]){5,}\s*")
+
+
+def collapse_dot_leaders(html: str) -> str:
+    """Replace runs of five or more periods (contents/index dot leaders) with one space."""
+    return _DOT_LEADERS.sub(" ", html)
+
+
 def normalize_result(data: dict) -> dict:
     """Coerce a parsed model result into the exact shape the pipeline stores."""
     label = data.get("label")
@@ -177,7 +188,7 @@ def normalize_result(data: dict) -> dict:
         "skip": bool(data.get("skip", False)),
         "starts_mid_paragraph": bool(data.get("starts_mid_paragraph", False)),
         "ends_mid_paragraph": bool(data.get("ends_mid_paragraph", False)),
-        "html": str(data.get("html", "") or ""),
+        "html": collapse_dot_leaders(str(data.get("html", "") or "")),
         "figures": figs,
         "notes": str(data.get("notes", "") or ""),
     }

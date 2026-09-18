@@ -16,6 +16,12 @@ from .base import Backend, BackendError, RefusalError, looks_like_refusal
 
 DEFAULT_BASE_URL = "http://localhost:11434/v1"  # Ollama
 DEFAULT_MODEL = "qwen2.5vl:7b"
+MAX_ATTEMPTS = 7  # rate-limit back-off: 5, 10, 20, 40, 60, 60 s
+
+
+def is_rate_limited(r: httpx.Response) -> bool:
+    """429, or the 400 some gateways send with a 'rate limit' message."""
+    return r.status_code == 429 or (r.status_code == 400 and "rate limit" in r.text.lower())
 
 
 def normalize_base_url(url: str) -> str:
@@ -76,9 +82,13 @@ class OpenAICompatBackend(Backend):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         last_err: Exception | None = None
         data = None
-        for attempt in range(3):
+        for attempt in range(MAX_ATTEMPTS):
             try:
                 r = self.client.post(f"{self.base_url}/chat/completions", json=body, headers=headers)
+                if is_rate_limited(r):
+                    last_err = BackendError(f"rate limited: {r.text.strip()[:200]}")
+                    time.sleep(min(60, 5 * 2 ** attempt))
+                    continue
                 if r.status_code == 400 and self.json_mode and "response_format" in r.text:
                     self.json_mode = False  # server does not support JSON mode; rely on the prompt
                     body.pop("response_format", None)
@@ -94,6 +104,8 @@ class OpenAICompatBackend(Backend):
                 break
             except (httpx.HTTPError, ValueError) as e:
                 last_err = e
+                if attempt >= 2:
+                    break  # transient network errors get three tries; rate limits get MAX_ATTEMPTS
                 time.sleep(3 * (attempt + 1))
         if data is None:
             raise BackendError(f"request failed: {last_err}")
