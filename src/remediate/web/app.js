@@ -485,8 +485,22 @@ function showFigures(ed) {
     im.src = `/api/documents/${state.doc.doc_id}/pages/${state.page}/figure/${encodeURIComponent(id)}`;
   });
 }
+/* Large figures (full-page plates) are scaled down to fit the editor; label those so it is clear the
+   preview is smaller than the image that goes into the output. The label is display only. */
+function markScaledFigures() {
+  $("#editor").querySelectorAll("img[data-fig]").forEach((im) => {
+    const holder = figureWrapper(im);
+    if (!holder || !im.naturalWidth || !im.clientWidth) return;
+    const pct = Math.round((im.clientWidth / im.naturalWidth) * 100);
+    if (pct < 95) holder.dataset.preview = `Scaled preview: shown at ${pct}% of full size`;
+    else delete holder.dataset.preview;
+  });
+}
+$("#editor").addEventListener("load", (e) => { if (e.target.tagName === "IMG") markScaledFigures(); }, true);
+window.addEventListener("resize", markScaledFigures);
 function editorHtml() {
   const clone = $("#editor").cloneNode(true);
+  clone.querySelectorAll("[data-preview]").forEach((el) => delete el.dataset.preview);
   clone.querySelectorAll("img[data-fig]").forEach((im) => { im.setAttribute("src", "fig:" + im.dataset.fig); delete im.dataset.fig; });
   clone.querySelectorAll('img[src^="data:"]').forEach((im) => im.removeAttribute("src"));  // placeholder of a figure with no crop yet
   clone.querySelectorAll("img.selected").forEach((im) => im.removeAttribute("class"));

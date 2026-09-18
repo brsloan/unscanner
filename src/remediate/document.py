@@ -24,6 +24,10 @@ class Figure:
     bbox: list[float] | None = None  # [x0, y0, x1, y1] in 0-1000 normalized page coords
     caption: str = ""
 
+    def __post_init__(self) -> None:
+        # The HTML refers to a figure as src="fig:ID"; some models repeat that prefix in the id.
+        self.id = self.id.removeprefix("fig:")
+
 
 @dataclass
 class Page:

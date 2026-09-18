@@ -123,6 +123,14 @@ def test_parse_model_json_tolerates_fences():
     assert d["html"] == "<p>y</p>"
 
 
+def test_figure_id_drops_fig_prefix():
+    """A model that repeats the src prefix in the figure id must still match <img src="fig:ID">."""
+    from remediate.document import Figure, Page
+    assert Figure(id="fig:page-951-1", alt="x").id == "page-951-1"
+    assert Page.from_dict({"index": 1, "figures": [{"id": "fig:1-1", "alt": ""}]}).figures[0].id == "1-1"
+    assert Figure(id="1-1", alt="").id == "1-1"
+
+
 def test_heading_normalization(tmp_path, doc):
     doc.page(1).html = "<h1>Part A</h1><p>a</p>"
     doc.page(2).html = "<h1>Part B</h1><h4>Deep</h4><p>b</p>"

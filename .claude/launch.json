@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "remediate.cli", "ui", "--no-browser", "--port", "8765"],
       "port": 8765
+    },
+    {
+      "name": "remediate-ui-verify",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "remediate.cli", "ui", "--no-browser", "--port", "8766"],
+      "port": 8766
     }
   ]
 }
