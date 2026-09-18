@@ -336,6 +336,7 @@ async function loadDocs(selectId) {
 
 async function openDoc(docId, pageToShow) {
   storeDraftNow();  // keep unsaved edits of the page we are leaving, whatever document it belongs to
+  if ($("#dlg-properties").open) $("#dlg-properties").close("cancel");  // it belongs to the document we are leaving
   if (!docId) { state.doc = null; renderPages(); return; }
   state.doc = await api(`/documents/${docId}`);
   localStorage.setItem("remediate.lastDoc", docId);
@@ -996,6 +997,20 @@ function wireDialog(id) {
 }
 const dlgOpen = wireDialog("#dlg-open"), dlgTranscribe = wireDialog("#dlg-transcribe"), dlgSettings = wireDialog("#dlg-settings");
 const dlgProperties = wireDialog("#dlg-properties");
+// Shown over the editor pane only, so the scan and page list stay usable for reading the title page.
+function showInEditorPane(dlg) {
+  const pane = dlg.parentElement;
+  [...pane.children].forEach((el) => { if (el !== dlg) el.inert = true; });
+  pane.classList.add("dialog-open");
+  dlg.show();
+  dlg.querySelector("input, select, textarea").focus();
+}
+dlgProperties.addEventListener("close", () => {
+  const pane = dlgProperties.parentElement;
+  [...pane.children].forEach((el) => (el.inert = false));
+  pane.classList.remove("dialog-open");
+});
+dlgProperties.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); dlgProperties.close("cancel"); } });
 
 $("#btn-open").addEventListener("click", () => dlgOpen.showModal());
 $("#form-open").addEventListener("submit", async (e) => {
@@ -1090,10 +1105,12 @@ function showResults(title, html) {
 $("#btn-results-close").addEventListener("click", () => ($("#results").hidden = true));
 
 $("#btn-properties").addEventListener("click", async () => {
+  if (dlgProperties.open) { dlgProperties.querySelector("input").focus(); return; }  // keep what was typed
   const d = await api(`/documents/${state.doc.doc_id}`);  // fresh: Claude may have changed them
   const f = $("#form-properties");
   ["title", "author", "language"].forEach((k) => (f.elements[k].value = d[k] || ""));
-  dlgProperties.showModal();
+  f.dataset.docId = d.doc_id;  // the page list stays usable, so remember which document this is
+  showInEditorPane(dlgProperties);
 });
 function showProperties(d) {
   Object.assign(state.doc, { title: d.title, author: d.author, language: d.language });
@@ -1103,7 +1120,7 @@ function showProperties(d) {
 $("#form-properties").addEventListener("submit", async (e) => {
   const f = new FormData(e.target);
   try {
-    const d = await api(`/documents/${state.doc.doc_id}/properties`, { method: "PUT",
+    const d = await api(`/documents/${e.target.dataset.docId}/properties`, { method: "PUT",
       body: { title: f.get("title"), author: f.get("author"), language: f.get("language") } });
     showProperties(d);
     setStatus(`Properties saved: ${d.title} · ${d.author || "no author"} · ${d.language}. Build again to update the output.`);

@@ -49,7 +49,12 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 
 .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .pane-image { width: var(--image-w); min-width: 120px; flex: none; }
-.pane-editor { flex: 1; min-width: 160px; }
+.pane-editor { flex: 1; min-width: 160px; position: relative; }
+/* A dialog shown over the editor pane only (non-modal); the pane behind it is dimmed and inert. */
+.pane-editor > dialog { position: absolute; inset: 0; margin: auto; height: fit-content; max-width: calc(100% - 2em); max-height: calc(100% - 2em); overflow: auto; z-index: 5; box-shadow: 0 4px 24px rgba(0,0,0,0.35); }
+.pane-editor > dialog label:has(input[type="text"]) { display: flex; margin-right: 0; }
+.pane-editor > dialog input[type="text"] { flex: 1; min-width: 0; }
+.pane-editor.dialog-open::after { content: ""; position: absolute; inset: 0; background: rgba(0,0,0,0.55); z-index: 4; }
 .pane-toolbar { display: flex; align-items: center; gap: 0.3em; padding: 0.25em 0.45em; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; flex: none; }
 #page-indicator { min-width: 3em; text-align: center; font-variant-numeric: tabular-nums; }
 .zoom-label input { width: 90px; vertical-align: middle; }

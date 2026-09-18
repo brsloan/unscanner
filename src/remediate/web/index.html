@@ -64,6 +64,19 @@
   <div class="gutter" id="gutter-2" role="separator" aria-orientation="vertical" aria-label="Resize page image" tabindex="0"></div>
 
   <section class="pane pane-editor" aria-label="Transcription editor">
+    <!-- Opened non-modally over the editor only, so the scan stays visible and usable (page to the
+         title page, zoom) while filling it in. -->
+    <dialog id="dlg-properties" aria-labelledby="properties-title">
+      <form method="dialog" id="form-properties">
+        <h2 id="properties-title">Document properties</h2>
+        <p><label>Title <input name="title" type="text" size="50" required></label></p>
+        <p><label>Author <input name="author" type="text" size="50"></label></p>
+        <p><label>Language <input name="language" type="text" size="8" required pattern="[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*"></label>
+          <small>The main language of the text as a code such as <code>en</code>, <code>fr</code> or <code>en-GB</code>. Screen readers use it to pick a voice.</small></p>
+        <p><small>These go into the HTML and EPUB the next time you Build. The title is also the document's top heading when the scan has none.</small></p>
+        <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Save</button></menu>
+      </form>
+    </dialog>
     <div class="pane-toolbar" role="toolbar" aria-label="Formatting">
       <!-- Shows the element type at the caret; choosing another type converts the block. The disabled
            options are display-only: types that are shown but cannot be made from here. -->
@@ -173,18 +186,6 @@
     <p><label>Author <input name="author" type="text" size="40"></label>
        <label>Language <input name="language" type="text" size="4" value="en"></label></p>
     <menu><button value="cancel" type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Open</button></menu>
-  </form>
-</dialog>
-
-<dialog id="dlg-properties">
-  <form method="dialog" id="form-properties">
-    <h2>Document properties</h2>
-    <p><label>Title <input name="title" type="text" size="50" required></label></p>
-    <p><label>Author <input name="author" type="text" size="50"></label></p>
-    <p><label>Language <input name="language" type="text" size="8" required pattern="[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*"></label>
-      <small>The main language of the text as a code such as <code>en</code>, <code>fr</code> or <code>en-GB</code>. Screen readers use it to pick a voice.</small></p>
-    <p><small>These go into the HTML and EPUB the next time you Build. The title is also the document's top heading when the scan has none.</small></p>
-    <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Save</button></menu>
   </form>
 </dialog>
 
