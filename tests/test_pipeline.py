@@ -322,3 +322,30 @@ def test_numbered_list_split_between_items_is_joined_by_its_start(doc):
     assert html.count('role="doc-pagebreak"') == 3
     assert [w for w in a.warnings if w.startswith("page 3:") and "not joined" in w]
     assert not [i for i in validate_html(a.html()) if i.severity == "error"]
+
+
+def test_paragraph_split_over_a_page_with_footnotes_joins_the_body_not_the_footnote(doc):
+    _pages(doc,
+           ("1", '<h1>T</h1><p>The sentence starts</p>'
+                 '<aside role="doc-footnote" id="fn-1-1"><p>1. Note.</p></aside>', False, True),
+           ("2", "<p>and ends here.</p><p>Next.</p>", True, False),
+           ("3", "<p>End.</p>", False, False))
+    a = assemble(doc)
+    html = lhtml.tostring(a.main, encoding="unicode")
+    assert '<p>The sentence starts <span role="doc-pagebreak" id="pg-2"' in html
+    assert "</span>and ends here.</p>" in html
+    assert '<aside role="doc-footnote" id="fn-1-1"><p>1. Note.</p></aside>' in html
+    assert html.index("and ends here.") < html.index("doc-footnote") < html.index("<p>Next.</p>")
+    assert html.count('role="doc-pagebreak"') == 3 and not a.warnings
+
+
+def test_continuation_is_never_taken_from_a_footnote_opening_the_new_page(doc):
+    _pages(doc,
+           ("1", "<h1>T</h1><p>The sentence starts</p>", False, True),
+           ("2", '<aside role="doc-footnote" id="fn-2-1"><p>1. Note.</p></aside><p>Body.</p>', True, False),
+           ("3", "<p>End.</p>", False, False))
+    a = assemble(doc)
+    html = lhtml.tostring(a.main, encoding="unicode")
+    assert '<p>The sentence starts <span role="doc-pagebreak" id="pg-2"' in html and "</span>Body.</p>" in html
+    assert '<aside role="doc-footnote" id="fn-2-1"><p>1. Note.</p></aside>' in html
+    assert html.count('role="doc-pagebreak"') == 3

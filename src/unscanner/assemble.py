@@ -73,11 +73,12 @@ def _edge_leaf(el, pick):
     """Descend through container blocks (blockquote, lists, sections) to the first/last text block.
 
     pick(el) returns the child to descend into (first or last). Returns None when the edge child is
-    not a text-bearing block (e.g. a table, figure or page marker)."""
+    not a text-bearing block (e.g. a table, figure or page marker). Footnotes are looked past: they
+    sit at the end of a page's html, after the paragraph that may carry on over the page break."""
     cur = el
     while len(cur):
         child = pick(cur)
-        if not isinstance(child.tag, str):
+        if child is None or not isinstance(child.tag, str):
             return None
         if child.tag == "li" and len(child) and child[-1 if pick is _last else 0].tag in TEXT_BLOCKS | CONTAINERS:
             cur = child
@@ -91,12 +92,16 @@ def _edge_leaf(el, pick):
     return None
 
 
+def _is_footnote(el) -> bool:
+    return el.tag == "aside" and el.get("role") == "doc-footnote"
+
+
 def _last(el):
-    return el[-1]
+    return next((c for c in reversed(el) if not _is_footnote(c)), None)
 
 
 def _first(el):
-    return el[0]
+    return next((c for c in el if not _is_footnote(c)), None)
 
 
 def _last_leaf(el):
@@ -182,10 +187,7 @@ def _ol_start(ol) -> int:
 
 def _closing_block(main):
     """The last block of the pages assembled so far, looking past the page's footnotes."""
-    for el in reversed(main):
-        if not (el.tag == "aside" and el.get("role") == "doc-footnote"):
-            return el
-    return None
+    return _last(main)
 
 
 def merge_continued_list(main, section, marker, where: str, warnings: list[str]) -> bool:
