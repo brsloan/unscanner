@@ -6,7 +6,14 @@
 
 const $ = (sel) => document.querySelector(sel);
 const state = { docs: [], doc: null, page: null, pageData: null, dirty: false, job: null, settings: null,
-  lastRequestAt: 0, lastSelection: "", polling: null };
+  lastRequestAt: 0, lastSelection: "", polling: null, busy: 0, gen: 0 };
+/* busy counts page loads and saves in flight; gen changes when one starts or ends. poll() drops a
+   document snapshot that overlapped either: a snapshot fetched before a save landed still has the
+   old version and would look like someone else changed the page. */
+async function tracked(promise) {
+  state.busy++; state.gen++;
+  try { return await promise; } finally { state.busy--; state.gen++; }
+}
 
 // ------------------------------------------------------------------ api
 async function api(path, opts = {}) {
@@ -532,7 +539,7 @@ async function loadPage(n, opts = {}) {
   // Leaving a page never loses anything: unsaved edits are kept as a draft and restored on return.
   if (state.dirty && !opts.discardCurrent && n !== state.page) storeDraftNow();
   else if (opts.discardCurrent) clearDraft(state.page);
-  const d = await api(`/documents/${state.doc.doc_id}/pages/${n}`);
+  const d = await tracked(api(`/documents/${state.doc.doc_id}/pages/${n}`));
   state.page = n; state.pageData = d; state.dirty = false;
   rememberPage(state.doc.doc_id, n);
   hideBanner();
@@ -695,7 +702,7 @@ async function savePage(andNext = false, overwrite = false, approve = false) {
   if (!state.doc || !state.page) return;
   const n = state.page;
   try {
-    const saved = await persistPage(n, formSnapshot(), { approve, overwrite });
+    const saved = await tracked(persistPage(n, formSnapshot(), { approve, overwrite }));
     state.dirty = false; clearDraft(n); state.pageData = { ...state.pageData, ...saved };
     $("#editor").innerHTML = saved.html; showFigures($("#editor")); setSource(saved.html);
     refreshDiffSoon(0);
@@ -781,7 +788,9 @@ async function poll() {
       };
       await go();  // unsaved edits on the current page are kept as a draft
     }
+    const gen = state.gen;
     const fresh = await api(`/documents/${state.doc.doc_id}`);
+    if (state.busy || state.gen !== gen) return;  // a save or page load overlapped: snapshot may be stale
     state.doc.pages = fresh.pages; state.doc.status_counts = fresh.status_counts;
     showProperties(fresh);
     renderPages(); renderMeta();
