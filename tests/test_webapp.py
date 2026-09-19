@@ -43,6 +43,9 @@ def test_sanitize_normalizes_editor_output():
     # a numbered list continued from the previous page keeps its start; junk values do not survive
     assert sanitize_fragment('<ol start="4" type="a" reversed><li>x</li></ol>') == '<ol start="4" type="a"><li>x</li></ol>'
     assert sanitize_fragment('<ol start="iv" type="disc"><li>x</li></ol><ul start="2"><li>y</li></ul>') ==         '<ol><li>x</li></ol><ul><li>y</li></ul>'
+    # small caps survive on a span only, and alignment classes do not ride along on one
+    assert sanitize_fragment('<p><span class="small-caps align-center" style="x">John Barner</span> was</p>') ==         '<p><span class="small-caps">John Barner</span> was</p>'
+    assert sanitize_fragment('<p class="small-caps align-right">x</p>') == '<p class="align-right">x</p>'
 
 
 def test_sanitize_drops_source_view_indentation():

@@ -18,8 +18,10 @@ ALLOWED_TAGS = {
 }
 GLOBAL_ATTRS = {"id", "lang"}
 # The only class names that survive: figure placement chosen in the editor, alignment of headings,
-# paragraphs and table cells, and the assembler's placeholder for figures that could not be cropped.
-ALLOWED_CLASSES = {"align-left", "align-center", "align-right", "wrap", "figure-description"}
+# paragraphs and table cells, the assembler's placeholder for figures that could not be cropped, and
+# small caps as printed (on a <span> only; the text inside keeps its normal case so it reads normally).
+ALLOWED_CLASSES = {"align-left", "align-center", "align-right", "wrap", "figure-description", "small-caps"}
+SPAN_CLASSES = {"small-caps"}
 TAG_ATTRS = {
     "a": {"href", "role"},
     "img": {"src", "alt"},
@@ -32,6 +34,7 @@ TAG_ATTRS = {
     "aside": {"role", "aria-label"},
     "section": {"aria-label"},
     "abbr": {"title"},
+    "span": {"class"},
     "math": {"display", "xmlns"},
 }
 RENAME = {"b": "strong", "i": "em", "strike": "del", "s": "del"}
@@ -88,7 +91,7 @@ def sanitize_fragment(fragment: str) -> str:
                 el.drop_tag()
                 continue
             el.tag = tag = "p"
-        if tag == "span" and not el.get("lang"):
+        if tag == "span" and not el.get("lang") and not SPAN_CLASSES & set(el.get("class", "").split()):
             el.drop_tag()
             continue
         if tag not in ALLOWED_TAGS:
@@ -99,7 +102,8 @@ def sanitize_fragment(fragment: str) -> str:
             if name not in allowed:
                 del el.attrib[name]
         if "class" in el.attrib:
-            keep = [c for c in el.get("class", "").split() if c in ALLOWED_CLASSES]
+            keep = [c for c in el.get("class", "").split()
+                    if c in ALLOWED_CLASSES and (c in SPAN_CLASSES) == (tag == "span")]
             if keep:
                 el.set("class", " ".join(keep))
             else:

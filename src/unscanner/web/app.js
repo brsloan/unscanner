@@ -892,6 +892,7 @@ const EDITOR_KEYS = {
   "ca:Digit0": () => setBlockKind("p"),
   ...Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [`ca:Digit${n}`, () => setBlockKind(`h${n}`)])),
   "c:Backslash": () => runCommand("removeFormat"),
+  "cs:KeyK": () => toggleSmallCaps(),
 };
 $("#editor").addEventListener("keydown", (e) => {
   if (!(e.ctrlKey || e.metaKey) || e.getModifierState("AltGraph")) return;
@@ -1284,6 +1285,44 @@ $("#btn-list-start").addEventListener("click", () => {
   if (n === 1) list.removeAttribute("start"); else list.setAttribute("start", n);
   markDirty();
 });
+/* Small caps: toggles a <span class="small-caps"> around the selection, or removes the one at the caret.
+   Text with no lower-case letters (a transcription that typed the small caps as capitals) is put in
+   normal case, so a screen reader reads JOHN BARNER as a name rather than spelling it out. */
+function smallCapsAtCaret() {
+  const sel = window.getSelection();
+  const node = sel && sel.rangeCount ? sel.anchorNode : null;
+  const el = node && (node.nodeType === 1 ? node : node.parentElement);
+  const span = el && el.closest("span.small-caps");
+  return span && $("#editor").contains(span) ? span : null;
+}
+function normalCase(text) {
+  if (/\p{Ll}/u.test(text)) return text;
+  return text.toLowerCase().replace(/(^|[\s\-'’(.])(\p{Ll})/gu, (_, pre, c) => pre + c.toUpperCase())
+    .replace(/\bMc(\p{Ll})/gu, (_, c) => "Mc" + c.toUpperCase());
+}
+function toggleSmallCaps() {
+  $("#editor").focus();
+  const on = smallCapsAtCaret();
+  if (on) {
+    while (on.firstChild) on.parentNode.insertBefore(on.firstChild, on);
+    on.remove();
+  } else {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) { setStatus("Select the words printed in small caps first.", true); return; }
+    const range = sel.getRangeAt(0);
+    const span = document.createElement("span"); span.className = "small-caps";
+    span.appendChild(range.extractContents());
+    const walker = document.createTreeWalker(span, NodeFilter.SHOW_TEXT);
+    const texts = []; while (walker.nextNode()) texts.push(walker.currentNode);
+    if (!/\p{Ll}/u.test(span.textContent)) texts.forEach((t) => { t.data = normalCase(t.data); });
+    range.insertNode(span);
+    sel.selectAllChildren(span);
+  }
+  markDirty(); updateSmallCapsButton();
+}
+function updateSmallCapsButton() { $("#btn-small-caps").setAttribute("aria-pressed", String(!!smallCapsAtCaret())); }
+document.addEventListener("selectionchange", updateSmallCapsButton);
+$("#btn-small-caps").addEventListener("click", toggleSmallCaps);
 $("#btn-lang").addEventListener("click", () => {
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed) { setStatus("Select the foreign-language text first.", true); return; }

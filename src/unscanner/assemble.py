@@ -36,6 +36,7 @@ figure { margin: 1.5em 0; } figure img { max-width: 100%; height: auto; }
 figcaption { font-size: 0.9em; font-style: italic; }
 th[scope="row"] { text-align: left; }
 .align-left { text-align: left; } .align-center, th.align-center { text-align: center; } .align-right, th.align-right { text-align: right; }
+.small-caps { font-variant: small-caps; }
 figure.wrap.align-left { float: left; max-width: 45%; margin: 0.3em 1.2em 0.8em 0; }
 figure.wrap.align-right { float: right; max-width: 45%; margin: 0.3em 0 0.8em 1.2em; }
 h1, h2, h3, h4, h5, h6, table, [role="doc-pagebreak"] { clear: both; }

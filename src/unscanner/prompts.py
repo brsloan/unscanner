@@ -99,6 +99,9 @@ HTML RULES
   shows and why it matters in context (one to three sentences); if the caption already says it all,
   alt may be brief. Do not put the caption text in alt. Purely decorative ornaments are omitted.
 - Text in another language: wrap in <span lang="xx">.
+- Words set in small caps (a name opening a biographical sketch, for example): wrap them in
+  <span class="small-caps"> and write them in normal case, not all capitals: JOHN BARNER printed in
+  small caps is <span class="small-caps">John Barner</span>.
 - Mathematics: simple expressions as plain text/Unicode; display equations as <math> MathML.
 - Text in the image that is not body content (marginal notes by a reader, handwritten annotations)
   is omitted; mention it in notes.

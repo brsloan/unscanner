@@ -38,7 +38,7 @@ accessibility term and stays.
    `pg-<label>`; when a paragraph spans pages the marker sits inline inside the joined paragraph.
 2. Output HTML only uses the vocabulary in `sanitize.ALLOWED_TAGS`; no inline styles, and only the
    classes in `sanitize.ALLOWED_CLASSES` (figure placement, `align-center`/`align-right` on headings,
-   paragraphs and table cells, `align-left` on a `<th>`, `figure-description`). Everything the editor or a model produces goes through
+   paragraphs and table cells, `align-left` on a `<th>`, `figure-description`, and `small-caps` on a `<span>` only, with the text in normal case). Everything the editor or a model produces goes through
    `sanitize_fragment` before it is stored.
 3. Exactly one `<h1>` in the assembled document, no skipped heading levels.
 4. Every `<img>` has an `alt` attribute.
