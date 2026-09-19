@@ -964,6 +964,12 @@ function figureWrapper(imgEl) {
 function selectFigure(imgEl) {
   document.querySelectorAll("#editor img.selected").forEach((i) => i.classList.remove("selected"));
   document.querySelectorAll("#editor figure.selected-figure").forEach((f) => f.classList.remove("selected-figure"));
+  // A bare image straight under the editor (+Fig with no caret in the editor, e.g. right after F2 loads
+  // a page) has nothing to carry its alignment: give it the paragraph a browser would have made.
+  if (imgEl && imgEl.parentElement === $("#editor")) {
+    const p = document.createElement("p");
+    imgEl.replaceWith(p); p.append(imgEl); markDirty();
+  }
   selectedImg = imgEl;
   updateAlignButtons();
   if (!imgEl) { $("#figure-panel").hidden = true; cropBox.hidden = true; return; }
@@ -1122,6 +1128,9 @@ $("#btn-insert-figure").addEventListener("click", () => {
     block = block.closest(BLOCK_SEL);
     if (block === ed || !ed.contains(block)) block = null;
   }
+  // No caret in a block (e.g. right after F2 loads a page): go after the last paragraph or heading, so the
+  // browser doesn't drop the image into that paragraph's text or loose under the editor.
+  if (!block && ed.lastElementChild && ed.lastElementChild.matches(BLOCK_SEL)) block = ed.lastElementChild;
   range.selectNodeContents(block || ed); range.collapse(false);
   sel.removeAllRanges(); sel.addRange(range);
   const html = `<img data-fig="${escapeHtml(fid)}" alt="" src="${PLACEHOLDER_SRC}">`;
