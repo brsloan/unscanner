@@ -845,10 +845,12 @@ $("#block-style").addEventListener("change", (e) => {
   tidyAfterCommand(); markDirty(); updateBlockStyle();
 });
 
-// Alignment is a class on the paragraph or heading (the sanitizer keeps only align-center / align-right
-// there); left is the default, so it just removes the class.
+// Alignment is a class on the paragraph, heading or figure; left is the default, so it just removes the
+// class, except on a wrapped figure, where align-left is what floats it.
 const ALIGNABLE = "p, h1, h2, h3, h4, h5, h6";
 function selectedAlignBlocks() {
+  const fig = figureWrapper(selectedImg);  // a figure clicked in the editor takes precedence
+  if (fig) return [fig];
   const sel = window.getSelection();
   const ed = $("#editor");
   if (!sel || !sel.rangeCount || !ed.contains(sel.anchorNode)) return [];
@@ -871,10 +873,16 @@ document.querySelectorAll("[data-align]").forEach((btn) => {
   btn.addEventListener("mousedown", (e) => e.preventDefault());  // keep the editor selection
   btn.addEventListener("click", () => {
     const blocks = selectedAlignBlocks();
-    if (!blocks.length) { setStatus("Put the caret in a paragraph or heading to align it."); return; }
+    if (!blocks.length) { setStatus("Put the caret in a paragraph or heading, or click a figure, to align it."); return; }
     blocks.forEach((b) => {
+      const wrapped = b.classList.contains("wrap");
       b.classList.remove("align-left", "align-center", "align-right");
       if (btn.dataset.align) b.classList.add(btn.dataset.align);
+      else if (wrapped) b.classList.add("align-left");
+      if (wrapped && btn.dataset.align === "align-center") {
+        b.classList.remove("wrap"); $("#fig-wrap").checked = false;
+        setStatus("Centered figures don't wrap text; wrap turned off.");
+      }
       if (!b.classList.length) b.removeAttribute("class");
     });
     updateAlignButtons(); markDirty();
@@ -888,7 +896,7 @@ $("#source").addEventListener("input", colorSource);
 $("#source").addEventListener("scroll", syncSourceScroll);
 ["#f-label", "#f-starts", "#f-ends", "#f-skip", "#f-notes"].forEach((s) => $(s).addEventListener("change", markDirty));
 
-// ------------------------------------------------------------------ figure panel (alt text, AI autofill, alignment, wrap)
+// ------------------------------------------------------------------ figure panel (alt text, AI autofill, wrap)
 let selectedImg = null;
 /* The element carrying a figure's layout classes: its <figure>, or the <p> a browser wraps an inserted
    image in (the sanitizer turns such a paragraph into a <figure> on save). */
@@ -904,15 +912,14 @@ function selectFigure(imgEl) {
   document.querySelectorAll("#editor img.selected").forEach((i) => i.classList.remove("selected"));
   document.querySelectorAll("#editor figure.selected-figure").forEach((f) => f.classList.remove("selected-figure"));
   selectedImg = imgEl;
+  updateAlignButtons();
   if (!imgEl) { $("#figure-panel").hidden = true; cropBox.hidden = true; return; }
   imgEl.classList.add("selected");
   const fig = figureWrapper(imgEl);
   if (fig) fig.classList.add("selected-figure");
   $("#figure-label").textContent = "Figure" + (imgEl.dataset.fig ? " " + imgEl.dataset.fig : "");
   $("#fig-alt").value = imgEl.getAttribute("alt") || "";
-  const cls = fig ? fig.classList : { contains: () => false };
-  $("#fig-align").value = ["align-left", "align-center", "align-right"].find((c) => cls.contains(c)) || "";
-  $("#fig-wrap").checked = cls.contains("wrap");
+  $("#fig-wrap").checked = !!fig && fig.classList.contains("wrap");
   $("#fig-ai").disabled = !imgEl.dataset.fig;
   $("#fig-ai").title = imgEl.dataset.fig ? "Ask the configured model to write alt text from the cropped image"
     : "AI autofill needs a figure with a crop box on the scan";
@@ -1061,19 +1068,23 @@ $("#btn-alt").addEventListener("click", () => {
 });
 $("#fig-close").addEventListener("click", () => selectFigure(null));
 $("#fig-alt").addEventListener("input", () => { if (selectedImg) { selectedImg.setAttribute("alt", $("#fig-alt").value); markDirty(); } });
-function applyFigureLayout() {
+// Wrap floats the figure to its side (align-left or align-right, set with the toolbar alignment buttons).
+$("#fig-wrap").addEventListener("change", () => {
   const fig = figureWrapper(selectedImg);
   if (!fig) return;
-  ["align-left", "align-center", "align-right", "wrap"].forEach((c) => fig.classList.remove(c));
-  const align = $("#fig-align").value;
-  if (align) fig.classList.add(align);
-  if ($("#fig-wrap").checked && (align === "align-left" || align === "align-right")) fig.classList.add("wrap");
-  if ($("#fig-wrap").checked && !(align === "align-left" || align === "align-right")) setStatus("Wrap needs left or right alignment.");
+  if (!$("#fig-wrap").checked) {
+    fig.classList.remove("wrap", "align-left");  // left is the default without wrap
+  } else if (fig.classList.contains("align-center")) {
+    $("#fig-wrap").checked = false;
+    setStatus("Wrap needs a left or right aligned figure; use the alignment buttons first.");
+    return;
+  } else {
+    if (!fig.classList.contains("align-right")) fig.classList.add("align-left");
+    fig.classList.add("wrap");
+  }
   if (!fig.classList.length) fig.removeAttribute("class");
-  markDirty();
-}
-$("#fig-align").addEventListener("change", applyFigureLayout);
-$("#fig-wrap").addEventListener("change", applyFigureLayout);
+  updateAlignButtons(); markDirty();
+});
 $("#fig-ai").addEventListener("click", async () => {
   if (!selectedImg || !selectedImg.dataset.fig) return;
   const fig = figureWrapper(selectedImg);
