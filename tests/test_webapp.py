@@ -62,6 +62,9 @@ def test_open_edit_build_validate(client, tmp_path):
 
     assert client.get("/").status_code == 200 and "Unscanner" in client.get("/").text
     assert client.get("/static/app.js").status_code == 200
+    # the toolbar's symbol dropdown offers the fractions OCR tends to confuse, and app.js handles it
+    assert 'id="symbol-picker"' in client.get("/").text and "<option>¼</option>" in client.get("/").text
+    assert "#symbol-picker" in client.get("/static/app.js").text
     # the UI code is revalidated on every load, so a restart picks up changes to it
     assert client.get("/").headers["cache-control"] == "no-cache"
     assert client.get("/static/app.js").headers["cache-control"] == "no-cache"

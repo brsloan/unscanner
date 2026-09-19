@@ -122,7 +122,25 @@
       <button type="button" id="btn-alt" title="Edit alt text of the selected image">Alt</button>
       <button type="button" id="btn-insert-figure" title="Insert a figure at the caret, then draw its crop box on the scan">+Fig</button>
       <button type="button" id="btn-insert-table" aria-pressed="false" title="Re-read part of the scan as a table: select the run-together text in the editor (optional), click, then drag a box over the table on the scan">+Table</button>
-      <button type="button" id="btn-lang" title="Mark selection as another language">Lang</button>
+      <select id="symbol-picker" aria-label="Insert a symbol at the caret, replacing any selected text" title="Insert a symbol (replaces the selected text)">
+        <option value="" selected>Ω</option>
+        <optgroup label="Fractions">
+          <option>¼</option><option>½</option><option>¾</option><option>⅓</option><option>⅔</option>
+          <option>⅛</option><option>⅜</option><option>⅝</option><option>⅞</option>
+        </optgroup>
+        <optgroup label="Punctuation">
+          <option>—</option><option>–</option><option>…</option><option>‘</option><option>’</option>
+          <option>“</option><option>”</option><option>§</option><option>¶</option><option>†</option><option>‡</option><option>•</option>
+        </optgroup>
+        <optgroup label="Math and units">
+          <option>°</option><option>′</option><option>″</option><option>×</option><option>÷</option><option>±</option>
+          <option>−</option><option>≤</option><option>≥</option><option>≠</option><option>≈</option><option>µ</option>
+        </optgroup>
+        <optgroup label="Currency and marks">
+          <option>£</option><option>€</option><option>¢</option><option>¥</option><option>©</option><option>®</option><option>™</option>
+        </optgroup>
+      </select>
+      <button type="button" id="btn-lang"title="Mark selection as another language">Lang</button>
       <button type="button" data-cmd="removeFormat" title="Clear formatting">Clear</button>
       <span class="spacer"></span>
       <label title="Edit the HTML source"><input type="checkbox" id="toggle-source"> Source</label>

@@ -871,6 +871,19 @@ $("#block-style").addEventListener("change", (e) => {
   tidyAfterCommand(); markDirty(); updateBlockStyle();
 });
 
+// The symbol dropdown types the chosen character at the caret (over the selection, if any), in the
+// editor or in Source, whichever is showing. insertText keeps it on the browser's undo stack.
+$("#symbol-picker").addEventListener("change", (e) => {
+  const ch = e.target.value;
+  e.target.value = "";  // back to the Ω label, so the same symbol can be chosen twice running
+  if (!ch) return;
+  const target = $("#source").hidden ? $("#editor") : $("#source");
+  if (target.hidden) return;  // Draft view: nothing editable is showing
+  target.focus();  // brings back the selection the dropdown took focus from
+  document.execCommand("insertText", false, ch);
+  markDirty(); updateBlockStyle();
+});
+
 // Alignment is a class on the paragraph, heading, table cell or figure; left is the default, so it just
 // removes the class, except on a wrapped figure, where align-left is what floats it, and on a <th>,
 // which browsers center unless told otherwise.
