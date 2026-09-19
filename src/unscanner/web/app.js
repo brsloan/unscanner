@@ -1055,21 +1055,26 @@ window.addEventListener("mouseup", () => {
   if (!cropDrag) return;
   const d = cropDrag; cropDrag = null;
   document.body.classList.remove("dragging"); scroller.classList.remove("drawing"); state.drawCrop = false;
-  if (d.moved && d.current && d.current.x1 - d.current.x0 >= 5 && d.current.y1 - d.current.y0 >= 5) commitCrop(d.current);
+  disarmDrawTable();
+  const drawn = d.moved && d.current && d.current.x1 - d.current.x0 >= 5 && d.current.y1 - d.current.y0 >= 5;
+  if (drawn && d.table) readTable(d.current, d.table);
+  else if (drawn) commitCrop(d.current);
   else if (d.mode === "draw") showCropBox(figureBox(selectedImg && selectedImg.dataset.fig));
   state.suppressClick = d.moved;  // the click event that follows a drag must not jump to a word
 });
 /* Draw mode: the next drag on the scan defines the selected figure's box. */
 function armDrawCrop() {
   if (!selectedImg) { setStatus("Select a figure in the editor first.", true); return; }
+  disarmDrawTable();
   state.drawCrop = true; scroller.classList.add("drawing");
   setStatus("Drag over the scan to draw the figure's crop box.");
 }
 $("#fig-draw").addEventListener("click", armDrawCrop);
 scroller.addEventListener("mousedown", (e) => {
-  if (!state.drawCrop || e.target !== img) return;
+  if (state.drawTable && state.drawTable.page !== state.page) disarmDrawTable();  // armed on another page
+  if (!(state.drawCrop || state.drawTable) || e.target !== img) return;
   e.preventDefault();
-  cropDrag = { mode: "draw", start: pagePoint(e), box: null, moved: false };
+  cropDrag = { mode: "draw", start: pagePoint(e), box: null, moved: false, table: state.drawTable };
   document.body.classList.add("dragging");
 });
 /* Insert a new empty figure at the caret and arm draw mode for its crop box. */
@@ -1100,6 +1105,69 @@ $("#btn-insert-figure").addEventListener("click", () => {
   const im = ed.querySelector(`img[data-fig="${CSS.escape(fid)}"]`);
   markDirty(); if (im) { selectFigure(im); armDrawCrop(); }
 });
+// ------------------------------------------------------------------ +Table: re-read a region of the scan as a table
+/* For a table the transcriber ran together as text. +Table arms a draw on the scan; the model reads the
+   drawn region as a <table>, which replaces the editor selection (select the run-together text first)
+   or, with no selection, goes in after the block holding the caret. Nothing is stored until Save. */
+function disarmDrawTable() {
+  state.drawTable = null; scroller.classList.remove("drawing");
+  $("#btn-insert-table").setAttribute("aria-pressed", "false");
+}
+$("#btn-insert-table").addEventListener("mousedown", (e) => e.preventDefault());  // keep the editor selection
+$("#btn-insert-table").addEventListener("click", () => {
+  if (state.drawTable) { disarmDrawTable(); setStatus("Table drawing cancelled."); return; }
+  if (!state.doc || !state.pageData) return;
+  const ed = $("#editor"), sel = window.getSelection();
+  const inEditor = sel && sel.rangeCount && ed.contains(sel.getRangeAt(0).commonAncestorContainer);
+  const range = inEditor ? sel.getRangeAt(0).cloneRange() : null;
+  selectFigure(null);  // the crop box on the scan is about to show the table region
+  state.drawCrop = false;
+  state.drawTable = { range, text: range && !range.collapsed ? sel.toString() : "", page: state.page, doc: state.doc.doc_id };
+  scroller.classList.add("drawing");
+  $("#btn-insert-table").setAttribute("aria-pressed", "true");
+  setStatus(range && !range.collapsed ? "Drag over the table on the scan; it will replace the selected text."
+    : "Drag over the table on the scan; it will be inserted after the caret's paragraph. (Select the run-together text first to replace it.)");
+});
+async function readTable(box, target) {
+  const btn = $("#btn-insert-table");
+  showCropBox(box); btn.disabled = true; setStatus("Asking the model to read the region as a table…");
+  try {
+    const r = await api(`/documents/${target.doc}/pages/${target.page}/table`, { method: "POST",
+      body: { bbox: [box.x0, box.y0, box.x1, box.y1].map((v) => Math.round(v * 10) / 10), text: target.text } });
+    if (!state.doc || state.doc.doc_id !== target.doc || state.page !== target.page) {
+      setStatus("The table came back after you left the page; it was not inserted.", true); return;
+    }
+    insertTable(r.html, target.range);
+    setStatus(`Table inserted (${r.model}). Check it against the scan; Ctrl+Z undoes it.`);
+  } catch (e) { setStatus("Table failed: " + e.message, true); }
+  finally { btn.disabled = false; if (!selectedImg) cropBox.hidden = true; }
+}
+/* Through execCommand, like +Fig, so Ctrl+Z takes the table out again (and brings replaced text back). */
+function insertTable(html, range) {
+  const ed = $("#editor"); ed.focus();
+  const sel = window.getSelection();
+  let r = range && ed.contains(range.commonAncestorContainer) ? range : null;  // the text may have been edited away meanwhile
+  let block = null;
+  if (!r || r.collapsed) {
+    if (r) {
+      const at = r.startContainer.nodeType === Node.TEXT_NODE ? r.startContainer.parentElement : r.startContainer;
+      // Never inside another table or a list: go after the whole thing.
+      block = at.closest("table, ul, ol, dl") || at.closest(BLOCK_SEL);
+      while (block && block.parentElement && block.parentElement !== ed && block.parentElement.closest("table, ul, ol, dl")) block = block.parentElement.closest("table, ul, ol, dl");
+      if (block === ed || !ed.contains(block)) block = null;
+    }
+    r = document.createRange();
+    if (block && block.matches("table, ul, ol, dl")) { r.setStartAfter(block); r.collapse(true); block = null; }
+    else { r.selectNodeContents(block || ed); r.collapse(false); }
+  }
+  sel.removeAllRanges(); sel.addRange(r);
+  if (block) document.execCommand("insertParagraph");
+  if (!document.execCommand("insertHTML", false, html)) {  // fallback for browsers without insertHTML
+    const t = document.createElement("template"); t.innerHTML = html; r.deleteContents(); r.insertNode(t.content);
+  }
+  markDirty();
+}
+
 // An undo (or any edit) that removes the selected figure closes its panel and crop box.
 $("#editor").addEventListener("input", () => { if (selectedImg && !$("#editor").contains(selectedImg)) selectFigure(null); });
 $("#editor").addEventListener("click", (e) => {

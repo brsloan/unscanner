@@ -119,8 +119,9 @@ class OpenAICompatBackend(Backend):
                 raise RefusalError(f"model refused: {(text or '').strip()[:300]}") from e
             raise BackendError(f"model returned invalid JSON: {e}") from e
 
-    def _post(self, body: dict) -> dict:
-        """POST one chat completion; handles rate limits, unsupported fields and transient errors."""
+    def _post(self, body: dict, network_tries: int = 3) -> dict:
+        """POST one chat completion; handles rate limits, unsupported fields and transient errors.
+        network_tries=1 suits a button a person is waiting on: an unreachable host fails at once."""
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         last_err: Exception | None = None
         data = None
@@ -146,27 +147,33 @@ class OpenAICompatBackend(Backend):
                 break
             except (httpx.HTTPError, ValueError) as e:
                 last_err = e
-                if attempt >= 2:
+                if attempt >= network_tries - 1:
                     break  # transient network errors get three tries; rate limits get MAX_ATTEMPTS
                 time.sleep(3 * (attempt + 1))
         if data is None:
+            if isinstance(last_err, httpx.ConnectError | httpx.ConnectTimeout):
+                raise BackendError(f"cannot reach {self.base_url} (is this computer on the network or VPN the "
+                                   f"endpoint needs?): {last_err}")
             raise BackendError(f"request failed: {last_err}")
         return data
 
-    def describe_image(self, image_png: bytes, prompt: str) -> str:
+    def describe_image(self, image_png: bytes, prompt: str, max_tokens: int | None = None) -> str:
         img = base64.standard_b64encode(image_png).decode()
         body = {
-            "model": self.model, "temperature": self.temperature, "max_tokens": 600,
+            "model": self.model, "temperature": self.temperature, "max_tokens": max_tokens or 600,
             "messages": [{"role": "user", "content": [
                 {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img}"}},
                 {"type": "text", "text": prompt},
             ]}],
             **self._thinking_fields(),
         }
-        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        data = self._post(body, network_tries=1)
         try:
-            r = self.client.post(f"{self.base_url}/chat/completions", json=body, headers=headers)
-            r.raise_for_status()
-            return (r.json()["choices"][0]["message"]["content"] or "").strip()
-        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError) as e:
-            raise BackendError(f"describe request failed: {e}") from e
+            choice = data["choices"][0]
+            text = (choice["message"]["content"] or "").strip()
+        except (KeyError, IndexError, TypeError) as e:
+            raise BackendError(f"unexpected response shape: {data!r}"[:500]) from e
+        if choice.get("finish_reason") == "length":
+            raise BackendError(f"output truncated at {body['max_tokens']} tokens (finish_reason=length); the model "
+                               "is probably repeating itself, try again")
+        return text

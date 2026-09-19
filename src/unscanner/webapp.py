@@ -89,6 +89,14 @@ class DescribeRequest(BaseModel):
     context: str = ""
 
 
+class TableRequest(BaseModel):
+    bbox: list[float]
+    text: str = ""
+
+
+TABLE_MAX_TOKENS = 4000  # output budget for one region re-read as a table (+Table in the UI)
+
+
 class LocateRequest(BaseModel):
     context: list[str]
     index: int
@@ -417,6 +425,46 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             raise HTTPException(502, f"{type(e).__name__}: {e}") from e
         decorative = text.strip().upper().startswith("DECORATIVE")
         return {"alt": "" if decorative else text.strip(), "decorative": decorative, "model": backend.model}
+
+    @app.post("/api/documents/{doc_id}/pages/{n}/table")
+    def read_table(doc_id: str, n: int, req: TableRequest) -> dict[str, Any]:
+        """Ask the configured model to re-read a region of the scan (req.bbox, 0-1000 page coordinates)
+        as a table. Returns {html, model}; nothing is stored, the editor inserts the table and the
+        person saves the page as usual. req.text is the editor's current wording of the region; without
+        it the scan's words inside the box are sent as the hint."""
+        from .backends import BackendError
+        from .pdf import crop_png
+        from .prompts import build_table_prompt, extract_table_html
+
+        doc = load_doc(doc_id)
+        try:
+            doc.page(n)
+        except IndexError as e:
+            raise HTTPException(404, str(e)) from e
+        box = req.bbox
+        if len(box) != 4 or not (0 <= box[0] < box[2] <= 1000 and 0 <= box[1] < box[3] <= 1000):
+            raise HTTPException(400, "bbox must be [x0, y0, x1, y1] in 0-1000 page coordinates with x0<x1 and y0<y1")
+        text = req.text.strip()
+        if not text:
+            inside = [w["text"] for w in cached_page_words(doc, n)
+                      if box[0] <= (w["x0"] + w["x1"]) / 2 <= box[2] and box[1] <= (w["y0"] + w["y1"]) / 2 <= box[3]]
+            text = " ".join(inside)
+        try:
+            backend = make_backend_from_settings()
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(400, f"backend not configured: {e}") from e
+        try:
+            reply = backend.describe_image(crop_png(cached_page_png(doc, n).read_bytes(), box),
+                                           build_table_prompt(text), max_tokens=TABLE_MAX_TOKENS)
+        except BackendError as e:
+            raise HTTPException(502, str(e)) from e
+        except Exception as e:  # noqa: BLE001 - surface the reason to the UI instead of a bare 500
+            raise HTTPException(502, f"{type(e).__name__}: {e}") from e
+        try:
+            html = sanitize_fragment(extract_table_html(reply))
+        except ValueError as e:
+            raise HTTPException(502, f"{e}: {reply.strip()[:200]}") from e
+        return {"html": html, "model": backend.model}
 
     @app.get("/api/documents/{doc_id}/pages/{n}/words")
     def get_page_words(doc_id: str, n: int) -> list[dict[str, Any]]:

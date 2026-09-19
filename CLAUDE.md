@@ -65,6 +65,10 @@ accessibility term and stays.
   page (a dense table page is ~2000 tokens). `openai_compat.py` retries such a page at
   `TRUNCATION_RETRY_TEMPERATURES`. The budget is `openai_max_tokens` (UI Settings, CLI `--max-tokens`,
   default 8000); raising it makes loops slower and gateways time out (504).
+- A table the transcriber ran together as text: the editor's +Table button (select the text, click, drag
+  a box over the table on the scan). `POST /api/documents/{id}/pages/{n}/table` sends only that crop to
+  the configured model with `TABLE_PROMPT` from `prompts.py` (keep its table rules in step with
+  `GUIDELINES`) and returns a sanitized `<table>`; nothing is stored until the person saves the page.
 - Output look: `CSS` in `assemble.py` (shared by HTML and EPUB).
 - New validation rule: add to `validate_html` in `validate.py` and cover it in `tests/`.
 - New UI feature: `web/app.js` talks only to `/api/...` routes in `webapp.py`. Keep it vanilla JS.

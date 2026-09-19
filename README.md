@@ -89,6 +89,11 @@ amber needs review, grey not transcribed, red error) and review pages opened fir
   `align-left|center|right` and `wrap` on the `<figure>`; these are the only classes the sanitizer
   keeps, and the output CSS styles them in both HTML and EPUB. A heading or paragraph may also carry
   `align-center` (or `align-right`) when it was set that way in print.
+- **Missed tables**: when the transcriber ran a table together as ordinary text, select that text in
+  the editor, click **+Table**, and drag a box over the table on the scan. The configured model
+  re-reads just that region as a `<table>`, which replaces the selection (with no selection it goes in
+  after the caret's paragraph). Check it against the scan; Ctrl+Z takes it out again, and nothing is
+  stored until you Save. Click +Table a second time to cancel the draw.
 - **Editing and approval**: unsaved edits are kept per page in the browser, so you can move between
   pages freely and come back; pages with unsaved edits show a pencil in the page list. **Save** in the
   top bar (Ctrl+S) is document-level: it writes every page with unsaved edits without approving

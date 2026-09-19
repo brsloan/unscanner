@@ -179,6 +179,41 @@ def test_figure_alt_autofill_and_layout_classes(client, tmp_path, monkeypatch):
     assert 'class="align-right wrap"' in out and "figure.wrap.align-right" in out
 
 
+def test_region_is_reread_as_a_table(client, tmp_path, monkeypatch):
+    seen = {}
+
+    class TableBackend(FakeBackend):
+        reply = ('Here is the table:\n```html\n<table class="x" style="y"><tr><th scope="row">General military purposes</th>'
+                 '<td>$1,000</td></tr><tr><td onclick="z()">Navy</td><td></td></tr></table>\n```')
+
+        def describe_image(self, image_png, prompt, max_tokens=None):
+            seen.update(png=image_png, prompt=prompt, max_tokens=max_tokens)
+            return self.reply
+
+    monkeypatch.setattr("unscanner.backends.make_backend", lambda *a, **k: TableBackend())
+    pdf = make_pdf(tmp_path / "table sample.pdf")
+    doc_id = client.post("/api/documents", json={"pdf_path": str(pdf)}).json()["doc_id"]
+    url = f"/api/documents/{doc_id}/pages/1/table"
+    # the editor's selected text is the wording hint; the model sees only the crop, with a table-sized budget
+    r = client.post(url, json={"bbox": [50, 50, 950, 500], "text": "General military purposes $1,000"})
+    assert r.status_code == 200, r.text
+    assert seen["png"][:4] == b"\x89PNG" and seen["max_tokens"] == webapp.TABLE_MAX_TOKENS
+    assert "General military purposes $1,000" in seen["prompt"] and "<table>" in seen["prompt"]
+    # fence and prose dropped, and the table sanitized like everything else that reaches the editor
+    assert r.json()["html"] == ('<table><tr><th scope="row">General military purposes</th><td>$1,000</td></tr>'
+                                '<tr><td>Navy</td><td></td></tr></table>')
+    # nothing is stored: the editor inserts the table and the person saves
+    assert client.get(f"/api/documents/{doc_id}/pages/1").json()["version"] == 0
+    # without selected text, the scan's own words inside the box are the hint
+    client.post(url, json={"bbox": [0, 0, 1000, 1000]})
+    assert "CHAPTER ONE" in seen["prompt"]
+    assert client.post(url, json={"bbox": [500, 0, 100, 1000]}).status_code == 400
+    assert client.post(f"/api/documents/{doc_id}/pages/99/table", json={"bbox": [0, 0, 9, 9]}).status_code == 404
+    TableBackend.reply = "I see no table here."
+    r = client.post(url, json={"bbox": [0, 0, 1000, 1000]})
+    assert r.status_code == 502 and "no <table>" in r.json()["detail"]
+
+
 def test_settings_roundtrip(client):
     # untouched settings pre-fill the model the guidelines were tuned against
     assert client.get("/api/settings").json()["openai_model"] == "qwen3.6:27b"

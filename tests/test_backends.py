@@ -169,6 +169,25 @@ def test_openai_compat_explains_reasoning_exhaustion():
         be.transcribe(b"\x89PNG", "p")
 
 
+def test_openai_compat_describe_image_budget_and_unreachable_host():
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(json.loads(request.content))
+        if len(calls) == 1:
+            return httpx.Response(200, json={"choices": [{"message": {"content": " <table></table> "}, "finish_reason": "stop"}]})
+        raise httpx.ConnectTimeout("timed out")
+
+    be = OpenAICompatBackend(model="m", base_url="http://ollama.local:11434/v1")
+    be.client = httpx.Client(transport=httpx.MockTransport(handler))
+    assert be.describe_image(b"\x89PNG", "table please", max_tokens=4000) == "<table></table>"
+    assert calls[0]["max_tokens"] == 4000
+    # a person is waiting on this: an unreachable endpoint fails at once, and says what to check
+    with pytest.raises(BackendError, match="cannot reach http://ollama.local:11434/v1"):
+        be.describe_image(b"\x89PNG", "alt text please")
+    assert len(calls) == 2 and calls[1]["max_tokens"] == 600
+
+
 def test_openai_compat_retries_rate_limits(monkeypatch):
     import unscanner.backends.openai_compat as oc
 

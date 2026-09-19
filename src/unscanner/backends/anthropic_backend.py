@@ -110,11 +110,11 @@ class AnthropicBackend(Backend):
         except ValueError as e:
             raise BackendError(f"model returned invalid JSON: {e}") from e
 
-    def describe_image(self, image_png: bytes, prompt: str) -> str:
+    def describe_image(self, image_png: bytes, prompt: str, max_tokens: int | None = None) -> str:
         img = base64.standard_b64encode(image_png).decode()
         kwargs: dict = dict(
             model=self.model,
-            max_tokens=1024,
+            max_tokens=max_tokens or 1024,
             messages=[{
                 "role": "user",
                 "content": [

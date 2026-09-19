@@ -156,6 +156,47 @@ def build_user_prompt(page_index: int, n_pages: int, draft_text: str, prev_tail:
     return "\n\n".join(parts)
 
 
+# The +Table button in the UI: a person dragged a box over a region the page transcription did not
+# recognize as a table, and the model sees only that crop. Keep the table rules in step with GUIDELINES.
+TABLE_PROMPT = CONTEXT + """
+This image is one region cut out of a scanned page. The person reviewing the page has marked it as a
+table that the first transcription ran together as ordinary text. Transcribe it as one HTML <table>.
+- Every word and figure in the image goes into the table, word for word, in reading order. Never
+  summarize, and never add text that is not printed.
+- One <tr> per printed row and one cell per column, so two numbers on a line never run together. An
+  entry that wraps onto a second printed line is still one cell. An empty position is an empty <td>.
+- Column headings are transcribed, never invented: when the region prints a heading row, put it in
+  <thead> with <th scope="col">; when it prints none, there is no <thead> and no <th scope="col">.
+- The first cell of each row is <th scope="row"> when it names the row (an item, a name, a year).
+- A title printed above the table is its <caption>; do not invent one.
+- Dot leaders (rows of periods leading to a number) are layout: never reproduce them.
+- A total or subtotal is an ordinary row. Rules and brackets drawn on the page are not transcribed.
+- Use only table, caption, thead, tbody, tr, th, td, em, strong, sup, sub. No styles, no classes.
+Return only the <table> element, with no commentary and no code fence.
+"""
+
+
+def build_table_prompt(text: str = "") -> str:
+    """The +Table prompt; `text` is what is known of the region's wording (the reviewer's selected
+    transcription, else the scan's words inside the box)."""
+    if not text.strip():
+        return TABLE_PROMPT
+    return (TABLE_PROMPT + "\nTEXT OF THIS REGION from the current transcription or OCR (the wording helps; its line "
+            "breaks and order may be wrong, and the image is authoritative):\n" + text.strip()[:6000])
+
+
+_TABLE = re.compile(r"<table\b.*</table\s*>", re.IGNORECASE | re.DOTALL)
+
+
+def extract_table_html(reply: str) -> str:
+    """The <table>...</table> part of a model reply (code fences and prose around it are dropped).
+    Raises ValueError when the reply has no table."""
+    m = _TABLE.search(reply or "")
+    if not m:
+        raise ValueError("the model's reply contains no <table>")
+    return m.group(0)
+
+
 _FENCE = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
 
 
