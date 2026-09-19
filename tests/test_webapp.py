@@ -38,6 +38,8 @@ def test_sanitize_normalizes_editor_output():
     assert sanitize_fragment('<h2 class="align-center big" style="color:red">T</h2>') == '<h2 class="align-center">T</h2>'
     # the editor's alignment buttons put the same classes on paragraphs
     assert sanitize_fragment('<p class="align-right" style="text-align:right">x</p>') == '<p class="align-right">x</p>'
+    # ...and on table cells (a <th> is centered by browsers, so Left is an explicit align-left there)
+    assert sanitize_fragment('<table><tr><th scope="row" class="align-left big">a</th><td class="align-right" style="x">1</td></tr></table>') ==         '<table><tr><th scope="row" class="align-left">a</th><td class="align-right">1</td></tr></table>'
 
 
 def test_sanitize_drops_source_view_indentation():

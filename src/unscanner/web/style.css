@@ -141,7 +141,8 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 .editor figure { margin: 1em 0; } .editor figure img { max-width: 100%; }
 .btn-group { display: inline-flex; gap: 1px; }
 .align-icon { width: 14px; height: 12px; vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 1.5; }
-.editor .align-center { text-align: center; } .editor .align-right { text-align: right; }
+.editor th[scope="row"] { text-align: left; }
+.editor .align-left { text-align: left; } .editor .align-center, .editor th.align-center { text-align: center; } .editor .align-right, .editor th.align-right { text-align: right; }
 .editor .wrap.align-left { float: left; max-width: 45%; margin: 0.3em 1.2em 0.8em 0; }
 .editor .wrap.align-right { float: right; max-width: 45%; margin: 0.3em 0 0.8em 1.2em; }
 .editor h1, .editor h2, .editor h3, .editor table { clear: both; }

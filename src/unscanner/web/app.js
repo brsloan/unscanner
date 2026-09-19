@@ -871,9 +871,10 @@ $("#block-style").addEventListener("change", (e) => {
   tidyAfterCommand(); markDirty(); updateBlockStyle();
 });
 
-// Alignment is a class on the paragraph, heading or figure; left is the default, so it just removes the
-// class, except on a wrapped figure, where align-left is what floats it.
-const ALIGNABLE = "p, h1, h2, h3, h4, h5, h6";
+// Alignment is a class on the paragraph, heading, table cell or figure; left is the default, so it just
+// removes the class, except on a wrapped figure, where align-left is what floats it, and on a <th>,
+// which browsers center unless told otherwise.
+const ALIGNABLE = "p, h1, h2, h3, h4, h5, h6, th, td";
 function selectedAlignBlocks() {
   const fig = figureWrapper(selectedImg);  // a figure clicked in the editor takes precedence
   if (fig) return [fig];
@@ -891,7 +892,9 @@ function selectedAlignBlocks() {
 }
 function updateAlignButtons() {
   const blocks = selectedAlignBlocks();
-  const current = (b) => ["align-center", "align-right"].find((c) => b.classList.contains(c)) || "";
+  // A header cell without a class may be centered (column heading) or left (row heading): ask the browser.
+  const current = (b) => ["align-center", "align-right"].find((c) => b.classList.contains(c)) ||
+    (b.tagName === "TH" && !b.classList.contains("align-left") && getComputedStyle(b).textAlign.includes("center") ? "align-center" : "");
   document.querySelectorAll("[data-align]").forEach((btn) => btn.setAttribute("aria-pressed",
     String(blocks.length > 0 && blocks.every((b) => current(b) === btn.dataset.align))));
 }
@@ -899,12 +902,12 @@ document.querySelectorAll("[data-align]").forEach((btn) => {
   btn.addEventListener("mousedown", (e) => e.preventDefault());  // keep the editor selection
   btn.addEventListener("click", () => {
     const blocks = selectedAlignBlocks();
-    if (!blocks.length) { setStatus("Put the caret in a paragraph or heading, or click a figure, to align it."); return; }
+    if (!blocks.length) { setStatus("Put the caret in a paragraph, heading or table cell, or click a figure, to align it."); return; }
     blocks.forEach((b) => {
       const wrapped = b.classList.contains("wrap");
       b.classList.remove("align-left", "align-center", "align-right");
       if (btn.dataset.align) b.classList.add(btn.dataset.align);
-      else if (wrapped) b.classList.add("align-left");
+      else if (wrapped || b.tagName === "TH") b.classList.add("align-left");
       if (wrapped && btn.dataset.align === "align-center") {
         b.classList.remove("wrap"); $("#fig-wrap").checked = false;
         setStatus("Centered figures don't wrap text; wrap turned off.");

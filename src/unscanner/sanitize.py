@@ -15,8 +15,8 @@ ALLOWED_TAGS = {
     "dl", "dt", "dd", "pre", "code", "hr", "span", "aside", "section", "a", "br", "math", "del", "ins", "abbr",
 }
 GLOBAL_ATTRS = {"id", "lang"}
-# The only class names that survive: figure placement chosen in the editor, alignment of headings
-# and paragraphs, and the assembler's placeholder for figures that could not be cropped.
+# The only class names that survive: figure placement chosen in the editor, alignment of headings,
+# paragraphs and table cells, and the assembler's placeholder for figures that could not be cropped.
 ALLOWED_CLASSES = {"align-left", "align-center", "align-right", "wrap", "figure-description"}
 TAG_ATTRS = {
     "a": {"href", "role"},
@@ -24,8 +24,8 @@ TAG_ATTRS = {
     "figure": {"class"},
     "p": {"class"},
     **{h: {"class"} for h in ("h1", "h2", "h3", "h4", "h5", "h6")},  # align-center for headings centered in print
-    "th": {"scope", "colspan", "rowspan"},
-    "td": {"colspan", "rowspan"},
+    "th": {"scope", "colspan", "rowspan", "class"},  # alignment, as on paragraphs
+    "td": {"colspan", "rowspan", "class"},
     "aside": {"role", "aria-label"},
     "section": {"aria-label"},
     "abbr": {"title"},
