@@ -127,8 +127,9 @@ def draft_text_for_page(doc: Document, index: int) -> tuple[str, str]:
     return ocr_png(png), "ocr"
 
 
-def crop_png(png: bytes, bbox: list[float]) -> bytes:
-    """Crop a normalized [x0,y0,x1,y1] (0-1000) region out of a PNG."""
+def crop_png(png: bytes, bbox: list[float], rotate: int = 0) -> bytes:
+    """Crop a normalized [x0,y0,x1,y1] (0-1000) region out of a PNG, then turn it `rotate` degrees
+    clockwise (a multiple of 90)."""
     from PIL import Image
 
     im = Image.open(io.BytesIO(png))
@@ -137,7 +138,10 @@ def crop_png(png: bytes, bbox: list[float]) -> bytes:
     box = (int(w * x0 / 1000), int(h * y0 / 1000), int(w * x1 / 1000), int(h * y1 / 1000))
     box = (max(0, box[0]), max(0, box[1]), min(w, max(box[2], box[0] + 1)), min(h, max(box[3], box[1] + 1)))
     buf = io.BytesIO()
-    im.crop(box).save(buf, format="PNG")
+    out = im.crop(box)
+    if rotate % 360:
+        out = out.rotate(-(rotate % 360), expand=True)  # PIL turns counterclockwise
+    out.save(buf, format="PNG")
     return buf.getvalue()
 
 

@@ -182,7 +182,7 @@ def resolve_figures(doc: Document, page: Page, section, out_dir: Path, figures: 
             name = f"p{page.index:03d}-{slugify(fid)}.png"
             path = out_dir / "figures" / name
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(crop_png(cached_page_png(doc, page.index).read_bytes(), fig.bbox))
+            path.write_bytes(crop_png(cached_page_png(doc, page.index).read_bytes(), fig.bbox, fig.rotate))
             figures[name] = path
             img.set("src", f"figures/{name}")
             img.set("alt", alt)

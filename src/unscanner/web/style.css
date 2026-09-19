@@ -134,6 +134,7 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 .figure-panel { flex: none; display: flex; flex-direction: column; gap: 0.25em; padding: 0.35em 0.6em; border-top: 2px solid var(--accent); background: var(--panel); }
 .figure-row { display: flex; align-items: center; gap: 0.6em; }
 .figure-row label { display: inline-flex; align-items: center; gap: 0.3em; white-space: nowrap; }
+.fig-rotate { display: inline-flex; gap: 0.2em; }
 .figure-row textarea { flex: 1; resize: vertical; min-height: 2.4em; font: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0.3em 0.5em; }
 .editor figure { margin: 1em 0; } .editor figure img { max-width: 100%; }
 .btn-group { display: inline-flex; gap: 1px; }

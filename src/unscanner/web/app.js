@@ -477,12 +477,12 @@ function storeDraftNow() {
   renderPages(); renderMeta();
 }
 function applyDraft(d) {
+  if (d.figures) state.pageData.figures = d.figures;  // before showFigures, which reads the crop boxes
   $("#editor").innerHTML = d.html || ""; showFigures($("#editor"));
   setSource(d.html);
   $("#f-label").value = d.label || "";
   $("#f-starts").checked = !!d.starts_mid_paragraph; $("#f-ends").checked = !!d.ends_mid_paragraph;
   $("#f-skip").checked = !!d.skip; $("#f-notes").value = d.notes || "";
-  if (d.figures) state.pageData.figures = d.figures;
   state.dirty = true;
 }
 
@@ -562,12 +562,16 @@ async function loadPage(n, opts = {}) {
 }
 
 /* Figures are stored as <img src="fig:ID">; in the editor they are shown from the crop endpoint and
-   restored to fig:ID when the HTML is read back. */
+   restored to fig:ID when the HTML is read back. The URL carries the crop box and rotation: the browser
+   reuses an image it already loaded from the same URL, so a bare URL showed a figure's old orientation
+   after a save or a page change. */
 function showFigures(ed) {
   ed.querySelectorAll('img[src^="fig:"]').forEach((im) => {
     const id = im.getAttribute("src").slice(4);
     im.dataset.fig = id;
-    im.src = `/api/documents/${state.doc.doc_id}/pages/${state.page}/figure/${encodeURIComponent(id)}`;
+    const f = state.pageData && (state.pageData.figures || []).find((x) => x.id === id);
+    im.src = f && f.bbox ? figurePreviewSrc(f)
+      : `/api/documents/${state.doc.doc_id}/pages/${state.page}/figure/${encodeURIComponent(id)}`;
   });
 }
 /* Large figures (full-page plates) are scaled down to fit the editor; label those so it is clear the
@@ -953,9 +957,9 @@ function commitCrop(box) {
     selectedImg.dataset.fig = fid;
   }
   let f = figs.find((x) => x.id === fid);
-  if (!f) { f = { id: fid, alt: selectedImg.getAttribute("alt") || "", bbox: null, caption: "" }; figs.push(f); }
+  if (!f) { f = { id: fid, alt: selectedImg.getAttribute("alt") || "", bbox: null, caption: "", rotate: 0 }; figs.push(f); }
   f.bbox = [box.x0, box.y0, box.x1, box.y1].map((v) => Math.round(v * 10) / 10);
-  selectedImg.src = `/api/documents/${state.doc.doc_id}/pages/${state.page}/figure/${encodeURIComponent(fid)}?bbox=${f.bbox.join(",")}`;
+  selectedImg.src = figurePreviewSrc(f);
   $("#figure-label").textContent = "Figure " + fid;
   $("#fig-ai").disabled = false;
   $("#fig-crop-hint").textContent = "Crop updated; Save to keep it.";
@@ -963,6 +967,24 @@ function commitCrop(box) {
   if (state.mark || state.follow) { lastLocateKey = "figure:" + fid; placeMarker(box); }
   markDirty();
 }
+/* The editor preview of a figure record's (possibly unsaved) crop box and rotation. */
+function figurePreviewSrc(f) {
+  return `/api/documents/${state.doc.doc_id}/pages/${state.page}/figure/${encodeURIComponent(f.id)}` +
+    `?bbox=${f.bbox.join(",")}&rotate=${f.rotate || 0}`;
+}
+/* Turn the selected figure a quarter turn (delta = 90 clockwise, -90 counterclockwise). The rotation is
+   stored on the figure record and applied when the crop is cut out, so the output image is rotated too. */
+function rotateFigure(delta) {
+  const fid = selectedImg && selectedImg.dataset.fig;
+  const f = fid && (state.pageData.figures || []).find((x) => x.id === fid);
+  if (!f || !f.bbox) { setStatus("Draw a crop box for this figure before rotating it.", true); return; }
+  f.rotate = (((f.rotate || 0) + delta) % 360 + 360) % 360;
+  selectedImg.src = figurePreviewSrc(f);
+  setStatus(`Figure rotated to ${f.rotate}°; Save to keep it.`);
+  markDirty();
+}
+$("#fig-rotate-cw").addEventListener("click", () => rotateFigure(90));
+$("#fig-rotate-ccw").addEventListener("click", () => rotateFigure(-90));
 function newFigureId() {
   const label = (state.pageData && state.pageData.label) || ("page" + state.page);
   const used = new Set((state.pageData.figures || []).map((f) => f.id));

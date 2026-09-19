@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 from . import keystore, project
 from .backends.openai_compat import DEFAULT_MODEL as DEFAULT_OPENAI_MODEL
-from .document import Document, parse_page_range, slugify
+from .document import Document, normalize_rotation, parse_page_range, slugify
 from .pdf import cached_page_png, cached_page_words, new_document
 from .pipeline import apply_result, ensure_draft_text
 from .prompts import GUIDELINES
@@ -356,9 +356,10 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
                             headers={"Cache-Control": "no-cache"})
 
     @app.get("/api/documents/{doc_id}/pages/{n}/figure/{fid}")
-    def get_page_figure(doc_id: str, n: int, fid: str, bbox: str | None = None):
-        """Crop of a figure on this page, from its stored bbox or from ?bbox=x0,y0,x1,y1 (0-1000 page
-        coordinates) for a live preview while the user adjusts the crop in the editor."""
+    def get_page_figure(doc_id: str, n: int, fid: str, bbox: str | None = None, rotate: int | None = None):
+        """Crop of a figure on this page, from its stored bbox and rotation or from ?bbox=x0,y0,x1,y1
+        (0-1000 page coordinates) and ?rotate=90 for a live preview while the user adjusts the figure in
+        the editor."""
         from fastapi.responses import Response
 
         from .pdf import crop_png
@@ -368,6 +369,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             p = doc.page(n)
         except IndexError as e:
             raise HTTPException(404, str(e)) from e
+        fig = next((f for f in p.figures if f.id == fid), None)
         box: list[float] | None = None
         if bbox:
             try:
@@ -376,11 +378,12 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             except (ValueError, AssertionError) as e:
                 raise HTTPException(400, "bbox must be x0,y0,x1,y1 with x0<x1 and y0<y1") from e
         else:
-            fig = next((f for f in p.figures if f.id == fid), None)
             if fig is None or not fig.bbox:
                 raise HTTPException(404, "no crop box for this figure")
             box = fig.bbox
-        return Response(crop_png(cached_page_png(doc, n).read_bytes(), box), media_type="image/png")
+        turn = normalize_rotation(rotate) if rotate is not None else (fig.rotate if fig else 0)
+        return Response(crop_png(cached_page_png(doc, n).read_bytes(), box, turn), media_type="image/png",
+                        headers={"Cache-Control": "no-cache"})
 
     @app.post("/api/documents/{doc_id}/pages/{n}/figures/{fid}/describe")
     def describe_figure(doc_id: str, n: int, fid: str, req: DescribeRequest) -> dict[str, Any]:
@@ -407,7 +410,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         if req.context.strip():
             prompt += f"\nText near the image on the page: {req.context.strip()[:1500]}"
         try:
-            text = backend.describe_image(crop_png(cached_page_png(doc, n).read_bytes(), fig.bbox), prompt)
+            text = backend.describe_image(crop_png(cached_page_png(doc, n).read_bytes(), fig.bbox, fig.rotate), prompt)
         except BackendError as e:
             raise HTTPException(502, str(e)) from e
         except Exception as e:  # noqa: BLE001 - surface the reason to the UI instead of a bare 500

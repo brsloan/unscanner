@@ -23,10 +23,20 @@ class Figure:
     alt: str
     bbox: list[float] | None = None  # [x0, y0, x1, y1] in 0-1000 normalized page coords
     caption: str = ""
+    rotate: int = 0  # clockwise degrees applied after cropping: 0, 90, 180 or 270
 
     def __post_init__(self) -> None:
         # The HTML refers to a figure as src="fig:ID"; some models repeat that prefix in the id.
         self.id = self.id.removeprefix("fig:")
+        self.rotate = normalize_rotation(self.rotate)
+
+
+def normalize_rotation(value: object) -> int:
+    """A rotation in degrees as one of 0, 90, 180, 270 (clockwise); anything unreadable is 0."""
+    try:
+        return round(float(value) / 90) % 4 * 90  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0
 
 
 @dataclass

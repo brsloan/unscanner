@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import re
 
+from .document import normalize_rotation
+
 # Why the work is being done. Models weigh this context heavily: a bare "transcribe this book page
 # word for word" is the pattern copyright classifiers key on, while the same request from a library's
 # accessibility service, with the legal basis stated, is a routine OCR job. Keep it truthful; edit it
@@ -195,7 +197,7 @@ def normalize_result(data: dict) -> dict:
         else:
             bbox = None
         figs.append({"id": str(f.get("id", "")), "alt": str(f.get("alt", "")), "bbox": bbox,
-                     "caption": str(f.get("caption", ""))})
+                     "caption": str(f.get("caption", "")), "rotate": normalize_rotation(f.get("rotate", 0))})
     return {
         "label": label,
         "skip": bool(data.get("skip", False)),

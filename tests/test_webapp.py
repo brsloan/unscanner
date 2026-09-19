@@ -128,6 +128,34 @@ def test_figures_survive_editor_saves_and_can_be_previewed(client, tmp_path):
     assert 'src="figures/p001-1-1.png"' in client.get(f"/api/documents/{doc_id}/preview").text
 
 
+def test_figure_rotation_is_previewed_stored_and_built(client, tmp_path):
+    import io
+
+    from PIL import Image
+
+    def size(png: bytes) -> tuple[int, int]:
+        return Image.open(io.BytesIO(png)).size
+
+    pdf = make_pdf(tmp_path / "rot sample.pdf")
+    doc_id = client.post("/api/documents", json={"pdf_path": str(pdf)}).json()["doc_id"]
+    html = '<figure><img src="fig:1-1" alt="A wide box."></figure><p>Text here for the page.</p>'
+    fig = {"id": "1-1", "alt": "A wide box.", "bbox": [100, 100, 500, 200], "caption": ""}
+    client.put(f"/api/documents/{doc_id}/pages/1", json={"html": html, "figures": [fig]})
+    url = f"/api/documents/{doc_id}/pages/1/figure/1-1"
+    w, h = size(client.get(url).content)
+    assert w > h
+    # the live preview turns an unsaved crop; a save stores the rotation (normalized to a quarter turn)
+    assert size(client.get(url, params={"bbox": "100,100,500,200", "rotate": 90}).content) == (h, w)
+    r = client.put(f"/api/documents/{doc_id}/pages/1", json={"html": html, "version": 1,
+                                                             "figures": [{**fig, "rotate": -90}]})
+    assert r.status_code == 200
+    assert client.get(f"/api/documents/{doc_id}/pages/1").json()["figures"][0]["rotate"] == 270
+    assert size(client.get(url).content) == (h, w)
+    client.post(f"/api/documents/{doc_id}/build")
+    built = client.get(f"/api/documents/{doc_id}/figures/p001-1-1.png")
+    assert size(built.content) == (h, w)
+
+
 def test_figure_alt_autofill_and_layout_classes(client, tmp_path, monkeypatch):
     class DescribingBackend(FakeBackend):
         def describe_image(self, image_png, prompt):
