@@ -155,7 +155,65 @@ def merge_continuation(prev_section, cur_section, marker) -> bool:
     marker.tail = lead.lstrip() if not joiner else lead
     for child in list(first):
         last.append(child)
+    _carry_list_items(last, first)
     _remove_and_prune(first, cur_section)
+    return True
+
+
+def _carry_list_items(last, first) -> None:
+    """After a list item split by the page break is joined, the items that follow it on the new page
+    belong to the same list: move them over, so an <ol> keeps counting instead of restarting at 1.
+    The same is done one level up while both sides are still inside matching lists (nested lists)."""
+    while last is not None and first is not None and last.tag == "li" and first.tag == "li":
+        prev_list, cur_list = last.getparent(), first.getparent()
+        if prev_list.tag != cur_list.tag or prev_list.tag not in {"ol", "ul"}:
+            return
+        for item in list(first.itersiblings()):
+            prev_list.append(item)
+        last, first = prev_list.getparent(), cur_list.getparent()
+
+
+def _ol_start(ol) -> int:
+    try:
+        return int(ol.get("start") or 1)
+    except ValueError:
+        return 1
+
+
+def _closing_block(main):
+    """The last block of the pages assembled so far, looking past the page's footnotes."""
+    for el in reversed(main):
+        if not (el.tag == "aside" and el.get("role") == "doc-footnote"):
+            return el
+    return None
+
+
+def merge_continued_list(main, section, marker, where: str, warnings: list[str]) -> bool:
+    """Join a numbered list that carries on over a page break that falls between two items.
+
+    The new page says so itself: it opens with an <ol start="N"> where N is the number after the last
+    item of the <ol> closing the previous page. Its items move into that list and the inline `marker`
+    goes at the head of the first of them. Numbers that do not line up leave the lists apart."""
+    prev = _closing_block(main)
+    cur = section[0] if len(section) and not (section.text or "").strip() else None
+    if prev is None or cur is None or prev.tag != "ol" or cur.tag != "ol" or cur.get("start") is None:
+        return False
+    items = [c for c in cur if c.tag == "li"]
+    if not items or (prev.get("type") or "1") != (cur.get("type") or "1"):
+        return False
+    expected = _ol_start(prev) + sum(1 for c in prev if c.tag == "li")
+    if _ol_start(cur) != expected:
+        warnings.append(f"{where}: numbered list starts at {_ol_start(cur)} but the previous page's list "
+                        f"ends at {expected - 1}; the two lists were not joined")
+        return False
+    host = items[0]
+    if not (host.text or "").strip() and len(host) and host[0].tag == "p":
+        host = host[0]  # an item made of paragraphs: the marker sits inside the first one
+    marker.tail, host.text = host.text, None
+    host.insert(0, marker)
+    for child in list(cur):
+        prev.append(child)
+    section.remove(cur)
     return True
 
 
@@ -311,6 +369,9 @@ def assemble(doc: Document, out_dir: str | Path | None = None) -> Assembled:
         if prev_page is not None and prev_page.ends_mid_paragraph and page.starts_mid_paragraph:
             # The previous page's blocks are the trailing children of <main>.
             merged = merge_continuation(main, section, make_marker(pid, label, inline=True))
+        if not merged and prev_page is not None:
+            merged = merge_continued_list(main, section, make_marker(pid, label, inline=True),
+                                          f"page {page.index}", warnings)
         if not merged:
             main.append(make_marker(pid, label, inline=False))
         if section.text and section.text.strip():  # bare text before the first element

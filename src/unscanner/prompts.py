@@ -60,6 +60,13 @@ HTML RULES
 - Italics -> <em>; bold -> <strong>; titles of works may use <cite>.
 - Block quotations (indented or smaller type) -> <blockquote>. Lists -> ul/ol. Verse -> a <p> with <br>
   between lines.
+- A numbered list in the body text does not have its numbers typed as text: the <ol> supplies them
+  (pages of endnotes, below, are the exception). When the page opens
+  partway through a numbered list begun on the previous page, it is still an <ol>, with start set to
+  the first number that belongs on this page: <ol start="4"> when the first item printed here is 4.
+  When the page opens in the middle of item 3, the rest of that item is the first <li> of
+  <ol start="3"> and starts_mid_paragraph is true. Lists lettered a, b, c or i, ii, iii use
+  type="a" / type="i" (capitals: "A" / "I"); start is always a number (start="3" for c or iii).
 - Footnote/endnote reference numbers in the text -> <sup><a href="#fn-LABEL-N" id="fnref-LABEL-N"
   role="doc-noteref">N</a></sup> where LABEL is the page label (or the word "page" plus the PDF page
   index if there is no label) and N the note number.

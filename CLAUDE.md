@@ -69,6 +69,11 @@ accessibility term and stays.
   a box over the table on the scan). `POST /api/documents/{id}/pages/{n}/table` sends only that crop to
   the configured model with `TABLE_PROMPT` from `prompts.py` (keep its table rules in step with
   `GUIDELINES`) and returns a sanitized `<table>`; nothing is stored until the person saves the page.
+- A numbered list that runs over a page break: the new page's list is `<ol start="N">` (the editor's
+  `n.` button; the sanitizer keeps only `start` and `type` on an `<ol>`). `assemble.py` makes one list
+  of the two: `_carry_list_items` when the break falls inside an item (the continuation flags are set,
+  so the item is joined first), `merge_continued_list` when it falls between items and `start` is the
+  previous list's next number. Numbers that do not line up leave two lists and a build warning.
 - Output look: `CSS` in `assemble.py` (shared by HTML and EPUB).
 - New validation rule: add to `validate_html` in `validate.py` and cover it in `tests/`.
 - New UI feature: `web/app.js` talks only to `/api/...` routes in `webapp.py`. Keep it vanilla JS.

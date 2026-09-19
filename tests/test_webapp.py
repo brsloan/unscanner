@@ -40,6 +40,9 @@ def test_sanitize_normalizes_editor_output():
     assert sanitize_fragment('<p class="align-right" style="text-align:right">x</p>') == '<p class="align-right">x</p>'
     # ...and on table cells (a <th> is centered by browsers, so Left is an explicit align-left there)
     assert sanitize_fragment('<table><tr><th scope="row" class="align-left big">a</th><td class="align-right" style="x">1</td></tr></table>') ==         '<table><tr><th scope="row" class="align-left">a</th><td class="align-right">1</td></tr></table>'
+    # a numbered list continued from the previous page keeps its start; junk values do not survive
+    assert sanitize_fragment('<ol start="4" type="a" reversed><li>x</li></ol>') == '<ol start="4" type="a"><li>x</li></ol>'
+    assert sanitize_fragment('<ol start="iv" type="disc"><li>x</li></ol><ul start="2"><li>y</li></ul>') ==         '<ol><li>x</li></ol><ul><li>y</li></ul>'
 
 
 def test_sanitize_drops_source_view_indentation():

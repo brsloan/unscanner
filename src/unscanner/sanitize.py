@@ -7,6 +7,8 @@ become paragraphs, inline styles and classes disappear.
 
 from __future__ import annotations
 
+import re
+
 from lxml import etree, html as lhtml
 
 ALLOWED_TAGS = {
@@ -23,6 +25,7 @@ TAG_ATTRS = {
     "img": {"src", "alt"},
     "figure": {"class"},
     "p": {"class"},
+    "ol": {"start", "type"},  # a list continued from the previous page starts at its printed number
     **{h: {"class"} for h in ("h1", "h2", "h3", "h4", "h5", "h6")},  # align-center for headings centered in print
     "th": {"scope", "colspan", "rowspan", "class"},  # alignment, as on paragraphs
     "td": {"colspan", "rowspan", "class"},
@@ -36,6 +39,11 @@ DROP = {"script", "style", "link", "meta", "iframe", "object", "embed", "form", 
 BLOCKS = {"h1", "h2", "h3", "h4", "h5", "h6", "p", "ul", "ol", "li", "blockquote", "table", "figure", "dl",
           "pre", "hr", "aside", "section", "div"}
 MATH_TAGS_PREFIX = ("m",)  # MathML children (mi, mo, mn, mrow, msup, ...) are kept inside <math>
+OL_TYPES = {"1", "a", "A", "i", "I"}
+
+
+def _is_int(value: str | None) -> bool:
+    return re.fullmatch(r"-?[0-9]+", value or "") is not None
 
 
 def _inside_math(el) -> bool:
@@ -96,6 +104,11 @@ def sanitize_fragment(fragment: str) -> str:
                 el.set("class", " ".join(keep))
             else:
                 del el.attrib["class"]
+        if tag == "ol":
+            if "start" in el.attrib and not _is_int(el.get("start")):
+                del el.attrib["start"]
+            if "type" in el.attrib and el.get("type") not in OL_TYPES:
+                del el.attrib["type"]
         if tag == "a" and el.get("href", "").lower().startswith(("javascript:", "data:")):
             del el.attrib["href"]
         if tag == "img" and el.get("alt") is None:

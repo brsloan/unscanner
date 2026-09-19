@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pymupdf
 import pytest
+from lxml import html as lhtml
 
 from unscanner.assemble import assemble
 from unscanner.backends.base import Backend
@@ -283,3 +284,41 @@ def test_fatal_error_cancels_the_queue(doc, monkeypatch):
     with pytest.raises(PermissionError):
         transcribe_pages(doc, Slow(), [1, 2, 3], workers=1)
     assert len(calls) < 3
+
+
+def _pages(doc, *pages):
+    """Store (label, html, starts_mid, ends_mid) on the document's pages, as if transcribed."""
+    for page, (label, html, starts, ends) in zip(doc.pages, pages):
+        page.label, page.html, page.status = label, html, "needs_review"
+        page.starts_mid_paragraph, page.ends_mid_paragraph = starts, ends
+    return doc
+
+
+def test_numbered_list_split_inside_an_item_keeps_counting(doc):
+    _pages(doc,
+           ("1", "<h1>T</h1><ol><li>one</li><li>two</li><li>three starts</li></ol>", False, True),
+           ("2", '<ol start="3"><li>and ends</li><li>four</li></ol><p>After.</p>', True, False),
+           ("3", "<p>End.</p>", False, False))
+    a = assemble(doc)
+    html = lhtml.tostring(a.main, encoding="unicode")  # just the content, not the page-list <ol>
+    assert html.count("<ol") == 1 and "start=" not in html
+    assert '<li>three starts <span role="doc-pagebreak" id="pg-2"' in html
+    assert html.index("and ends</li><li>four</li></ol>") < html.index("<p>After.</p>")
+    assert html.count('role="doc-pagebreak"') == 3 and not a.warnings
+
+
+def test_numbered_list_split_between_items_is_joined_by_its_start(doc):
+    _pages(doc,
+           ("1", '<h1>T</h1><ol type="a"><li>one</li><li>two</li></ol>'
+                 '<aside role="doc-footnote" id="fn-1-1"><p>1. Note.</p></aside>', False, False),
+           ("2", '<ol type="a" start="3"><li>three</li><li>four</li></ol>', False, False),
+           ("3", '<ol type="a" start="9"><li>unrelated</li></ol>', False, False))
+    a = assemble(doc)
+    html = lhtml.tostring(a.main, encoding="unicode")  # just the content, not the page-list <ol>
+    assert '<li>two</li><li><span role="doc-pagebreak" id="pg-2"' in html
+    assert html.index("<li>four</li></ol>") < html.index("doc-footnote")
+    # page 3's numbers do not follow on: it stays a list of its own, keeps its start, and is reported
+    assert '<ol type="a" start="9">' in html and html.count("<ol") == 2
+    assert html.count('role="doc-pagebreak"') == 3
+    assert [w for w in a.warnings if w.startswith("page 3:") and "not joined" in w]
+    assert not [i for i in validate_html(a.html()) if i.severity == "error"]

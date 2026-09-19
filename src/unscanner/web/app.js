@@ -1232,6 +1232,21 @@ $("#fig-ai").addEventListener("click", async () => {
   } catch (e) { setStatus("AI autofill failed: " + e.message, true); }
   finally { $("#fig-ai").disabled = false; }
 });
+// A numbered list continued from the previous page starts at its printed number (the number of the
+// item the page opens in the middle of, if it does); the build joins the two lists.
+$("#btn-list-start").addEventListener("click", () => {
+  const sel = window.getSelection();
+  const node = sel && sel.rangeCount ? sel.anchorNode : null;
+  const el = node && (node.nodeType === 1 ? node : node.parentElement);
+  const list = el && el.closest("ol, ul");
+  if (!list || list.tagName !== "OL" || !$("#editor").contains(list)) { setStatus("Put the caret in a numbered list first.", true); return; }
+  const answer = prompt("Number of the first item of this list on this page (3 for c or iii):", list.getAttribute("start") || "1");
+  if (answer === null) return;
+  if (!/^\s*-?\d+\s*$/.test(answer)) { setStatus("The start must be a whole number.", true); return; }
+  const n = parseInt(answer, 10);
+  if (n === 1) list.removeAttribute("start"); else list.setAttribute("start", n);
+  markDirty();
+});
 $("#btn-lang").addEventListener("click", () => {
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed) { setStatus("Select the foreign-language text first.", true); return; }
