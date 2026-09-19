@@ -1295,6 +1295,12 @@ document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); savePage(false, false, true); }
   if (e.altKey && e.key === "ArrowLeft") { e.preventDefault(); $("#btn-prev").click(); }
   if (e.altKey && e.key === "ArrowRight") { e.preventDefault(); $("#btn-next").click(); }
+  // F2 = Approve & next: one left-hand key that types nothing into the editor (and, not being a
+  // character key, needs no off switch under WCAG 2.1.4). A held key approves only one page.
+  if (e.key === "F2" && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+    e.preventDefault();
+    if (!e.repeat) $("#btn-approve-next").click();  // a disabled button ignores the click
+  }
 });
 window.addEventListener("beforeunload", () => storeDraftNow());  // drafts survive a reload
 

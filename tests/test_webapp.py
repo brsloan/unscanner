@@ -68,6 +68,9 @@ def test_open_edit_build_validate(client, tmp_path):
     # the toolbar's symbol dropdown offers the fractions OCR tends to confuse, and app.js handles it
     assert 'id="symbol-picker"' in client.get("/").text and "<option>¼</option>" in client.get("/").text
     assert "#symbol-picker" in client.get("/static/app.js").text
+    # F2 is Approve & next, and the button says so to sighted and screen reader users
+    assert 'aria-keyshortcuts="F2"' in client.get("/").text
+    assert 'e.key === "F2"' in client.get("/static/app.js").text
     # the UI code is revalidated on every load, so a restart picks up changes to it
     assert client.get("/").headers["cache-control"] == "no-cache"
     assert client.get("/static/app.js").headers["cache-control"] == "no-cache"
