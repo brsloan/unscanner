@@ -72,6 +72,32 @@ def test_open_and_state(doc, tmp_path):
     assert parse_page_range("2", 3) == [2]
 
 
+def test_document_follows_a_renamed_project_folder(tmp_path):
+    old = tmp_path / "old-name"
+    (old / "pdfs").mkdir(parents=True)
+    pdf = make_pdf(old / "pdfs" / "sample book.pdf")
+    doc = new_document(pdf, old / "work", title="Sample Book")
+    name = Path(doc.workdir).name
+    new = tmp_path / "new-name"
+    old.rename(new)
+
+    moved = Document.load(new / "work" / name)
+    assert Path(moved.workdir) == (new / "work" / name).resolve()
+    assert Path(moved.source) == (new / "pdfs" / "sample book.pdf").resolve()
+    moved.save()
+    assert not old.exists()  # saving must not recreate the old folder
+    assert json.loads((new / "work" / name / "doc.json").read_text(encoding="utf-8"))["workdir"] == moved.workdir
+
+
+def test_document_keeps_a_pdf_that_did_not_move(tmp_path):
+    (tmp_path / "elsewhere").mkdir()
+    pdf = make_pdf(tmp_path / "elsewhere" / "sample book.pdf")
+    doc = new_document(pdf, tmp_path / "a" / "work")
+    name = Path(doc.workdir).name
+    (tmp_path / "a").rename(tmp_path / "b")
+    assert Document.load(tmp_path / "b" / "work" / name).source == doc.source
+
+
 def test_transcribe_build_validate(doc, tmp_path):
     summary = transcribe_pages(doc, FakeBackend(), [1, 2, 3], workers=2)
     assert summary["done"] == 3 and summary["errors"] == 0

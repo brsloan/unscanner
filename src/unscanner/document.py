@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import ntpath
+import posixpath
 import re
 import unicodedata
 from dataclasses import asdict, dataclass, field
@@ -91,7 +93,26 @@ class Document:
         p = Path(workdir) / STATE_FILE
         data = json.loads(p.read_text(encoding="utf-8"))
         pages = [Page.from_dict(pd) for pd in data.pop("pages", [])]
-        return Document(pages=pages, **data)
+        doc = Document(pages=pages, **data)
+        doc._follow_move(Path(workdir).resolve())
+        return doc
+
+    def _follow_move(self, actual: Path) -> None:
+        """The stored paths are absolute. When the project folder was renamed, moved or copied to
+        another machine, trust the folder the state was loaded from, and look for the PDF at the same
+        place relative to it (so `pdfs/x.pdf` and `work/_inbox/x.pdf` are found again)."""
+        stored = self.workdir
+        self.workdir = str(actual)
+        if not stored or Path(stored) == actual or Path(self.source).exists():
+            return
+        flavour = ntpath if "\\" in stored else posixpath
+        try:
+            rel = flavour.relpath(self.source, stored)
+        except ValueError:  # different drives
+            return
+        moved = (actual / Path(*re.split(r"[\\/]", rel))).resolve()
+        if moved.exists():
+            self.source = str(moved)
 
     @staticmethod
     def exists(workdir: str | Path) -> bool:

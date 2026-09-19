@@ -8,7 +8,7 @@ changes small, plain, and covered by tests.
 
 | File | Role |
 |---|---|
-| `src/unscanner/document.py` | on-disk state: `work/<doc>/doc.json`, one `Page` record per PDF page |
+| `src/unscanner/document.py` | on-disk state: `work/<doc>/doc.json`, one `Page` record per PDF page. The stored `workdir`/`source` are absolute; `Document.load` re-points them when the project folder was renamed or moved |
 | `src/unscanner/pdf.py` | render pages, text layer, RapidOCR fallback, figure cropping |
 | `src/unscanner/prompts.py` | **the transcription contract** (`GUIDELINES`), JSON schema, result normalization |
 | `src/unscanner/backends/` | model backends: `anthropic_backend.py` (Claude API), `openai_compat.py` (Ollama/vLLM/etc.) |
