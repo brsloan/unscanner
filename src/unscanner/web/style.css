@@ -28,7 +28,7 @@ button:focus-visible, a:focus-visible, [contenteditable]:focus-visible, .gutter:
 
 /* ---- three resizable panels */
 .layout { display: flex; flex: 1; min-height: 0; }
-.sidebar { width: var(--sidebar-w); min-width: 90px; flex: none; border-right: 0; padding: 0.35em; overflow: auto; background: var(--panel); display: flex; flex-direction: column; gap: 0.3em; }
+.sidebar { width: var(--sidebar-w); min-width: 90px; flex: none; border-right: 0; padding: 0.35em; overflow: hidden; background: var(--panel); display: flex; flex-direction: column; gap: 0.3em; }
 .sidebar select { width: 100%; font-size: 0.9em; }
 .doc-meta { font-size: 0.8em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .review-filter { font-size: 0.8em; white-space: nowrap; }
@@ -37,8 +37,9 @@ button:focus-visible, a:focus-visible, [contenteditable]:focus-visible, .gutter:
 body.dragging { cursor: col-resize; user-select: none; }
 body.dragging iframe, body.dragging img { pointer-events: none; }
 
-/* padding-right keeps the page labels clear of an overlay scrollbar, which widens on hover */
-.page-list { list-style: none; margin: 0; padding: 0 12px 0 0; font-size: 0.9em; }
+/* Only the page list scrolls, so the document picker and filter above it stay in view.
+   padding-right keeps the page labels clear of an overlay scrollbar, which widens on hover */
+.page-list { list-style: none; margin: 0; padding: 0 12px 0 0; font-size: 0.9em; flex: 1; min-height: 0; overflow: auto; }
 .page-list li { display: flex; align-items: center; gap: 0.35em; padding: 0.12em 0.3em; border-radius: 3px; cursor: pointer; white-space: nowrap; }
 .page-list li:hover { background: var(--sel); }
 .page-list li[aria-current="true"] { background: var(--sel); font-weight: 600; }
