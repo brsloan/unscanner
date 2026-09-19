@@ -826,9 +826,10 @@ function tidyAfterCommand() {
   // Moving a node drops the selection out of it; the text nodes themselves survive, so put it back.
   if (at && at[0].isConnected && at[2].isConnected) sel.setBaseAndExtent(...at);
 }
-document.querySelectorAll("[data-cmd]").forEach((b) => b.addEventListener("click", () => {
-  $("#editor").focus(); document.execCommand(b.dataset.cmd, false, null); tidyAfterCommand(); markDirty(); updateBlockStyle();
-}));
+function runCommand(cmd) {
+  $("#editor").focus(); document.execCommand(cmd, false, null); tidyAfterCommand(); markDirty(); updateBlockStyle();
+}
+document.querySelectorAll("[data-cmd]").forEach((b) => b.addEventListener("click", () => runCommand(b.dataset.cmd)));
 
 // The block-style dropdown shows the element type at the caret and converts the block when changed.
 // A list item reports its list, and text inside a block quote or footnote reports that container,
@@ -860,8 +861,8 @@ function updateBlockStyle() {
 }
 document.addEventListener("selectionchange", updateBlockStyle);
 
-$("#block-style").addEventListener("change", (e) => {
-  const target = e.target.value;
+$("#block-style").addEventListener("change", (e) => setBlockKind(e.target.value));
+function setBlockKind(target) {
   $("#editor").focus();  // brings back the editor selection the dropdown took focus from
   const from = currentBlockKind();
   if (["caption", "figcaption", "dt", "figure"].includes(from)) {
@@ -878,6 +879,24 @@ $("#block-style").addEventListener("change", (e) => {
     document.execCommand("formatBlock", false, target);
   }
   tidyAfterCommand(); markDirty(); updateBlockStyle();
+}
+
+/* Word-processor shortcuts, routed through the same code as the toolbar so the result is tidied and the
+   page marked dirty. e.code, not e.key, so Ctrl+Shift+7 is the 7 key whatever it types shifted. AltGr
+   arrives as Ctrl+Alt on Windows and types characters on many layouts, so it is left alone. Ctrl+U is
+   swallowed: underline is not in the output vocabulary and would vanish on save. */
+const EDITOR_KEYS = {
+  "c:KeyB": () => runCommand("bold"), "c:KeyI": () => runCommand("italic"), "c:KeyU": () => {},
+  "cs:Equal": () => runCommand("superscript"), "c:Equal": () => runCommand("subscript"),
+  "cs:Digit7": () => setBlockKind("ol"), "cs:Digit8": () => setBlockKind("ul"),
+  "ca:Digit0": () => setBlockKind("p"),
+  ...Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [`ca:Digit${n}`, () => setBlockKind(`h${n}`)])),
+  "c:Backslash": () => runCommand("removeFormat"),
+};
+$("#editor").addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.getModifierState("AltGraph")) return;
+  const run = EDITOR_KEYS[`c${e.shiftKey ? "s" : ""}${e.altKey ? "a" : ""}:${e.code}`];
+  if (run) { e.preventDefault(); run(); }
 });
 
 // The symbol dropdown types the chosen character at the caret (over the selection, if any), in the

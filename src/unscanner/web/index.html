@@ -86,7 +86,7 @@
       <!-- Shows the element type at the caret; choosing another type converts the block. The disabled
            options are display-only: types that are shown but cannot be made from here. -->
       <select id="block-style" aria-label="Element type of the text at the caret; choose another to change it"
-              title="Element type of the text at the caret; choose another to change it">
+              title="Element type of the text at the caret; choose another to change it (Ctrl+Alt+1 to 6 for a heading, Ctrl+Alt+0 for a paragraph)">
         <option value="p">Paragraph</option>
         <option value="h1">Heading 1</option>
         <option value="h2">Heading 2</option>
@@ -109,11 +109,11 @@
         <option value="mixed" disabled>Mixed</option>
         <option value="" disabled>—</option>
       </select>
-      <button type="button" data-cmd="bold" title="Strong (Ctrl+B)"><strong>B</strong></button>
-      <button type="button" data-cmd="italic" title="Emphasis (Ctrl+I)"><em>I</em></button>
-      <button type="button" data-cmd="superscript" title="Superscript">x<sup>2</sup></button>
-      <button type="button" data-cmd="insertUnorderedList" title="Bullet list">•</button>
-      <button type="button" data-cmd="insertOrderedList" title="Numbered list">1.</button>
+      <button type="button" data-cmd="bold" title="Strong (Ctrl+B)" aria-keyshortcuts="Control+B"><strong>B</strong></button>
+      <button type="button" data-cmd="italic" title="Emphasis (Ctrl+I)" aria-keyshortcuts="Control+I"><em>I</em></button>
+      <button type="button" data-cmd="superscript" title="Superscript (Ctrl+Shift+=; Ctrl+= for subscript)" aria-keyshortcuts="Control+Shift+=">x<sup>2</sup></button>
+      <button type="button" data-cmd="insertUnorderedList" title="Bullet list (Ctrl+Shift+8)" aria-keyshortcuts="Control+Shift+8">•</button>
+      <button type="button" data-cmd="insertOrderedList" title="Numbered list (Ctrl+Shift+7)" aria-keyshortcuts="Control+Shift+7">1.</button>
       <button type="button" id="btn-list-start" title="Set the number this numbered list starts at, for a list continued from the previous page" aria-label="Numbered list: start at">n.</button>
       <span class="btn-group" role="group" aria-label="Text alignment">
         <button type="button" data-align="" aria-pressed="false" title="Align left (the default)" aria-label="Align left"><svg class="align-icon" viewBox="0 0 14 12" width="14" height="12" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M1 1.5h12M1 4.5h7M1 7.5h12M1 10.5h7"/></svg></button>
@@ -142,7 +142,7 @@
         </optgroup>
       </select>
       <button type="button" id="btn-lang"title="Mark selection as another language">Lang</button>
-      <button type="button" data-cmd="removeFormat" title="Clear formatting">Clear</button>
+      <button type="button" data-cmd="removeFormat" title="Clear formatting (Ctrl+\)" aria-keyshortcuts="Control+\">Clear</button>
       <span class="spacer"></span>
       <label title="Edit the HTML source"><input type="checkbox" id="toggle-source"> Source</label>
       <label title="Show the OCR draft text"><input type="checkbox" id="toggle-draft"> Draft</label>
