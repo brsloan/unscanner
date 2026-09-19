@@ -883,7 +883,9 @@ function selectedAlignBlocks() {
   if (!sel || !sel.rangeCount || !ed.contains(sel.anchorNode)) return [];
   const range = sel.getRangeAt(0);
   if (!sel.isCollapsed) {
-    const hit = [...ed.querySelectorAll(ALIGNABLE)].filter((b) => range.intersectsNode(b));
+    // Every range, not just the first: Firefox selects dragged-over table cells as one range per cell.
+    const ranges = Array.from({ length: sel.rangeCount }, (_, i) => sel.getRangeAt(i));
+    const hit = [...ed.querySelectorAll(ALIGNABLE)].filter((b) => ranges.some((r) => r.intersectsNode(b)));
     if (hit.length) return hit;
   }
   const node = range.startContainer;
