@@ -894,7 +894,47 @@ const EDITOR_KEYS = {
   "c:Backslash": () => runCommand("removeFormat"),
   "cs:KeyK": () => toggleSmallCaps(),
 };
+/* A table that ends (or starts) the page leaves nowhere to put the caret below (above) it. Arrow down
+   or right from the end of its last cell, or up or left from the start of its first, makes a paragraph
+   there. With something already on that side the browser moves the caret itself. An empty paragraph
+   left behind is dropped on save. insertHTML keeps it on the undo stack. */
+function escapeTable(e) {
+  const forward = e.key === "ArrowDown" || e.key === "ArrowRight";
+  const sel = window.getSelection();
+  if (!sel || !sel.isCollapsed || !sel.rangeCount) return;
+  const ed = $("#editor");
+  const range = sel.getRangeAt(0);
+  const node = range.startContainer;
+  const cell = (node.nodeType === 1 ? node : node.parentElement).closest("td, th");
+  const table = cell && cell.closest("table");
+  if (!table || !ed.contains(table)) return;
+  const cells = table.querySelectorAll("td, th");
+  if (cell !== cells[forward ? cells.length - 1 : 0]) return;
+  let top = table;  // becomes the editor's child holding the table
+  for (let box = table; box !== ed; box = box.parentElement) {
+    // anything but whitespace on that side, at any level up to the editor: the browser can go there
+    for (let n = forward ? box.nextSibling : box.previousSibling; n; n = forward ? n.nextSibling : n.previousSibling) {
+      if (n.nodeType === 1 || n.textContent.trim()) return;
+    }
+    top = box;
+  }
+  const rest = document.createRange();  // from the caret to that end of the cell
+  rest.selectNodeContents(cell);
+  if (forward) rest.setStart(range.endContainer, range.endOffset);
+  else rest.setEnd(range.startContainer, range.startOffset);
+  if (rest.toString().trim() || rest.cloneContents().querySelector("img")) return;
+  e.preventDefault();
+  const at = document.createRange();
+  if (forward) at.setStartAfter(top); else at.setStartBefore(top);
+  at.collapse(true);
+  sel.removeAllRanges(); sel.addRange(at);
+  document.execCommand("insertHTML", false, "<p><br></p>");
+  const p = forward ? top.nextElementSibling : top.previousElementSibling;
+  if (p && p.tagName === "P") { at.selectNodeContents(p); at.collapse(true); sel.removeAllRanges(); sel.addRange(at); }
+  markDirty(); updateBlockStyle();
+}
 $("#editor").addEventListener("keydown", (e) => {
+  if (e.key.startsWith("Arrow") && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) { escapeTable(e); return; }
   if (!(e.ctrlKey || e.metaKey) || e.getModifierState("AltGraph")) return;
   const run = EDITOR_KEYS[`c${e.shiftKey ? "s" : ""}${e.altKey ? "a" : ""}:${e.code}`];
   if (run) { e.preventDefault(); run(); }

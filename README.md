@@ -93,7 +93,9 @@ amber needs review, grey not transcribed, red error) and review pages opened fir
   the editor, click **+Table**, and drag a box over the table on the scan. The configured model
   re-reads just that region as a `<table>`, which replaces the selection (with no selection it goes in
   after the caret's paragraph). Check it against the scan; Ctrl+Z takes it out again, and nothing is
-  stored until you Save. Click +Table a second time to cancel the draw.
+  stored until you Save. Click +Table a second time to cancel the draw. When a table is the last
+  thing on the page, arrow down (or right) from the end of its last cell starts a paragraph below it;
+  arrow up (or left) from the start of its first cell does the same above a table that opens the page.
 - **Editing and approval**: unsaved edits are kept per page in the browser, so you can move between
   pages freely and come back; pages with unsaved edits show a pencil in the page list. **Save** in the
   top bar (Ctrl+S) is document-level: it writes every page with unsaved edits without approving

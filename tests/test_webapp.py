@@ -74,6 +74,8 @@ def test_open_edit_build_validate(client, tmp_path):
     # F2 is Approve & next, and the button says so to sighted and screen reader users
     assert 'aria-keyshortcuts="F2"' in client.get("/").text
     assert 'e.key === "F2"' in client.get("/static/app.js").text
+    # arrow keys get the caret out of a table that ends or starts the page
+    assert "function escapeTable(e)" in client.get("/static/app.js").text
     # the UI code is revalidated on every load, so a restart picks up changes to it
     assert client.get("/").headers["cache-control"] == "no-cache"
     assert client.get("/static/app.js").headers["cache-control"] == "no-cache"
