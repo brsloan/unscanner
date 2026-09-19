@@ -230,6 +230,18 @@ async def test_mcp_server_roundtrip(tmp_path, monkeypatch):
         assert not errors, errors
 
 
+def test_coverage_counts_compact_table_cells_as_separate_words(doc):
+    # an election-results page: cells with no whitespace between the tags must not run together
+    names = ["Smith", "Jones", "Brown", "Clark", "Adams", "Baker", "Evans", "Green"]
+    rows = "".join(f'<tr><th scope="row">{n}</th><td>1,{400 + i}</td><td>{60 + i}</td></tr>'
+                   for i, n in enumerate(names))
+    p = doc.page(1)
+    p.status = "needs_review"
+    p.html = f'<table><tr><th scope="col">Name</th><th scope="col">Votes</th><th scope="col">Majority</th></tr>{rows}</table>'
+    p.draft_text = "Name Votes Majority\n" + "\n".join(f"{n} 1,{400 + i} {60 + i}" for i, n in enumerate(names))
+    assert not [i for i in coverage(doc) if i.location == "page 1"]
+
+
 def test_page_load_failure_is_a_page_error(doc, monkeypatch):
     import unscanner.pipeline as pl
 

@@ -126,7 +126,8 @@ def coverage(doc: Document, low: float = 0.6, high: float = 1.6, min_words: int 
             continue
         dw = _words(p.draft_text)
         try:
-            hw = _words(lhtml.fragment_fromstring(p.html or "<p></p>", create_parent="div").text_content())
+            # join text pieces with spaces: text_content() runs adjacent cells together ("Doe1,44360")
+            hw = _words(" ".join(lhtml.fragment_fromstring(p.html or "<p></p>", create_parent="div").itertext()))
         except Exception:  # noqa: BLE001 - malformed html is reported separately
             hw = _words(re.sub(r"<[^>]+>", " ", p.html))
         if dw >= min_words:
