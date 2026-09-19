@@ -31,6 +31,7 @@ button:focus-visible, a:focus-visible, [contenteditable]:focus-visible, .gutter:
 .sidebar { width: var(--sidebar-w); min-width: 90px; flex: none; border-right: 0; padding: 0.35em; overflow: auto; background: var(--panel); display: flex; flex-direction: column; gap: 0.3em; }
 .sidebar select { width: 100%; font-size: 0.9em; }
 .doc-meta { font-size: 0.8em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.review-filter { font-size: 0.8em; white-space: nowrap; }
 .gutter { width: 5px; flex: none; cursor: col-resize; background: var(--line); opacity: 0.6; }
 .gutter:hover, .gutter.dragging { opacity: 1; background: var(--accent); }
 body.dragging { cursor: col-resize; user-select: none; }

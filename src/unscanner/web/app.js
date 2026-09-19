@@ -491,11 +491,27 @@ function whoLabel(p) {
   return p.changed_by === "claude" ? "C" : "M";
 }
 
+/* "needs work only": the page list, Approve & next and the page arrows use only pages not yet
+   approved (needs review, not transcribed, error). The current page stays listed so approving it
+   does not pull it out from under you. */
+const reviewFilterOn = () => $("#filter-review").checked;
+const needsWork = (p) => p.status !== "done";
+function listedPages() {
+  const pages = state.doc ? state.doc.pages : [];
+  return reviewFilterOn() ? pages.filter((p) => needsWork(p) || p.index === state.page) : pages;
+}
+/* The next (step 1) or previous (step -1) page to go to from page n, or null. */
+function neighbourPage(n, step) {
+  if (!reviewFilterOn()) { const m = n + step; return m >= 1 && m <= state.doc.page_count ? m : null; }
+  const todo = state.doc.pages.filter((p) => needsWork(p) && p.index !== n).map((p) => p.index);
+  return (step > 0 ? todo.find((i) => i > n) : todo.reverse().find((i) => i < n)) ?? null;
+}
+
 function renderPages() {
   const list = $("#page-list");
   if (!state.doc) { list.innerHTML = ""; return; }
   const drafts = docDrafts();
-  list.innerHTML = state.doc.pages.map((p) => {
+  list.innerHTML = listedPages().map((p) => {
     const who = whoLabel(p);
     const hasDraft = !!drafts[p.index] || (p.index === state.page && state.dirty);
     const title = `PDF page ${p.index}${p.label ? ", printed " + p.label : ""}: ${statusLabel(p.status)}${p.skip ? " (skipped)" : ""}` +
@@ -550,6 +566,8 @@ async function loadPage(n, opts = {}) {
   updateNotesUI();
   ["#btn-approve", "#btn-approve-next"].forEach((b) => ($(b).disabled = false));
   renderPages(); renderMeta();
+  // Keep the current page visible in the list (on app open and when paging with the buttons).
+  $(`#page-list li[data-page="${n}"]`)?.scrollIntoView({ block: "nearest" });
   if (!opts.silent) {
     const who = d.changed_by && d.changed_by !== "editor" ? ` · last changed by ${d.changed_by}` : "";
     setStatus(`Page ${n}: ${statusLabel(d.status)}${who}${d.notes ? " · has notes" : ""}${draft ? " · restored unsaved edits" : ""}`);
@@ -686,7 +704,11 @@ async function savePage(andNext = false, overwrite = false, approve = false) {
     renderPages(); renderMeta();
     setStatus(`${approve ? "Approved" : "Saved"} page ${n} (${saved.words} words)`);
     reportView();
-    if (andNext && n < state.doc.page_count) loadPage(n + 1);
+    if (andNext) {
+      const next = neighbourPage(n, 1);
+      if (next) loadPage(next);
+      else if (reviewFilterOn()) setStatus(`Approved page ${n}. No pages after it still need work.`);
+    }
   } catch (e) {
     if (e.status === 409) {
       showBanner(e.message,
@@ -1148,8 +1170,14 @@ $("#toggle-draft").addEventListener("change", (e) => {
 $("#btn-approve").addEventListener("click", () => savePage(false, false, true));
 $("#btn-approve-next").addEventListener("click", () => savePage(true, false, true));
 $("#btn-save-all").addEventListener("click", saveAll);
-$("#btn-prev").addEventListener("click", () => state.page > 1 && loadPage(state.page - 1));
-$("#btn-next").addEventListener("click", () => state.doc && state.page < state.doc.page_count && loadPage(state.page + 1));
+$("#btn-prev").addEventListener("click", () => { const m = state.doc && state.page && neighbourPage(state.page, -1); if (m) loadPage(m); });
+$("#btn-next").addEventListener("click", () => { const m = state.doc && state.page && neighbourPage(state.page, 1); if (m) loadPage(m); });
+try { $("#filter-review").checked = localStorage.getItem("unscanner.filterReview") === "1"; } catch (_) { /* storage disabled */ }
+$("#filter-review").addEventListener("change", () => {
+  try { localStorage.setItem("unscanner.filterReview", reviewFilterOn() ? "1" : "0"); } catch (_) { /* storage disabled */ }
+  renderPages();
+  $(`#page-list li[data-page="${state.page}"]`)?.scrollIntoView({ block: "nearest" });
+});
 $("#page-list").addEventListener("click", (e) => { const li = e.target.closest("li[data-page]"); if (li) loadPage(+li.dataset.page); });
 $("#doc-select").addEventListener("change", (e) => openDoc(e.target.value));
 document.addEventListener("keydown", (e) => {
