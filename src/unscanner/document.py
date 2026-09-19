@@ -6,9 +6,14 @@ import json
 import ntpath
 import posixpath
 import re
+import time
 import unicodedata
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import TypeVar
+
+T = TypeVar("T")
 
 STATE_FILE = "doc.json"
 
@@ -17,6 +22,23 @@ def slugify(text: str) -> str:
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
     text = re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-").lower()
     return text[:80] or "document"
+
+
+def _retry_locked(action: Callable[[], T], attempts: int = 20, delay: float = 0.05) -> T:
+    """Run a file operation, waiting out a brief lock.
+
+    On Windows, replacing or reading doc.json fails with PermissionError while another reader has
+    it open: a second request, the MCP server process, a virus scanner or the search indexer. Such
+    locks last milliseconds, so try again for about a second before giving up.
+    """
+    for attempt in range(attempts):
+        try:
+            return action()
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(delay)
+    raise AssertionError("unreachable")
 
 
 @dataclass
@@ -86,12 +108,12 @@ class Document:
         data = asdict(self)
         tmp = self.state_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(self.state_path)
+        _retry_locked(lambda: tmp.replace(self.state_path))
 
     @staticmethod
     def load(workdir: str | Path) -> "Document":
         p = Path(workdir) / STATE_FILE
-        data = json.loads(p.read_text(encoding="utf-8"))
+        data = json.loads(_retry_locked(lambda: p.read_text(encoding="utf-8")))
         pages = [Page.from_dict(pd) for pd in data.pop("pages", [])]
         doc = Document(pages=pages, **data)
         doc._follow_move(Path(workdir).resolve())

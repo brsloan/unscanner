@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from .document import _retry_locked
+
 FILE = "session.json"
 
 
@@ -36,7 +38,7 @@ class Session:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(self.path)
+        _retry_locked(lambda: tmp.replace(self.path))
 
     def update_view(self, doc_id: str, page: int, label: str | None = None, selection: str = "",
                     dirty: bool = False) -> dict[str, Any]:
