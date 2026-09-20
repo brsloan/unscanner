@@ -77,6 +77,12 @@ def cmd_transcribe(args) -> None:
     print(json.dumps(summary, indent=1))
 
 
+def built_html(out_dir: Path) -> Path | None:
+    """The HTML file of the last build: `<title>.html`, the only .html file a build leaves in the folder."""
+    files = sorted(out_dir.glob("*.html"), key=lambda f: f.stat().st_mtime)
+    return files[-1] if files else None
+
+
 def _build(doc: Document, out_root: str, epub: bool = True) -> dict:
     from .assemble import assemble, export_style, image_options, load_export_settings
     from .epub import build_epub
@@ -87,7 +93,11 @@ def _build(doc: Document, out_root: str, epub: bool = True) -> dict:
     # Export section of the UI's settings.
     settings = load_export_settings(Path(doc.workdir).parent)
     a = assemble(doc, out_dir, image_options(settings))
-    html_path = out_dir / "index.html"
+    # Named after the title, like the EPUB, so the file says what it is once it leaves this folder.
+    html_path = out_dir / (slugify(doc.title) + ".html")
+    for old in out_dir.glob("*.html"):  # an earlier build's index.html, or the file of a former title
+        if old != html_path:
+            old.unlink()
     html_path.write_text(a.html(export_style("html", settings)), encoding="utf-8")
     result = {"html": str(html_path), "figures": len(a.figures), "warnings": a.warnings}
     if epub:
@@ -107,9 +117,9 @@ def _validate(doc: Document, out_root: str, run_epubcheck: bool = True) -> dict:
     from .validate import coverage, epubcheck, validate_html
 
     out_dir = Path(out_root) / slugify(Path(doc.source).stem)
-    html_path = out_dir / "index.html"
+    html_path = built_html(out_dir)
     issues = []
-    if html_path.exists():
+    if html_path:
         issues += validate_html(html_path.read_text(encoding="utf-8"))
         if not export_style("html", load_export_settings(Path(doc.workdir).parent)).page_numbers:
             issues = [i for i in issues if i.code != "no-pagebreaks"]  # left out on purpose

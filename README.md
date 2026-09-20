@@ -41,7 +41,7 @@ unscanner run "pdfs/HIST 101 Harbor Towns.pdf" --title "Harbor Towns of the Nort
 unscanner open  pdfs/x.pdf --title "..." --author "..."
 unscanner transcribe pdfs/x.pdf --pages 1-10 --backend anthropic --model claude-sonnet-5 --effort low
 unscanner transcribe pdfs/x.pdf --backend openai --model qwen3.6:27b      # Ollama at localhost:11434
-unscanner build pdfs/x.pdf            # out/<doc>/index.html + out/<doc>/<title>.epub
+unscanner build pdfs/x.pdf            # out/<doc>/<title>.html + out/<doc>/<title>.epub
 unscanner validate pdfs/x.pdf         # HTML checks + coverage check + epubcheck
 unscanner status pdfs/x.pdf
 unscanner page pdfs/x.pdf 7           # print the stored HTML for page 7
@@ -183,7 +183,7 @@ Tools:
 | `get_page(doc_id, page)` | page image + OCR draft + neighbours' edges + any stored HTML |
 | `set_page(doc_id, page, html, label, starts_mid_paragraph, ends_mid_paragraph, skip, notes, figures)` | store a page |
 | `transcribe_pages(doc_id, pages, backend, model, force)` | batch-run a model backend over pages |
-| `build(doc_id)` | write `index.html` and the EPUB |
+| `build(doc_id)` | write `<title>.html` and the EPUB |
 | `validate(doc_id)` | structural HTML checks, per-page coverage check, epubcheck |
 | `get_output_html(doc_id)` | read back the assembled HTML |
 
@@ -197,7 +197,7 @@ to answer "here is a page image and a draft, return corrected HTML as JSON".
 
 ## What the output looks like
 
-- One `index.html` per document: `<main>` with h1..h6, p, lists, tables with `<th scope>`,
+- One `<title>.html` per document: `<main>` with h1..h6, p, lists, tables with `<th scope>`,
   `<blockquote>`, `<figure>` with alt text (cropped out of the scan when the model gives a
   bounding box), footnotes as `<aside role="doc-footnote">` linked from `role="doc-noteref"`.
 - Every scanned page starts with a marker: `<div role="doc-pagebreak" id="pg-81" aria-label="Page 81">81</div>`.
@@ -244,7 +244,7 @@ an accommodation, a human should still spot-check the flagged pages against the 
 ## Not done yet
 
 - **Tagged PDF output.** HTML and EPUB were the priority. If PDF/UA is required later, the cleanest
-  route is to generate a new PDF from `index.html` with a PDF/UA-capable HTML renderer; the scan's
+  route is to generate a new PDF from the built HTML with a PDF/UA-capable HTML renderer; the scan's
   appearance is not preserved in that route.
 - **Endnote linking across pages.** Footnotes on the same page are linked; references to endnotes at
   the end of a chapter are kept as plain superscripts.

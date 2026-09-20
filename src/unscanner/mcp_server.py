@@ -264,7 +264,7 @@ def transcribe_pages(doc_id: str, pages: str = "all", backend: str | None = None
 
 @server.tool()
 def build(doc_id: str, epub: bool = True) -> dict[str, Any]:
-    """Assemble all transcribed pages into out/<doc>/index.html (and an EPUB 3 with page-list navigation).
+    """Assemble all transcribed pages into out/<doc>/<title>.html (and an EPUB 3 with page-list navigation).
     Returns output paths and assembler warnings (e.g. pages not yet transcribed, duplicate ids)."""
     from .cli import _build
 
@@ -287,8 +287,10 @@ def validate(doc_id: str, epubcheck: bool = True) -> dict[str, Any]:
 @server.tool()
 def get_output_html(doc_id: str, max_chars: int = 200000) -> str:
     """Return the assembled HTML from the last build (truncated to max_chars) for review."""
-    p = _out_root() / slugify(Path(_load(doc_id).source).stem) / "index.html"
-    if not p.exists():
+    from .cli import built_html
+
+    p = built_html(_out_root() / slugify(Path(_load(doc_id).source).stem))
+    if not p:
         raise ToolError("no build yet; call build first")
     return p.read_text(encoding="utf-8")[:max_chars]
 

@@ -81,7 +81,7 @@ accessibility term and stays.
   plus `html_embed_images` and `html_bookmarks` in `work/settings.json` (the Export section of the UI Settings dialog). `cli._build` reads them for
   every build (UI, CLI, MCP) and hands each writer an `ExportStyle`. Page numbers off is the one allowed
   exception to invariant 1: `without_page_markers` takes the markers out of a copy for that format only.
-  `html_embed_images` (on by default) makes `index.html` one self-contained file: `with_embedded_images`
+  `html_embed_images` (on by default) makes the HTML (`<title>.html`, named like the EPUB; `cli.built_html` finds it) one self-contained file: `with_embedded_images`
   puts each figure in a copy of `<main>` as a `data:` URI, so the file opens with a double-click or uploads to
   an LMS without its `figures/` folder. The folder is still written (the EPUB and the UI read it), and stored
   page HTML never holds a `data:` URI.

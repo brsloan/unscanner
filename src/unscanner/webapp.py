@@ -237,7 +237,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         return HTMLResponse((WEB_DIR / "index.html").read_text(encoding="utf-8"),
                             headers={"Cache-Control": "no-cache"})
 
-    # Pages without the <link rel="icon"> (a built index.html, the API) make browsers ask for this.
+    # Pages without the <link rel="icon"> (a built document, the API) make browsers ask for this.
     @app.get("/favicon.ico", include_in_schema=False)
     def favicon() -> FileResponse:
         return FileResponse(WEB_DIR / "favicon.svg", media_type="image/svg+xml")
@@ -637,11 +637,17 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
     def _out_dir(doc: Document) -> Path:
         return out_root / slugify(Path(doc.source).stem)
 
+    def _built_html(doc_id: str) -> Path:
+        from .cli import built_html
+
+        p = built_html(_out_dir(load_doc(doc_id)))
+        if not p:
+            raise HTTPException(404, "no build yet")
+        return p
+
     @app.get("/api/documents/{doc_id}/output/html")
     def output_html(doc_id: str):
-        p = _out_dir(load_doc(doc_id)) / "index.html"
-        if not p.exists():
-            raise HTTPException(404, "no build yet")
+        p = _built_html(doc_id)
         return FileResponse(p, media_type="text/html", filename=p.name)
 
     @app.get("/api/documents/{doc_id}/output/epub")
@@ -653,9 +659,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
 
     @app.get("/api/documents/{doc_id}/preview", response_class=HTMLResponse)
     def preview(doc_id: str) -> str:
-        p = _out_dir(load_doc(doc_id)) / "index.html"
-        if not p.exists():
-            raise HTTPException(404, "no build yet")
+        p = _built_html(doc_id)
         return p.read_text(encoding="utf-8")
 
     @app.get("/api/documents/{doc_id}/figures/{name}")

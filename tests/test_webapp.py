@@ -372,6 +372,14 @@ def test_document_properties(client, tmp_path):
     from pathlib import Path
     out = Path(html).read_text(encoding="utf-8")
     assert '<html lang="fr-CA">' in out and "<title>New Title</title>" in out
+    # the file is named after the title, and a build leaves no file from a former title behind
+    assert Path(html).name == "new-title.html"
+    r = client.get(f"/api/documents/{doc_id}/output/html")
+    assert r.status_code == 200 and "new-title.html" in r.headers["content-disposition"]
+    client.put(f"/api/documents/{doc_id}/properties", json={"title": "Newer", "language": "en"})
+    html = client.post(f"/api/documents/{doc_id}/build").json()["html"]
+    assert [f.name for f in Path(html).parent.glob("*.html")] == ["newer.html"]
+    assert "<title>Newer</title>" in client.get(f"/api/documents/{doc_id}/preview").text
 
 
 def test_page_diff_reports_dropped_and_invented_words(client, tmp_path):
