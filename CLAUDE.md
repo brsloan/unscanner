@@ -110,6 +110,10 @@ accessibility term and stays.
   every version is bumped (invariant 7). Skip and Don't skip never change the status (people skip pages just to
   build part of a document, and the record of what is approved must survive that); a page with no HTML cannot
   be approved and stays `pending`. The UI moves a draft made from the replaced version on to the new one, so unsaved edits still save.
+- Which pages the Pages tab lists: the `#filter-pages` dropdown (All pages, Needs work, Has figures, Has tables).
+  A filter is one predicate in `PAGE_FILTERS` in `app.js`; the page list, Approve & next and the page arrows all
+  go by it, and the page being shown always stays listed. `has_figures` / `has_tables` come from `page_view` in
+  `webapp.py`. The choice is kept in `unscanner.pageFilter` (the old checkbox's `unscanner.filterReview` is read once).
 - New validation rule: add to `validate_html` in `validate.py` and cover it in `tests/`.
 - New UI feature: `web/app.js` talks only to `/api/...` routes in `webapp.py`. Keep it vanilla JS.
 

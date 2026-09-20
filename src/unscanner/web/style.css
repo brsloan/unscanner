@@ -31,7 +31,8 @@ button:focus-visible, a:focus-visible, [contenteditable]:focus-visible, .gutter:
 .layout { display: flex; flex: 1; min-height: 0; }
 .sidebar { width: var(--sidebar-w); min-width: 90px; flex: none; border-right: 0; padding: 0.35em; overflow: hidden; background: var(--panel); display: flex; flex-direction: column; gap: 0.3em; }
 .doc-meta { font-size: 0.8em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.review-filter { font-size: 0.8em; white-space: nowrap; }
+.review-filter { font-size: 0.8em; white-space: nowrap; display: flex; align-items: center; gap: 0.3em; flex: none; }
+.review-filter select { font: inherit; flex: 1; min-width: 0; }
 /* Pages / Headings: two tabs over one panel area, so the sidebar shows either the page list or the
    document's heading outline. */
 .side-tabs { display: flex; gap: 0.2em; flex: none; }

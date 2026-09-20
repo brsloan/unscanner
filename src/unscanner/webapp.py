@@ -188,6 +188,8 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
     def page_view(p) -> dict[str, Any]:
         return {"index": p.index, "label": p.label, "status": p.status, "skip": p.skip,
                 "words": len((p.html or "").split()), "notes": p.notes,
+                # for the page list's "Has figures" / "Has tables" filters
+                "has_figures": "<img" in (p.html or ""), "has_tables": "<table" in (p.html or ""),
                 "starts_mid_paragraph": p.starts_mid_paragraph, "ends_mid_paragraph": p.ends_mid_paragraph,
                 "version": p.version, "changed_by": p.changed_by, "updated_at": p.updated_at}
 

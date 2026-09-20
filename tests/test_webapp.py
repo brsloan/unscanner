@@ -149,6 +149,12 @@ def test_bulk_skip_approve_and_flag(client, tmp_path):
     # Approve: the transcribed page is approved, the empty one stays "not transcribed".
     by_index = {p["index"]: p for p in bulk([1, 2], "approve").json()["pages"]}
     assert (by_index[1]["status"], by_index[2]["status"]) == ("done", "pending")
+    # What the page list's "Has figures" / "Has tables" filters go by.
+    assert (by_index[1]["has_figures"], by_index[1]["has_tables"], by_index[2]["has_figures"]) == (True, False, False)
+    client.put(f"/api/documents/{doc_id}/pages/2", json={"html": "<table><tr><td>1</td></tr></table>"})
+    listed = client.get(f"/api/documents/{doc_id}").json()["pages"]
+    assert (listed[1]["has_tables"], listed[1]["has_figures"]) == (True, False)
+    client.put(f"/api/documents/{doc_id}/pages/2", json={"html": ""})
     # The content is untouched, and the version moved on so an editor holding version 1 gets a 409.
     page = client.get(f"/api/documents/{doc_id}/pages/1").json()
     assert (page["html"], page["label"], page["notes"], page["version"]) == (sanitize_fragment(html), "37", "check", 2)

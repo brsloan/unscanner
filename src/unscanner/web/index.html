@@ -36,7 +36,14 @@
     </div>
     <div id="doc-meta" class="doc-meta"></div>
     <div id="panel-pages" class="side-panel" role="tabpanel" aria-labelledby="tab-pages">
-      <label class="review-filter" title="List only pages not yet approved (needs review, not transcribed, or error); Approve &amp; next and the arrows then step through those pages"><input id="filter-review" type="checkbox"> needs work only</label>
+      <label class="review-filter" title="Choose which pages to list; Approve &amp; next and the arrows then step through those pages. Needs work: pages not yet approved (needs review, not transcribed, or error)">Show
+        <select id="filter-pages">
+          <option value="all">All pages</option>
+          <option value="work">Needs work</option>
+          <option value="figures">Has figures</option>
+          <option value="tables">Has tables</option>
+        </select>
+      </label>
       <ol id="page-list" class="page-list" aria-label="Pages" title="Ctrl+click or Shift+click to select several pages; right-click for skip, approve and needs review"></ol>
       <div id="page-menu" class="page-menu" role="menu" aria-labelledby="page-menu-title" hidden>
         <div id="page-menu-title" class="page-menu-title"></div>

@@ -503,19 +503,24 @@ function whoLabel(p) {
   return p.changed_by === "claude" ? "C" : "M";
 }
 
-/* "needs work only": the page list, Approve & next and the page arrows use only pages not yet
-   approved (needs review, not transcribed, error). The current page stays listed so approving it
-   does not pull it out from under you. */
-const reviewFilterOn = () => $("#filter-review").checked;
-const needsWork = (p) => p.status !== "done";
+/* The page filter: the page list, Approve & next and the page arrows use only the pages it lets
+   through. "Needs work" is pages not yet approved (needs review, not transcribed, error). The
+   current page stays listed so approving it does not pull it out from under you. */
+const PAGE_FILTERS = {
+  work: (p) => p.status !== "done",
+  figures: (p) => p.has_figures,
+  tables: (p) => p.has_tables,
+};
+const pageFilter = () => PAGE_FILTERS[$("#filter-pages").value] || null;
 function listedPages() {
-  const pages = state.doc ? state.doc.pages : [];
-  return reviewFilterOn() ? pages.filter((p) => needsWork(p) || p.index === state.page) : pages;
+  const pages = state.doc ? state.doc.pages : [], keep = pageFilter();
+  return keep ? pages.filter((p) => keep(p) || p.index === state.page) : pages;
 }
 /* The next (step 1) or previous (step -1) page to go to from page n, or null. */
 function neighbourPage(n, step) {
-  if (!reviewFilterOn()) { const m = n + step; return m >= 1 && m <= state.doc.page_count ? m : null; }
-  const todo = state.doc.pages.filter((p) => needsWork(p) && p.index !== n).map((p) => p.index);
+  const keep = pageFilter();
+  if (!keep) { const m = n + step; return m >= 1 && m <= state.doc.page_count ? m : null; }
+  const todo = state.doc.pages.filter((p) => keep(p) && p.index !== n).map((p) => p.index);
   return (step > 0 ? todo.find((i) => i > n) : todo.reverse().find((i) => i < n)) ?? null;
 }
 
@@ -826,7 +831,7 @@ async function savePage(andNext = false, overwrite = false, approve = false) {
     if (andNext) {
       const next = neighbourPage(n, 1);
       if (next) loadPage(next);
-      else if (reviewFilterOn()) setStatus(`Approved page ${n}. No pages after it still need work.`);
+      else if (pageFilter()) setStatus(`Approved page ${n}. No pages after it ${$("#filter-pages").value === "work" ? "still need work" : "match the page filter"}.`);
     }
   } catch (e) {
     if (e.status === 409) {
@@ -1501,9 +1506,13 @@ $("#btn-approve-next").addEventListener("click", () => savePage(true, false, tru
 $("#btn-save-all").addEventListener("click", saveAll);
 $("#btn-prev").addEventListener("click", () => { const m = state.doc && state.page && neighbourPage(state.page, -1); if (m) loadPage(m); });
 $("#btn-next").addEventListener("click", () => { const m = state.doc && state.page && neighbourPage(state.page, 1); if (m) loadPage(m); });
-try { $("#filter-review").checked = localStorage.getItem("unscanner.filterReview") === "1"; } catch (_) { /* storage disabled */ }
-$("#filter-review").addEventListener("change", () => {
-  try { localStorage.setItem("unscanner.filterReview", reviewFilterOn() ? "1" : "0"); } catch (_) { /* storage disabled */ }
+/* unscanner.filterReview ("1") is the old "needs work only" checkbox's setting. */
+try {
+  const saved = localStorage.getItem("unscanner.pageFilter") || (localStorage.getItem("unscanner.filterReview") === "1" ? "work" : "all");
+  if (saved in PAGE_FILTERS) $("#filter-pages").value = saved;
+} catch (_) { /* storage disabled */ }
+$("#filter-pages").addEventListener("change", () => {
+  try { localStorage.setItem("unscanner.pageFilter", $("#filter-pages").value); localStorage.removeItem("unscanner.filterReview"); } catch (_) { /* storage disabled */ }
   renderPages();
   $(`#page-list li[data-page="${state.page}"]`)?.scrollIntoView({ block: "nearest" });
 });
