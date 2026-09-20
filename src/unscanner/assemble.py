@@ -24,9 +24,12 @@ TEXT_BLOCKS = {"p", "li", "dd", "dt", "h1", "h2", "h3", "h4", "h5", "h6"}
 CONTAINERS = {"blockquote", "ul", "ol", "section", "aside", "dl", "div"}
 HEADINGS = ["h1", "h2", "h3", "h4", "h5", "h6"]
 
+# Shared by the HTML and the EPUB writer. The 31em measure holds a line of about 66 characters in
+# Georgia (whose average character is 0.443em) and about 72 in the Times New Roman fallback; an em
+# measure rather than ch because Georgia's old-style figures make its ch 1.39 real characters wide.
 CSS = """
 :root { color-scheme: light dark; }
-body { max-width: 42em; margin: 2em auto; padding: 0 1em; font-family: Georgia, "Times New Roman", serif;
+body { max-width: 31em; margin: 2em auto; padding: 0 1em; font-family: Georgia, "Times New Roman", serif;
        font-size: 1.05rem; line-height: 1.55; }
 h1, h2, h3, h4, h5, h6 { font-family: system-ui, sans-serif; line-height: 1.25; }
 [role="doc-pagebreak"] { font-family: system-ui, sans-serif; font-size: 0.75em; color: #4a4a4a;
