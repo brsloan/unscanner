@@ -145,6 +145,29 @@ def crop_png(png: bytes, bbox: list[float], rotate: int = 0) -> bytes:
     return buf.getvalue()
 
 
+JPEG_QUALITY = 80  # figures cropped from a scan: no visible loss in a halftone, about a fifth of the PNG
+
+
+def compress_image(png: bytes, grayscale: bool = False, jpeg: bool = False) -> bytes:
+    """A figure crop re-encoded for a smaller export: without colour, as a JPEG, or both. With neither
+    the PNG comes back untouched."""
+    if not (grayscale or jpeg):
+        return png
+    from PIL import Image
+
+    im = Image.open(io.BytesIO(png))
+    if grayscale:
+        im = im.convert("L")
+    elif jpeg and im.mode not in ("L", "RGB"):
+        im = im.convert("RGB")  # JPEG has no palette and no transparency
+    buf = io.BytesIO()
+    if jpeg:
+        im.save(buf, format="JPEG", quality=JPEG_QUALITY, optimize=True)
+    else:
+        im.save(buf, format="PNG", optimize=True)
+    return buf.getvalue()
+
+
 def new_document(pdf_path: str | Path, work_root: str | Path, title: str = "", author: str = "",
                  language: str = "en") -> Document:
     """Create (or reopen) the work directory for a PDF and populate page records."""

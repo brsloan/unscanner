@@ -18,7 +18,7 @@ from pathlib import Path
 from lxml import etree, html as lhtml
 
 from .document import Document, Page, slugify
-from .pdf import cached_page_png, crop_png
+from .pdf import cached_page_png, compress_image, crop_png
 from .sanitize import ALLOWED_CLASSES
 
 TEXT_BLOCKS = {"p", "li", "dd", "dt", "h1", "h2", "h3", "h4", "h5", "h6"}
@@ -78,6 +78,8 @@ p, li, dd { text-align: justify; -webkit-hyphens: auto; hyphens: auto; }
 EXPORT_DEFAULTS: dict[str, bool] = {
     "html_indent": False, "html_justify": False, "html_page_numbers": True, "html_embed_images": True,
     "epub_indent": True, "epub_justify": False, "epub_page_numbers": True,
+    # The figure files are cropped once per build, so these two hold for both formats.
+    "images_grayscale": False, "images_jpeg": False,
 }
 
 
@@ -97,6 +99,26 @@ def export_style(fmt: str, settings: dict | None = None) -> ExportStyle:
     s = {**EXPORT_DEFAULTS, **{k: v for k, v in (settings or {}).items() if k in EXPORT_DEFAULTS}}
     return ExportStyle(bool(s[f"{fmt}_indent"]), bool(s[f"{fmt}_justify"]), bool(s[f"{fmt}_page_numbers"]),
                        bool(s.get(f"{fmt}_embed_images", False)))
+
+
+@dataclass
+class ImageOptions:
+    """How a build writes its figure files (smaller exports): see pdf.compress_image."""
+    grayscale: bool = False
+    jpeg: bool = False
+
+    @property
+    def suffix(self) -> str:
+        return ".jpg" if self.jpeg else ".png"
+
+
+def image_options(settings: dict | None = None) -> ImageOptions:
+    s = {**EXPORT_DEFAULTS, **(settings or {})}
+    return ImageOptions(bool(s["images_grayscale"]), bool(s["images_jpeg"]))
+
+
+def image_mime(name: str) -> str:
+    return "image/jpeg" if name.lower().endswith((".jpg", ".jpeg")) else "image/png"
 
 
 def load_export_settings(work_root: str | Path) -> dict:
@@ -347,7 +369,8 @@ def make_marker(page_id: str, label: str, inline: bool):
 # ---------------------------------------------------------------- figures
 
 def resolve_figures(doc: Document, page: Page, section, out_dir: Path, figures: dict[str, Path],
-                    warnings: list[str]) -> None:
+                    warnings: list[str], images: ImageOptions | None = None) -> None:
+    images = images or ImageOptions()
     by_id = {f.id: f for f in page.figures}
     for img in section.iter("img"):
         src = img.get("src", "")
@@ -355,10 +378,13 @@ def resolve_figures(doc: Document, page: Page, section, out_dir: Path, figures: 
         fig = by_id.get(fid)
         alt = img.get("alt") or (fig.alt if fig else "")
         if fig and fig.bbox and out_dir is not None:
-            name = f"p{page.index:03d}-{slugify(fid)}.png"
+            name = f"p{page.index:03d}-{slugify(fid)}{images.suffix}"
             path = out_dir / "figures" / name
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(crop_png(cached_page_png(doc, page.index).read_bytes(), fig.bbox, fig.rotate))
+            crop = crop_png(cached_page_png(doc, page.index).read_bytes(), fig.bbox, fig.rotate)
+            path.write_bytes(compress_image(crop, images.grayscale, images.jpeg))
+            # The same figure from a build in the other format would only be left lying in the folder.
+            path.with_suffix(".png" if images.jpeg else ".jpg").unlink(missing_ok=True)
             figures[name] = path
             img.set("src", f"figures/{name}")
             img.set("alt", alt)
@@ -491,7 +517,7 @@ def strip_disallowed(main, warnings: list[str]) -> None:
 
 # ---------------------------------------------------------------- main entry
 
-def assemble(doc: Document, out_dir: str | Path | None = None) -> Assembled:
+def assemble(doc: Document, out_dir: str | Path | None = None, images: ImageOptions | None = None) -> Assembled:
     out_dir = Path(out_dir) if out_dir is not None else None
     main = lhtml.Element("main")
     main.set("id", "content")
@@ -515,7 +541,7 @@ def assemble(doc: Document, out_dir: str | Path | None = None) -> Assembled:
         page_ids.append((pid, label))
 
         section = parse_fragment(page.html)
-        resolve_figures(doc, page, section, out_dir, figures, warnings)
+        resolve_figures(doc, page, section, out_dir, figures, warnings, images)
 
         merged = False
         if prev_page is not None and ((prev_page.ends_mid_paragraph and page.starts_mid_paragraph)
@@ -574,13 +600,14 @@ def with_embedded_images(main, figures: dict[str, Path]):
     figures/ folder. A figure whose file cannot be read keeps its path."""
     main = copy.deepcopy(main)
     for img in main.iter("img"):
-        path = figures.get((img.get("src") or "").removeprefix("figures/"))
+        name = (img.get("src") or "").removeprefix("figures/")
+        path = figures.get(name)
         try:
             data = path.read_bytes() if path else None
         except OSError:
             data = None
         if data:
-            img.set("src", "data:image/png;base64," + base64.b64encode(data).decode("ascii"))
+            img.set("src", f"data:{image_mime(name)};base64," + base64.b64encode(data).decode("ascii"))
     return main
 
 

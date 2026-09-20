@@ -78,14 +78,15 @@ def cmd_transcribe(args) -> None:
 
 
 def _build(doc: Document, out_root: str, epub: bool = True) -> dict:
-    from .assemble import assemble, export_style, load_export_settings
+    from .assemble import assemble, export_style, image_options, load_export_settings
     from .epub import build_epub
 
     out_dir = Path(out_root) / slugify(Path(doc.source).stem)
     out_dir.mkdir(parents=True, exist_ok=True)
-    a = assemble(doc, out_dir)
-    # Indent, justification and page numbers per format: the Export section of the UI's settings.
+    # Indent, justification and page numbers per format, and how the figure files are written: the
+    # Export section of the UI's settings.
     settings = load_export_settings(Path(doc.workdir).parent)
+    a = assemble(doc, out_dir, image_options(settings))
     html_path = out_dir / "index.html"
     html_path.write_text(a.html(export_style("html", settings)), encoding="utf-8")
     result = {"html": str(html_path), "figures": len(a.figures), "warnings": a.warnings}

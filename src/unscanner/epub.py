@@ -10,7 +10,7 @@ from pathlib import Path
 
 from lxml import etree, html as lhtml
 
-from .assemble import HEADINGS, Assembled, ExportStyle, export_style, heading_text, without_page_markers
+from .assemble import HEADINGS, Assembled, ExportStyle, export_style, heading_text, image_mime, without_page_markers
 
 XHTML_NS = "http://www.w3.org/1999/xhtml"
 EPUB_NS = "http://www.idpf.org/2007/ops"
@@ -240,7 +240,7 @@ def _package_opf(a: Assembled, book_id: str, modified: str, author: str, source:
         manifest.append(f'<item id="{cid}" href="{f}" media-type="application/xhtml+xml"{props}/>')
         spine.append(f'<itemref idref="{cid}"/>')
     for j, name in enumerate(a.figures):
-        manifest.append(f'<item id="img{j + 1}" href="figures/{_esc(name)}" media-type="image/png"/>')
+        manifest.append(f'<item id="img{j + 1}" href="figures/{_esc(name)}" media-type="{image_mime(name)}"/>')
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
         '<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid" '

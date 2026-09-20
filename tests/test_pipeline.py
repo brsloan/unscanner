@@ -131,6 +131,29 @@ def test_transcribe_build_validate(doc, tmp_path):
     issues = validate_html(single)
     assert not [i for i in issues if i.severity == "error"], [i.message for i in issues]
     assert all(len(i.location) < 200 for i in issues)  # never the base64 as a location
+
+    # Smaller images: grayscale and/or JPEG figure files, used by the HTML and the EPUB alike
+    import io
+    from PIL import Image
+    from unscanner.assemble import ImageOptions, image_options
+    assert image_options() == ImageOptions(False, False)
+    assert image_options({"images_grayscale": True, "images_jpeg": True}) == ImageOptions(True, True)
+    out2 = tmp_path / "out2"  # its own folder: a JPEG build clears the PNG the build above still uses
+    grey = assemble(doc, out2, ImageOptions(grayscale=True))
+    assert Image.open(grey.figures["p002-38-1.png"]).mode == "L"
+    small = assemble(doc, out2, ImageOptions(grayscale=True, jpeg=True))
+    jpg = out2 / "figures" / "p002-38-1.jpg"
+    assert list(small.figures) == ["p002-38-1.jpg"] and not (out2 / "figures" / "p002-38-1.png").exists()
+    im = Image.open(jpg)
+    assert (im.format, im.mode) == ("JPEG", "L")
+    assert Image.open(io.BytesIO(crop_bytes := base64.b64decode(crop))).size == im.size and crop_bytes
+    single = small.html(ExportStyle(embed_images=True))
+    assert 'src="data:image/jpeg;base64,' + base64.b64encode(jpg.read_bytes()).decode() in single
+    epub = build_epub(small, tmp_path / "small.epub")
+    with zipfile.ZipFile(epub) as z:
+        assert "OEBPS/figures/p002-38-1.jpg" in z.namelist()
+        assert 'href="figures/p002-38-1.jpg" media-type="image/jpeg"' in z.read("OEBPS/package.opf").decode()
+    assert Image.open(assemble(doc, out2, ImageOptions(jpeg=True)).figures["p002-38-1.jpg"]).mode == "RGB"
     cov = coverage(doc)
     assert not [i for i in cov if i.severity == "error"]
 

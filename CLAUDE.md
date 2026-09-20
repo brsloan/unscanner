@@ -85,6 +85,11 @@ accessibility term and stays.
   puts each figure in a copy of `<main>` as a `data:` URI, so the file opens with a double-click or uploads to
   an LMS without its `figures/` folder. The folder is still written (the EPUB and the UI read it), and stored
   page HTML never holds a `data:` URI.
+  `images_grayscale` and `images_jpeg` (both off by default) make the figure files smaller: `image_options`
+  hands `assemble` an `ImageOptions`, and `resolve_figures` re-encodes each crop with `pdf.compress_image`
+  (Pillow, `JPEG_QUALITY`). The figures are cropped once per build, so these hold for both formats; a JPEG
+  build names its files `.jpg` and `image_mime` gives the type to the EPUB manifest, the data URIs and the
+  figure route.
 - Words broken over a page edge: `knit_word` in `assemble.py` (called by `merge_continuation`) drops an
   end-of-line hyphen and keeps a true one, going by how the rest of the document spells the word
   (`document_words`). A page edge inside a hyphenated word joins the paragraphs even when the

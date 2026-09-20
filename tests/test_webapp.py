@@ -162,6 +162,18 @@ def test_figures_survive_editor_saves_and_can_be_previewed(client, tmp_path):
     client.put("/api/settings", json={"html_embed_images": False})
     client.post(f"/api/documents/{doc_id}/build")
     assert 'src="figures/p001-1-1.png"' in client.get(f"/api/documents/{doc_id}/preview").text
+    # Smaller images: the build writes grayscale JPEGs and the figure route serves them as such.
+    s = client.get("/api/settings").json()
+    assert (s["images_grayscale"], s["images_jpeg"]) == (False, False)
+    assert 'name="images_jpeg"' in client.get("/").text and '"images_grayscale"' in client.get("/static/app.js").text
+    client.put("/api/settings", json={"images_grayscale": True, "images_jpeg": True})
+    client.post(f"/api/documents/{doc_id}/build")
+    assert 'src="figures/p001-1-1.jpg"' in client.get(f"/api/documents/{doc_id}/preview").text
+    jpg = client.get(f"/api/documents/{doc_id}/figures/p001-1-1.jpg")
+    assert jpg.headers["content-type"] == "image/jpeg" and jpg.content[:2] == bytes([0xFF, 0xD8])
+    assert client.get(f"/api/documents/{doc_id}/figures/p001-1-1.png").status_code == 404
+    client.put("/api/settings", json={"images_grayscale": False, "images_jpeg": False})
+    client.post(f"/api/documents/{doc_id}/build")
 
 
 def test_figure_rotation_is_previewed_stored_and_built(client, tmp_path):

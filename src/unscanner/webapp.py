@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import keystore, project
-from .assemble import EXPORT_DEFAULTS, outline
+from .assemble import EXPORT_DEFAULTS, image_mime, outline
 from .backends.openai_compat import DEFAULT_MODEL as DEFAULT_OPENAI_MODEL
 from .document import Document, normalize_rotation, parse_page_range, slugify
 from .pdf import cached_page_png, cached_page_words, new_document
@@ -623,7 +623,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         p = _out_dir(load_doc(doc_id)) / "figures" / Path(name).name
         if not p.exists():
             raise HTTPException(404, "no such figure")
-        return FileResponse(p, media_type="image/png")
+        return FileResponse(p, media_type=image_mime(p.name))
 
     # ---------------------------------------------------------------- collaboration session
     @app.get("/api/session")
