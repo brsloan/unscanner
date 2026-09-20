@@ -402,6 +402,40 @@ def normalize_headings(main, title: str) -> None:
         prev = lvl
 
 
+def heading_text(el) -> str:
+    """A heading's text on one line.
+
+    A heading printed over two lines is usually written with a <br> between them, and dropping the
+    break runs the lines together ("Chapter IX.The Civil War"), so a break stands in as a space.
+    """
+    el = copy.deepcopy(el)
+    for br in el.iter("br"):
+        br.tail = " " + (br.tail or "")
+    return re.sub(r"\s+", " ", el.text_content()).strip()
+
+
+def outline(doc: Document) -> list[dict]:
+    """The document's headings in reading order, for the UI's Headings sidebar.
+
+    One entry per heading in a page's stored HTML, with the level as written (levels are only
+    normalized when the document is built, and this has to match what the editor shows). `nth` is
+    the heading's position among that page's headings, so clicking an entry can scroll the editor
+    to the right one. Skipped pages contribute nothing: they are left out of the output.
+    """
+    items: list[dict] = []
+    for page in doc.pages:
+        if page.skip or not page.html:
+            continue
+        nth = 0
+        for el in parse_fragment(page.html).iter():
+            if not isinstance(el.tag, str) or el.tag not in HEADINGS:
+                continue
+            items.append({"level": _level(el.tag), "text": heading_text(el), "page": page.index,
+                          "label": page.label, "nth": nth})
+            nth += 1
+    return items
+
+
 def assign_heading_ids(main) -> None:
     n = 0
     for el in main.iter():

@@ -10,6 +10,8 @@
 <a class="skip-link" href="#editor">Skip to editor</a>
 <header class="topbar">
   <h1>Unscanner</h1>
+  <label for="doc-select" class="visually-hidden">Document</label>
+  <select id="doc-select" title="The document being worked on"><option value="">— document —</option></select>
   <button id="btn-open" type="button">Open PDF…</button>
   <button id="btn-save-all" type="button" disabled title="Save every page with unsaved edits (Ctrl+S)">Save</button>
   <button id="btn-transcribe" type="button" disabled>Transcribe…</button>
@@ -27,12 +29,20 @@
 </header>
 
 <div class="layout" id="layout">
-  <nav class="sidebar" id="sidebar" aria-label="Documents and pages">
-    <label for="doc-select" class="visually-hidden">Document</label>
-    <select id="doc-select"><option value="">— document —</option></select>
+  <nav class="sidebar" id="sidebar" aria-label="Pages and headings">
+    <div class="side-tabs" role="tablist" aria-label="Sidebar view">
+      <button id="tab-pages" type="button" role="tab" aria-selected="true" aria-controls="panel-pages" title="List the PDF's pages">Pages</button>
+      <button id="tab-headings" type="button" role="tab" aria-selected="false" tabindex="-1" aria-controls="panel-headings" title="List the document's headings; click one to jump to its page">Headings</button>
+    </div>
     <div id="doc-meta" class="doc-meta"></div>
-    <label class="review-filter" title="List only pages not yet approved (needs review, not transcribed, or error); Approve &amp; next and the arrows then step through those pages"><input id="filter-review" type="checkbox"> needs work only</label>
-    <ol id="page-list" class="page-list" aria-label="Pages"></ol>
+    <div id="panel-pages" class="side-panel" role="tabpanel" aria-labelledby="tab-pages">
+      <label class="review-filter" title="List only pages not yet approved (needs review, not transcribed, or error); Approve &amp; next and the arrows then step through those pages"><input id="filter-review" type="checkbox"> needs work only</label>
+      <ol id="page-list" class="page-list" aria-label="Pages"></ol>
+    </div>
+    <div id="panel-headings" class="side-panel" role="tabpanel" aria-labelledby="tab-headings" hidden>
+      <p id="outline-empty" class="outline-empty">No headings yet. Headings you or the model write appear here once the page is saved.</p>
+      <ul id="outline" class="outline" aria-label="Headings"></ul>
+    </div>
   </nav>
   <div class="gutter" id="gutter-1" role="separator" aria-orientation="vertical" aria-label="Resize page list" tabindex="0"></div>
 

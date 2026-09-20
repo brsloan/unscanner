@@ -405,3 +405,28 @@ def test_continuation_is_never_taken_from_a_footnote_opening_the_new_page(doc):
     assert '<p>The sentence starts <span role="doc-pagebreak" id="pg-2"' in html and "</span>Body.</p>" in html
     assert '<aside role="doc-footnote" id="fn-2-1"><p>1. Note.</p></aside>' in html
     assert html.count('role="doc-pagebreak"') == 3
+
+
+def test_heading_over_two_lines_reads_as_one_line(tmp_path, doc):
+    """A <br> inside a heading is a printed line break, not a word boundary to swallow."""
+    from unscanner.assemble import heading_text
+    from lxml import html as lhtml
+
+    assert heading_text(lhtml.fragment_fromstring("<h2>Chapter IX.<br>The Civil War</h2>")) == \
+        "Chapter IX. The Civil War"
+    assert heading_text(lhtml.fragment_fromstring("<h2>Chapter\n  IX. <br/> The <em>Civil</em> War</h2>")) == \
+        "Chapter IX. The Civil War"
+
+    doc.page(1).html = "<h1>Sample Book</h1><p>a</p>"
+    doc.page(2).html = "<h2>Chapter IX.<br>The Civil War</h2><p>b</p>"
+    doc.page(3).html = "<p>c</p>"
+    for n, p in enumerate(doc.pages):
+        p.status, p.label = "done", str(10 + n)
+    a = assemble(doc, tmp_path / "out")
+    epub = build_epub(a, tmp_path / "lines.epub")
+    with zipfile.ZipFile(epub) as z:
+        nav = z.read("OEBPS/nav.xhtml").decode()
+        assert "Chapter IX. The Civil War" in nav and "IX.The" not in nav
+        # ...and in the chapter file's <title>, which comes from the same heading
+        assert any("<title>Chapter IX. The Civil War</title>" in z.read(n).decode()
+                   for n in z.namelist() if n.startswith("OEBPS/text/"))

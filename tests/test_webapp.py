@@ -319,3 +319,25 @@ def test_page_diff_reports_dropped_and_invented_words(client, tmp_path):
     assert [words[e["index"]] for e in d["editor"]] == ["wholly", "invented"]
     assert all(0 <= b["x0"] < b["x1"] <= 1000 for t in d["scan"] for b in t["boxes"])
     assert client.post(f"/api/documents/{doc_id}/pages/99/diff", json={"words": []}).status_code == 404
+
+
+def test_outline_lists_headings_for_the_headings_sidebar(client, tmp_path):
+    pdf = make_pdf(tmp_path / "outline sample.pdf")
+    doc_id = client.post("/api/documents", json={"pdf_path": str(pdf), "title": "Outline"}).json()["doc_id"]
+    client.put(f"/api/documents/{doc_id}/pages/1", json={
+        "html": "<h1>Chapter\n  One</h1><p>Text.</p><h2>A <em>first</em> part</h2><p>More.</p>", "label": "7"})
+    # a heading printed over two lines: the break has to read as a space, not run the lines together
+    client.put(f"/api/documents/{doc_id}/pages/2", json={
+        "html": "<h3>Chapter IX.<br>The Civil War</h3><p>Text.</p>", "label": "8"})
+    # a skipped page is left out of the output, so it is left out of the outline too
+    client.put(f"/api/documents/{doc_id}/pages/3", json={"html": "<h2>Front matter</h2>", "skip": True})
+    heads = client.get(f"/api/documents/{doc_id}/outline").json()["headings"]
+    assert [(h["level"], h["text"], h["page"], h["label"], h["nth"]) for h in heads] == [
+        (1, "Chapter One", 1, "7", 0),
+        (2, "A first part", 1, "7", 1),
+        (3, "Chapter IX. The Civil War", 2, "8", 0),
+    ]
+    # levels are as written, not the normalized ones the build produces
+    client.put(f"/api/documents/{doc_id}/pages/2", json={"html": "<h5>Deeper</h5>", "label": "8", "version": 1})
+    assert client.get(f"/api/documents/{doc_id}/outline").json()["headings"][2]["level"] == 5
+    assert client.get("/api/documents/nope/outline").status_code == 404

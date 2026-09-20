@@ -1,7 +1,7 @@
 :root {
   --bg: #fafafa; --fg: #1a1a1a; --muted: #555; --line: #c9c9c9; --panel: #fff; --accent: #1d4ed8;
   --ok: #15803d; --warn: #b45309; --err: #b91c1c; --pending: #6b7280; --sel: #dbeafe;
-  --sidebar-w: 150px; --image-w: 45%;
+  --sidebar-w: 180px; --image-w: 45%;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -25,13 +25,19 @@ button:focus-visible, a:focus-visible, [contenteditable]:focus-visible, .gutter:
 /* ---- top bar: one line, never wraps */
 .topbar { display: flex; align-items: center; gap: 0.35em; padding: 0.25em 0.6em; border-bottom: 1px solid var(--line); background: var(--panel); flex: none; overflow-x: auto; white-space: nowrap; }
 .topbar h1 { font-size: 1em; margin: 0 0.4em 0 0; }
+.topbar #doc-select { max-width: 16em; margin-right: 0.3em; }
 
 /* ---- three resizable panels */
 .layout { display: flex; flex: 1; min-height: 0; }
 .sidebar { width: var(--sidebar-w); min-width: 90px; flex: none; border-right: 0; padding: 0.35em; overflow: hidden; background: var(--panel); display: flex; flex-direction: column; gap: 0.3em; }
-.sidebar select { width: 100%; font-size: 0.9em; }
 .doc-meta { font-size: 0.8em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .review-filter { font-size: 0.8em; white-space: nowrap; }
+/* Pages / Headings: two tabs over one panel area, so the sidebar shows either the page list or the
+   document's heading outline. */
+.side-tabs { display: flex; gap: 0.2em; flex: none; }
+.side-tabs button { flex: 1; border-radius: 4px 4px 0 0; border-bottom-color: transparent; font-size: 0.9em; padding: 0.2em 0.3em; }
+.side-tabs button[aria-selected="true"] { background: var(--sel); border-color: var(--accent); font-weight: 600; }
+.side-panel { display: flex; flex-direction: column; gap: 0.3em; flex: 1; min-height: 0; }
 .gutter { width: 5px; flex: none; cursor: col-resize; background: var(--line); opacity: 0.6; }
 .gutter:hover, .gutter.dragging { opacity: 1; background: var(--accent); }
 body.dragging { cursor: col-resize; user-select: none; }
@@ -49,6 +55,29 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 .page-list .lbl { color: var(--muted); font-size: 0.85em; margin-left: auto; overflow: hidden; text-overflow: ellipsis; }
 .page-list .draft-mark { color: var(--warn); font-size: 0.85em; }
 .page-list .who { font-size: 0.75em; color: var(--accent); border: 1px solid var(--accent); border-radius: 3px; padding: 0 0.25em; line-height: 1.2; }
+
+/* Headings tab: a nested list of the document's headings, each a button that jumps to its page.
+   Nesting follows the heading levels as written; the level also sets the type size. */
+.outline { list-style: none; margin: 0; padding: 0 12px 0 0; font-size: 0.9em; flex: 1; min-height: 0; overflow: auto; }
+.outline ul { list-style: none; margin: 0; padding: 0 0 0 0.7em; border-left: 1px solid var(--line); }
+/* twisty and heading side by side; the heading's own children go on a row of their own below */
+.outline li { display: grid; grid-template-columns: 1.3em minmax(0, 1fr); align-items: center; }
+.outline li > ul { grid-column: 1 / -1; }
+.outline-twist, .outline-gap { width: 1.3em; flex: none; }
+/* the twisty fills the row's height so it is big enough to hit; the arrow itself stays small */
+.outline-twist { display: inline-flex; align-self: stretch; align-items: center; justify-content: center;
+  padding: 0; border: 0; border-radius: 3px; background: none; color: var(--muted); font-size: 0.85em; line-height: 1; }
+.outline-twist::before { content: "▸"; }  /* closed */
+.outline-twist[aria-expanded="true"]::before { content: "▾"; }  /* open */
+.outline-twist:hover { background: var(--sel); color: var(--fg); }
+.outline-item { display: flex; gap: 0.35em; align-items: baseline; width: 100%; text-align: left;
+  background: none; border: 0; border-radius: 3px; padding: 0.15em 0.3em; }
+.outline-item:hover { background: var(--sel); }
+.outline-item[aria-current="page"] { background: var(--sel); }
+.outline-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.outline-page { color: var(--muted); font-size: 0.85em; font-variant-numeric: tabular-nums; flex: none; }
+.outline > li > .outline-item .outline-text { font-weight: 600; }
+.outline-empty { font-size: 0.85em; color: var(--muted); margin: 0.4em 0.2em; white-space: normal; }
 
 .pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .pane-image { width: var(--image-w); min-width: 120px; flex: none; }

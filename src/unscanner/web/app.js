@@ -6,7 +6,8 @@
 
 const $ = (sel) => document.querySelector(sel);
 const state = { docs: [], doc: null, page: null, pageData: null, dirty: false, job: null, settings: null,
-  lastRequestAt: 0, lastSelection: "", polling: null, busy: 0, gen: 0 };
+  lastRequestAt: 0, lastSelection: "", polling: null, busy: 0, gen: 0,
+  outline: [], outlineKey: "", outlineHtml: "", outlineShownPage: null, collapsed: new Set() };
 /* busy counts page loads and saves in flight; gen changes when one starts or ends. poll() drops a
    document snapshot that overlapped either: a snapshot fetched before a save landed still has the
    old version and would look like someone else changed the page. */
@@ -415,6 +416,8 @@ async function loadDocs(selectId) {
 async function openDoc(docId, pageToShow) {
   storeDraftNow();  // keep unsaved edits of the page we are leaving, whatever document it belongs to
   if ($("#dlg-properties").open) $("#dlg-properties").close("cancel");  // it belongs to the document we are leaving
+  state.outline = []; state.outlineKey = ""; state.outlineShownPage = null;  // the outline belongs to
+  loadCollapsed(docId);                                                      // the document we are leaving
   if (!docId) { state.doc = null; renderPages(); return; }
   state.doc = await api(`/documents/${docId}`);
   localStorage.setItem("unscanner.lastDoc", docId);
@@ -516,7 +519,7 @@ function neighbourPage(n, step) {
 
 function renderPages() {
   const list = $("#page-list");
-  if (!state.doc) { list.innerHTML = ""; return; }
+  if (!state.doc) { list.innerHTML = ""; state.outline = []; state.outlineKey = ""; renderOutline(); return; }
   const drafts = docDrafts();
   list.innerHTML = listedPages().map((p) => {
     const who = whoLabel(p);
@@ -532,6 +535,113 @@ function renderPages() {
       <span class="visually-hidden">${statusLabel(p.status)}${hasDraft ? ", unsaved edits" : ""}</span>
     </li>`;
   }).join("");
+  refreshOutline();
+}
+
+// ------------------------------------------------------------------ headings tab: the document outline
+/* The headings come from the saved page HTML, so the outline is refetched whenever a page's stored
+   version changes — a save here, a transcription run, or an edit by Claude. This key says when that
+   happened without fetching to find out. */
+function outlineKey() {
+  return state.doc ? state.doc.doc_id + "|" + state.doc.pages.map((p) => `${p.version}${p.skip ? "s" : ""}`).join(",") : "";
+}
+let outlineFetching = false;
+function refreshOutline() {
+  if (!state.doc || $("#panel-headings").hidden) return;
+  const key = outlineKey();
+  if (key === state.outlineKey) { renderOutline(); return; }
+  if (outlineFetching) return;
+  outlineFetching = true;
+  api(`/documents/${state.doc.doc_id}/outline`).then((r) => {
+    state.outline = r.headings; state.outlineKey = key; renderOutline();
+  }).catch(() => { /* server briefly unavailable; the next change tries again */ })
+    .finally(() => { outlineFetching = false; });
+}
+
+/* The flat list of headings as a tree: a heading takes the deeper headings that follow it as its
+   children, so a level that skips a step (h2 straight to h4) still nests one step only. */
+function outlineTree(items) {
+  const root = { level: 0, children: [] };
+  const stack = [root];
+  for (const h of items) {
+    while (stack.length > 1 && h.level <= stack[stack.length - 1].level) stack.pop();
+    const node = { ...h, key: `${h.page}:${h.nth}`, children: [] };
+    stack[stack.length - 1].children.push(node);
+    stack.push(node);
+  }
+  return root.children;
+}
+
+/* Open every branch the page being shown sits in, so the highlighted heading is never buried in a
+   collapsed one. Only done when the page changes: collapsing a branch you are inside has to stick. */
+function revealPage(nodes, n) {
+  let found = false;
+  for (const node of nodes) {
+    const inside = revealPage(node.children, n);
+    if (inside) state.collapsed.delete(node.key);
+    if (inside || node.page === n) found = true;
+  }
+  return found;
+}
+
+/* One <li> per heading, children nested inside their parent's <li>, so the list reads as an outline
+   both on screen and to a screen reader. A heading with children gets a twisty that closes them. */
+function renderOutline() {
+  const root = $("#outline");
+  const tree = outlineTree(state.outline);
+  if (state.outline.length && state.outlineShownPage !== state.page) {
+    state.outlineShownPage = state.page;
+    revealPage(tree, state.page);
+  }
+  const html = outlineBranch(tree);
+  $("#outline-empty").hidden = state.outline.length > 0;
+  if (html === state.outlineHtml) return;  // leave the DOM (and the focused button) alone
+  state.outlineHtml = html;
+  root.innerHTML = html;
+  root.querySelector('[aria-current="page"]')?.scrollIntoView({ block: "nearest" });
+}
+
+function outlineBranch(nodes) {
+  return nodes.map((h) => {
+    const text = h.text || "(untitled heading)";
+    const where = h.label ? `p. ${h.label}` : `#${h.page}`;
+    const title = `Heading ${h.level}: ${text} — PDF page ${h.page}${h.label ? ", printed " + h.label : ""}`;
+    const open = !state.collapsed.has(h.key);
+    const subId = "outline-sub-" + h.key.replace(":", "-");
+    // The twisty is labelled with the heading text: with aria-expanded it reads as "…, collapsed".
+    const twist = h.children.length
+      ? `<button type="button" class="outline-twist" data-key="${h.key}" aria-expanded="${open}"` +
+        ` aria-controls="${subId}" aria-label="${escapeHtml(text)}"` +
+        ` title="${open ? "Collapse" : "Expand"} (Left and Right arrows)"></button>`
+      : '<span class="outline-gap" aria-hidden="true"></span>';
+    return `<li>${twist}<button type="button" class="outline-item" data-page="${h.page}" data-nth="${h.nth}"` +
+      `${h.page === state.page ? ' aria-current="page"' : ""} title="${escapeHtml(title)}">` +
+      `<span class="outline-text">${escapeHtml(text)}</span>` +
+      `<span class="outline-page">${escapeHtml(where)}</span></button>` +
+      (h.children.length ? `<ul id="${subId}"${open ? "" : " hidden"}>${outlineBranch(h.children)}</ul>` : "") +
+      "</li>";
+  }).join("");
+}
+
+/* Which branches are closed, remembered per document: reopening a long book keeps the view you left.
+   A heading is keyed by its page and its place on that page, which survives editing elsewhere. */
+function allCollapsed() {
+  try { return JSON.parse(localStorage.getItem("unscanner.outlineCollapsed") || "{}"); } catch (_) { return {}; }
+}
+function loadCollapsed(docId) { state.collapsed = new Set(docId ? allCollapsed()[docId] || [] : []); }
+function toggleBranch(key) {
+  if (state.collapsed.has(key)) state.collapsed.delete(key); else state.collapsed.add(key);
+  if (state.doc) {
+    const all = allCollapsed();
+    if (state.collapsed.size) all[state.doc.doc_id] = [...state.collapsed]; else delete all[state.doc.doc_id];
+    try { localStorage.setItem("unscanner.outlineCollapsed", JSON.stringify(all)); } catch (_) { /* storage disabled */ }
+  }
+  // Re-rendering replaces the buttons, so put the focus back on the one that was being used.
+  const a = document.activeElement;
+  const sel = a && a.dataset.key ? `.outline-twist[data-key="${a.dataset.key}"]`
+    : a && a.dataset.page ? `.outline-item[data-page="${a.dataset.page}"][data-nth="${a.dataset.nth}"]` : null;
+  renderOutline();
+  if (sel) $("#outline").querySelector(sel)?.focus();
 }
 
 // ------------------------------------------------------------------ pages
@@ -1397,6 +1507,77 @@ $("#filter-review").addEventListener("change", () => {
 });
 $("#page-list").addEventListener("click", (e) => { const li = e.target.closest("li[data-page]"); if (li) loadPage(+li.dataset.page); });
 $("#doc-select").addEventListener("change", (e) => openDoc(e.target.value));
+
+// ---- sidebar tabs: Pages or Headings
+const SIDEBAR_TABS = ["pages", "headings"];
+function setSidebarTab(name, focus = false) {
+  try { localStorage.setItem("unscanner.sidebarTab", name); } catch (_) { /* storage disabled */ }
+  for (const t of SIDEBAR_TABS) {
+    const on = t === name, tab = $("#tab-" + t);
+    tab.setAttribute("aria-selected", String(on));
+    tab.tabIndex = on ? 0 : -1;
+    $("#panel-" + t).hidden = !on;
+  }
+  if (focus) $("#tab-" + name).focus();
+  if (name === "headings") refreshOutline();
+  else $(`#page-list li[data-page="${state.page}"]`)?.scrollIntoView({ block: "nearest" });
+}
+$(".side-tabs").addEventListener("click", (e) => {
+  const tab = e.target.closest('[role="tab"]');
+  if (tab) setSidebarTab(tab.id.slice("tab-".length));
+});
+$(".side-tabs").addEventListener("keydown", (e) => {
+  const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+  if (!step) return;
+  e.preventDefault();
+  const i = SIDEBAR_TABS.indexOf(e.target.id.slice("tab-".length));
+  setSidebarTab(SIDEBAR_TABS[(i + step + SIDEBAR_TABS.length) % SIDEBAR_TABS.length], true);
+});
+try { setSidebarTab(localStorage.getItem("unscanner.sidebarTab") === "headings" ? "headings" : "pages"); }
+catch (_) { setSidebarTab("pages"); }
+
+// ---- a heading works as a bookmark: go to its page and put the caret on it; its twisty closes it
+$("#outline").addEventListener("click", async (e) => {
+  const twist = e.target.closest("button[data-key]");
+  if (twist) { toggleBranch(twist.dataset.key); return; }
+  const b = e.target.closest("button[data-page]");
+  if (!b) return;
+  const n = +b.dataset.page, nth = +b.dataset.nth;
+  if (n !== state.page) await loadPage(n);
+  goToHeading(nth);
+});
+/* The caret, not just a scroll: the scan follows the caret (Follow/Mark) and typing carries on from
+   the heading. An edit since the outline was fetched can leave the page with fewer headings. */
+function goToHeading(nth) {
+  const ed = $("#editor");
+  if (ed.hidden) return;  // the source or draft view is showing instead
+  const h = ed.querySelectorAll("h1, h2, h3, h4, h5, h6")[nth];
+  if (!h) return;
+  h.scrollIntoView({ block: "center" });
+  const range = document.createRange();
+  range.selectNodeContents(h); range.collapse(true);
+  const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+  ed.focus({ preventScroll: true });
+}
+/* Up/Down move between the headings in view, Left/Right close and open a branch; Tab still steps
+   through them one by one. */
+$("#outline").addEventListener("keydown", (e) => {
+  const li = e.target.closest("li");
+  if (!li) return;
+  const twist = li.querySelector(":scope > .outline-twist");
+  if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+    const wanted = e.key === "ArrowRight";
+    if (!twist || (twist.getAttribute("aria-expanded") === "true") === wanted) return;
+    e.preventDefault();
+    toggleBranch(twist.dataset.key);
+    return;
+  }
+  const step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+  if (!step) return;
+  const items = [...$("#outline").querySelectorAll(".outline-item")].filter((el) => el.offsetParent);
+  const next = items[items.indexOf(li.querySelector(":scope > .outline-item")) + step];
+  if (next) { e.preventDefault(); next.focus(); }
+});
 document.addEventListener("keydown", (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveAll(); }
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); savePage(false, false, true); }

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from lxml import etree, html as lhtml
 
-from .assemble import HEADINGS, Assembled, ExportStyle, export_style, without_page_markers
+from .assemble import HEADINGS, Assembled, ExportStyle, export_style, heading_text, without_page_markers
 
 XHTML_NS = "http://www.w3.org/1999/xhtml"
 EPUB_NS = "http://www.idpf.org/2007/ops"
@@ -71,7 +71,7 @@ def _split_chapters(main) -> list[list]:
 def _chapter_title(chunk, fallback: str) -> str:
     for el in chunk:
         if isinstance(el.tag, str) and el.tag in HEADINGS:
-            return el.text_content().strip() or fallback
+            return heading_text(el) or fallback
     return fallback
 
 
@@ -112,7 +112,7 @@ def build_epub(a: Assembled, out_path: str | Path, author: str = "", source: str
         for el in chunk:
             for e in ([el] if isinstance(el.tag, str) else []) + [x for x in el.iter() if isinstance(x.tag, str)]:
                 if e.tag in ("h1", "h2", "h3") and e.get("id"):
-                    toc.append((int(e.tag[1]), e.text_content().strip(), f"{fname}#{e.get('id')}"))
+                    toc.append((int(e.tag[1]), heading_text(e), f"{fname}#{e.get('id')}"))
                 if e.get("role") == "doc-pagebreak" and e.get("id"):
                     pages.append((e.text or e.get("aria-label", ""), f"{fname}#{e.get('id')}"))
     # de-duplicate nested traversal results while keeping order

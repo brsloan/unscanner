@@ -85,6 +85,12 @@ accessibility term and stays.
   end-of-line hyphen and keeps a true one, going by how the rest of the document spells the word
   (`document_words`). A page edge inside a hyphenated word joins the paragraphs even when the
   continuation flags are not set (`word_broken`).
+- The sidebar's Headings tab (a navigation pane like Word's): the outline comes from `assemble.outline`,
+  served by `GET /api/documents/{id}/outline`, and the UI refetches it whenever a page's version changes.
+  Levels are the ones written on the page, not the normalized ones a build produces, so the list matches
+  what the editor shows; skipped pages contribute nothing. `app.js` nests the flat list into a tree and
+  branches collapse: which are closed is kept per document in `unscanner.outlineCollapsed`, keyed by the
+  heading's page and its place on that page, and a branch the page being shown sits in is reopened.
 - New validation rule: add to `validate_html` in `validate.py` and cover it in `tests/`.
 - New UI feature: `web/app.js` talks only to `/api/...` routes in `webapp.py`. Keep it vanilla JS.
 
