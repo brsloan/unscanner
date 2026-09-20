@@ -37,7 +37,14 @@
     <div id="doc-meta" class="doc-meta"></div>
     <div id="panel-pages" class="side-panel" role="tabpanel" aria-labelledby="tab-pages">
       <label class="review-filter" title="List only pages not yet approved (needs review, not transcribed, or error); Approve &amp; next and the arrows then step through those pages"><input id="filter-review" type="checkbox"> needs work only</label>
-      <ol id="page-list" class="page-list" aria-label="Pages"></ol>
+      <ol id="page-list" class="page-list" aria-label="Pages" title="Ctrl+click or Shift+click to select several pages; right-click for skip, approve and needs review"></ol>
+      <div id="page-menu" class="page-menu" role="menu" aria-labelledby="page-menu-title" hidden>
+        <div id="page-menu-title" class="page-menu-title"></div>
+        <button type="button" role="menuitem" data-action="approve">Approve</button>
+        <button type="button" role="menuitem" data-action="needs_review">Needs review</button>
+        <button type="button" role="menuitem" data-action="skip">Skip</button>
+        <button type="button" role="menuitem" data-action="unskip">Don't skip</button>
+      </div>
     </div>
     <div id="panel-headings" class="side-panel" role="tabpanel" aria-labelledby="tab-headings" hidden>
       <p id="outline-empty" class="outline-empty">No headings yet. Headings you or the model write appear here once the page is saved.</p>

@@ -7,7 +7,8 @@
 const $ = (sel) => document.querySelector(sel);
 const state = { docs: [], doc: null, page: null, pageData: null, dirty: false, job: null, settings: null,
   lastRequestAt: 0, lastSelection: "", polling: null, busy: 0, gen: 0,
-  outline: [], outlineKey: "", outlineHtml: "", outlineShownPage: null, collapsed: new Set() };
+  outline: [], outlineKey: "", outlineHtml: "", outlineShownPage: null, collapsed: new Set(),
+  picked: new Set(), pickAnchor: null };  // pages picked in the page list for its right-click menu
 /* busy counts page loads and saves in flight; gen changes when one starts or ends. poll() drops a
    document snapshot that overlapped either: a snapshot fetched before a save landed still has the
    old version and would look like someone else changed the page. */
@@ -418,6 +419,7 @@ async function openDoc(docId, pageToShow) {
   if ($("#dlg-properties").open) $("#dlg-properties").close("cancel");  // it belongs to the document we are leaving
   state.outline = []; state.outlineKey = ""; state.outlineShownPage = null;  // the outline belongs to
   loadCollapsed(docId);                                                      // the document we are leaving
+  state.picked.clear(); state.pickAnchor = null; closePageMenu();
   if (!docId) { state.doc = null; renderPages(); return; }
   state.doc = await api(`/documents/${docId}`);
   localStorage.setItem("unscanner.lastDoc", docId);
@@ -526,13 +528,13 @@ function renderPages() {
     const hasDraft = !!drafts[p.index] || (p.index === state.page && state.dirty);
     const title = `PDF page ${p.index}${p.label ? ", printed " + p.label : ""}: ${statusLabel(p.status)}${p.skip ? " (skipped)" : ""}` +
       (hasDraft ? " · unsaved edits" : "") + (p.changed_by ? ` · last changed by ${p.changed_by}` : "") + (p.notes ? ` · ${p.notes}` : "");
-    return `<li data-page="${p.index}" aria-current="${p.index === state.page}" title="${escapeHtml(title)}">
+    return `<li data-page="${p.index}" aria-current="${p.index === state.page}"${state.picked.has(p.index) ? ' class="picked"' : ""} title="${escapeHtml(title)}">
       <span class="dot ${p.status}" aria-hidden="true"></span>
       <span class="num">${p.index}</span>
       ${hasDraft ? '<span class="draft-mark" title="unsaved edits">✎</span>' : ""}
       ${who ? `<span class="who" title="last changed by ${escapeHtml(p.changed_by)}">${who}</span>` : ""}
       <span class="lbl">${p.skip ? "skip" : p.label ? escapeHtml(p.label) : ""}</span>
-      <span class="visually-hidden">${statusLabel(p.status)}${hasDraft ? ", unsaved edits" : ""}</span>
+      <span class="visually-hidden">${statusLabel(p.status)}${hasDraft ? ", unsaved edits" : ""}${state.picked.has(p.index) ? ", selected" : ""}</span>
     </li>`;
   }).join("");
   refreshOutline();
@@ -1505,7 +1507,88 @@ $("#filter-review").addEventListener("change", () => {
   renderPages();
   $(`#page-list li[data-page="${state.page}"]`)?.scrollIntoView({ block: "nearest" });
 });
-$("#page-list").addEventListener("click", (e) => { const li = e.target.closest("li[data-page]"); if (li) loadPage(+li.dataset.page); });
+/* Ctrl+click and Shift+click pick pages without opening them, the way a file list does; a right-click
+   then offers to skip, approve or flag every picked page. The page being shown counts as the first pick. */
+$("#page-list").addEventListener("click", (e) => {
+  const li = e.target.closest("li[data-page]");
+  if (!li) return;
+  const n = +li.dataset.page;
+  if (e.shiftKey) {
+    const shown = listedPages().map((p) => p.index);
+    const a = shown.indexOf(state.pickAnchor ?? state.page), b = shown.indexOf(n);
+    state.picked = new Set(a < 0 ? [n] : shown.slice(Math.min(a, b), Math.max(a, b) + 1));
+    window.getSelection()?.removeAllRanges();  // Shift+click also selects the list's text
+  } else if (e.ctrlKey || e.metaKey) {
+    if (!state.picked.size && state.page && state.page !== n) state.picked.add(state.page);
+    if (state.picked.has(n)) state.picked.delete(n); else state.picked.add(n);
+    state.pickAnchor = n;
+  } else {
+    state.picked.clear(); state.pickAnchor = n;
+    loadPage(n);
+    return;
+  }
+  renderPages();
+});
+
+const BULK_DONE = { skip: "Skipped", unskip: "Un-skipped", approve: "Approved", needs_review: "Flagged for review:" };
+function closePageMenu() { $("#page-menu").hidden = true; }
+$("#page-list").addEventListener("contextmenu", (e) => {
+  const li = e.target.closest("li[data-page]");
+  if (!li || !state.doc) return;
+  e.preventDefault();
+  const n = +li.dataset.page;
+  if (!state.picked.has(n)) { state.picked = new Set([n]); state.pickAnchor = n; renderPages(); }
+  const menu = $("#page-menu"), count = state.picked.size;
+  $("#page-menu-title").textContent = count === 1 ? `Page ${n}` : `${count} pages`;
+  menu.hidden = false;
+  menu.style.left = Math.max(0, Math.min(e.clientX, innerWidth - menu.offsetWidth - 4)) + "px";
+  menu.style.top = Math.max(0, Math.min(e.clientY, innerHeight - menu.offsetHeight - 4)) + "px";
+  menu.querySelector("button").focus();
+});
+$("#page-menu").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-action]");
+  if (b) { closePageMenu(); bulkPages(b.dataset.action); }
+});
+$("#page-menu").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { closePageMenu(); return; }
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  e.preventDefault();
+  const items = [...$("#page-menu").querySelectorAll("button")];
+  items[(items.indexOf(document.activeElement) + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+});
+document.addEventListener("pointerdown", (e) => { if (!e.target.closest("#page-menu")) closePageMenu(); });
+window.addEventListener("blur", closePageMenu);
+window.addEventListener("resize", closePageMenu);
+$("#page-list").addEventListener("scroll", closePageMenu);
+
+/* Apply one action to every picked page. Only the skip flag and the status change on the server, so
+   unsaved edits here stay valid: a draft made from the version just replaced moves on to the new one. */
+async function bulkPages(action) {
+  const pages = [...state.picked].sort((a, b) => a - b);
+  if (!state.doc || !pages.length) return;
+  try {
+    const r = await tracked(api(`/documents/${state.doc.doc_id}/pages/bulk`, { method: "POST", body: { pages, action } }));
+    storeDraftNow();
+    for (const saved of r.pages) {
+      const p = state.doc.pages.find((x) => x.index === saved.index);
+      const before = p ? p.version : null;
+      if (p) Object.assign(p, saved);
+      const draft = getDraft(saved.index);
+      if (draft && draft.version === before) setDraft(saved.index, { ...draft, skip: saved.skip, version: saved.version });
+      if (saved.index === state.page && state.pageData && state.pageData.version === before) {
+        state.pageData = { ...state.pageData, ...saved };
+        $("#f-skip").checked = saved.skip;
+      }
+    }
+    state.doc.status_counts = (await api(`/documents/${state.doc.doc_id}`)).status_counts;
+    const left = r.pages.filter((p) => p.status === "pending").map((p) => p.index);
+    setStatus(`${BULK_DONE[action]} ${pages.length === 1 ? "page " + pages[0] : pages.length + " pages"}.` +
+      (["approve", "needs_review"].includes(action) && left.length ? ` Not transcribed, so left as not transcribed: ${left.join(", ")}.` : ""));
+    state.picked.clear();
+    reportView();
+  } catch (e) { setStatus("Could not change the pages: " + e.message, true); }
+  renderPages(); renderMeta();
+}
 $("#doc-select").addEventListener("change", (e) => openDoc(e.target.value));
 
 // ---- sidebar tabs: Pages or Headings

@@ -104,6 +104,12 @@ accessibility term and stays.
   what the editor shows; skipped pages contribute nothing. `app.js` nests the flat list into a tree and
   branches collapse: which are closed is kept per document in `unscanner.outlineCollapsed`, keyed by the
   heading's page and its place on that page, and a branch the page being shown sits in is reopened.
+- Several pages at once: in the sidebar's Pages tab, Ctrl+click and Shift+click pick pages (`state.picked` in
+  `app.js`) and a right-click opens `#page-menu`: Approve, Needs review, Skip, Don't skip.
+  `POST /api/documents/{id}/pages/bulk` changes only the skip flag and the status, through `apply_result`, so
+  every version is bumped (invariant 7). Skip and Don't skip never change the status (people skip pages just to
+  build part of a document, and the record of what is approved must survive that); a page with no HTML cannot
+  be approved and stays `pending`. The UI moves a draft made from the replaced version on to the new one, so unsaved edits still save.
 - New validation rule: add to `validate_html` in `validate.py` and cover it in `tests/`.
 - New UI feature: `web/app.js` talks only to `/api/...` routes in `webapp.py`. Keep it vanilla JS.
 

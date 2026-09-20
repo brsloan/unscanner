@@ -66,6 +66,11 @@ class PageUpdate(BaseModel):
     figures: list[dict] | None = None  # None keeps the page's stored figures (crop boxes) unchanged
 
 
+class BulkPageUpdate(BaseModel):
+    pages: list[int]
+    action: str  # "skip" | "unskip" | "approve" | "needs_review"
+
+
 class ViewUpdate(BaseModel):
     doc_id: str
     page: int
@@ -530,6 +535,34 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             p.status = upd.status if (clean or upd.skip) else "pending"
         doc.save()
         return {**page_view(p), "html": p.html}
+
+    @app.post("/api/documents/{doc_id}/pages/bulk")
+    def bulk_pages(doc_id: str, upd: BulkPageUpdate) -> dict[str, Any]:
+        """Skip, un-skip, approve or flag several pages at once (the page list's right-click menu).
+
+        Only the skip flag and the status change; each page keeps its content. Every page still goes
+        through apply_result, so its version is bumped and an editor holding the old one gets a 409.
+        A page with nothing on it cannot be approved: it stays "pending" unless it is skipped.
+        Skip and un-skip leave the status alone: pages may be skipped just for one build (an export of
+        part of the document), and that must not change the record of what has been approved.
+        """
+        if upd.action not in ("skip", "unskip", "approve", "needs_review"):
+            raise HTTPException(400, f"unknown action {upd.action!r}")
+        doc = load_doc(doc_id)
+        try:
+            pages = [doc.page(n) for n in dict.fromkeys(upd.pages)]
+        except IndexError as e:
+            raise HTTPException(404, str(e)) from e
+        for p in pages:
+            status = {"approve": "done", "needs_review": "needs_review"}.get(upd.action, p.status)
+            skip = {"skip": True, "unskip": False}.get(upd.action, p.skip)
+            apply_result(p, {"label": p.label, "skip": skip, "starts_mid_paragraph": p.starts_mid_paragraph,
+                             "ends_mid_paragraph": p.ends_mid_paragraph, "html": p.html,
+                             "figures": [asdict(f) for f in p.figures], "notes": p.notes},
+                         model="editor", changed_by="editor")
+            p.status = status if (p.html.strip() or p.skip) else "pending"
+        doc.save()
+        return {"pages": [page_view(p) for p in pages]}
 
     # ---------------------------------------------------------------- transcription jobs
     @app.post("/api/documents/{doc_id}/transcribe")

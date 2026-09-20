@@ -138,6 +138,36 @@ def test_save_versus_approve(client, tmp_path):
     assert r.json()["status"] == "needs_review"
 
 
+def test_bulk_skip_approve_and_flag(client, tmp_path):
+    pdf = make_pdf(tmp_path / "bulk sample.pdf")
+    doc_id = client.post("/api/documents", json={"pdf_path": str(pdf)}).json()["doc_id"]
+    html = '<figure><img src="fig-1" alt="A"></figure><p>Text</p>'
+    client.put(f"/api/documents/{doc_id}/pages/1", json={"html": html, "label": "37", "notes": "check", "status": "needs_review",
+                                                         "figures": [{"id": "fig-1", "alt": "A", "bbox": [0.1, 0.1, 0.5, 0.5]}]})
+    bulk = lambda pages, action: client.post(f"/api/documents/{doc_id}/pages/bulk", json={"pages": pages, "action": action})
+
+    # Approve: the transcribed page is approved, the empty one stays "not transcribed".
+    by_index = {p["index"]: p for p in bulk([1, 2], "approve").json()["pages"]}
+    assert (by_index[1]["status"], by_index[2]["status"]) == ("done", "pending")
+    # The content is untouched, and the version moved on so an editor holding version 1 gets a 409.
+    page = client.get(f"/api/documents/{doc_id}/pages/1").json()
+    assert (page["html"], page["label"], page["notes"], page["version"]) == (sanitize_fragment(html), "37", "check", 2)
+    assert page["figures"][0]["bbox"] == [0.1, 0.1, 0.5, 0.5]
+    assert client.put(f"/api/documents/{doc_id}/pages/1", json={"html": "<p>x</p>", "version": 1}).status_code == 409
+
+    assert [p["status"] for p in bulk([1], "needs_review").json()["pages"]] == ["needs_review"]
+
+    # Skip and un-skip never touch the status: skipping pages for one build must not change what is approved.
+    assert [(p["skip"], p["status"]) for p in bulk([1, 2], "skip").json()["pages"]] == [(True, "needs_review"), (True, "pending")]
+    assert [(p["skip"], p["status"]) for p in bulk([1, 2], "unskip").json()["pages"]] == [(False, "needs_review"), (False, "pending")]
+    bulk([1], "approve")
+    assert [(p["skip"], p["status"]) for p in bulk([1], "skip").json()["pages"]] == [(True, "done")]
+    assert [(p["skip"], p["status"]) for p in bulk([1], "unskip").json()["pages"]] == [(False, "done")]
+
+    assert bulk([1], "delete").status_code == 400
+    assert bulk([99], "skip").status_code == 404
+
+
 def test_figures_survive_editor_saves_and_can_be_previewed(client, tmp_path):
     pdf = make_pdf(tmp_path / "fig sample.pdf")
     doc_id = client.post("/api/documents", json={"pdf_path": str(pdf)}).json()["doc_id"]
