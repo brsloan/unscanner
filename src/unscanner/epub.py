@@ -10,7 +10,7 @@ from pathlib import Path
 
 from lxml import etree, html as lhtml
 
-from .assemble import CSS, HEADINGS, Assembled
+from .assemble import HEADINGS, Assembled, ExportStyle, export_style, without_page_markers
 
 XHTML_NS = "http://www.w3.org/1999/xhtml"
 EPUB_NS = "http://www.idpf.org/2007/ops"
@@ -75,9 +75,12 @@ def _chapter_title(chunk, fallback: str) -> str:
     return fallback
 
 
-def build_epub(a: Assembled, out_path: str | Path, author: str = "", source: str = "") -> Path:
+def build_epub(a: Assembled, out_path: str | Path, author: str = "", source: str = "",
+               style: ExportStyle | None = None) -> Path:
     out_path = Path(out_path)
-    main = copy.deepcopy(a.main)
+    style = style or export_style("epub")
+    # Without page numbers there are no markers, so no page-list and no page features in the metadata.
+    main = copy.deepcopy(a.main) if style.page_numbers else without_page_markers(a.main)
     # Chapter files live in OEBPS/text/, images in OEBPS/figures/: make the image paths relative to text/.
     for im in main.iter("img"):
         src = im.get("src", "")
@@ -131,7 +134,7 @@ def build_epub(a: Assembled, out_path: str | Path, author: str = "", source: str
         z.writestr("META-INF/container.xml", CONTAINER_XML, compress_type=zipfile.ZIP_DEFLATED)
         z.writestr("OEBPS/package.opf", opf, compress_type=zipfile.ZIP_DEFLATED)
         z.writestr("OEBPS/nav.xhtml", nav_xhtml, compress_type=zipfile.ZIP_DEFLATED)
-        z.writestr("OEBPS/style.css", CSS, compress_type=zipfile.ZIP_DEFLATED)
+        z.writestr("OEBPS/style.css", style.css(), compress_type=zipfile.ZIP_DEFLATED)
         for fname, chunk in zip(files, chunks):
             title = _chapter_title(chunk, a.title)
             z.writestr(f"OEBPS/{fname}", _xhtml_doc(title, a.language, chunk), compress_type=zipfile.ZIP_DEFLATED)
@@ -224,8 +227,8 @@ def _package_opf(a: Assembled, book_id: str, modified: str, author: str, source:
     meta.append("<meta property=\"schema:accessModeSufficient\">textual</meta>")
     meta += [f"<meta property=\"schema:accessibilityFeature\">{f}</meta>" for f in features]
     meta.append("<meta property=\"schema:accessibilityHazard\">none</meta>")
-    meta.append("<meta property=\"schema:accessibilitySummary\">Semantic HTML with headings, navigable "
-                "print page numbers and image descriptions, produced from a scanned original; conforms to "
+    meta.append("<meta property=\"schema:accessibilitySummary\">Semantic HTML with headings"
+                f"{', navigable print page numbers' if has_pages else ''} and image descriptions, produced from a scanned original; conforms to "
                 "WCAG 2.1 Level AA as far as automated checks can verify.</meta>")
     meta.append("<link rel=\"dcterms:conformsTo\" href=\"http://www.idpf.org/epub/a11y/accessibility-20170105.html#wcag-aa\"/>")
     manifest = ['<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',

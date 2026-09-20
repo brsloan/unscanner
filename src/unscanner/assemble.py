@@ -7,7 +7,9 @@ skipped levels), figure cropping, id de-duplication, and the final HTML wrapper.
 
 from __future__ import annotations
 
+import copy
 import html as htmlmod
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,6 +47,59 @@ nav.page-list ol { columns: 6 5em; list-style: none; padding: 0; }
 .skip-link { position: absolute; left: -999px; } .skip-link:focus { left: 1em; top: 1em; }
 """
 
+# Added to CSS when the format's "indent" export setting is on: paragraphs set the way a printed book
+# sets them. No space between paragraphs; a first-line indent only on a paragraph that follows another
+# paragraph, so not after a heading, a figure, a table, a list, a quotation or any other break in the
+# text. A page marker that sits between two paragraphs does not count as a break.
+BOOK_CSS = """
+p { margin: 0; text-indent: 0; }
+p + p, p + div[role="doc-pagebreak"] + p { text-indent: 1.5em; }
+li p, td p, th p, figcaption p { text-indent: 0; }
+p.align-center, p.align-right, div[role="doc-pagebreak"] + p.align-center,
+div[role="doc-pagebreak"] + p.align-right { text-indent: 0; }
+blockquote, ul, ol, dl { margin-top: 1em; margin-bottom: 1em; }
+li ul, li ol { margin-top: 0; margin-bottom: 0; }
+li p + p { margin-top: 0.5em; }
+div[role="doc-pagebreak"] { margin: 0.4em 0 0.2em; }
+"""
+
+# Added when the format's "justify" export setting is on. Off by default: justified text is harder to
+# read for some people (WCAG 1.4.8). The align-* classes are more specific and still win.
+JUSTIFY_CSS = """
+p, li, dd { text-align: justify; -webkit-hyphens: auto; hyphens: auto; }
+"""
+
+# Export settings, per output format. They live in work/settings.json next to the UI's other settings
+# (the Export section of the Settings dialog) and every build reads them: UI, CLI and MCP.
+EXPORT_DEFAULTS: dict[str, bool] = {
+    "html_indent": False, "html_justify": False, "html_page_numbers": True,
+    "epub_indent": True, "epub_justify": False, "epub_page_numbers": True,
+}
+
+
+@dataclass
+class ExportStyle:
+    indent: bool = False
+    justify: bool = False
+    page_numbers: bool = True
+
+    def css(self) -> str:
+        return CSS + (BOOK_CSS if self.indent else "") + (JUSTIFY_CSS if self.justify else "")
+
+
+def export_style(fmt: str, settings: dict | None = None) -> ExportStyle:
+    """The export settings of one format ("html" or "epub"), defaults where `settings` has none."""
+    s = {**EXPORT_DEFAULTS, **{k: v for k, v in (settings or {}).items() if k in EXPORT_DEFAULTS}}
+    return ExportStyle(bool(s[f"{fmt}_indent"]), bool(s[f"{fmt}_justify"]), bool(s[f"{fmt}_page_numbers"]))
+
+
+def load_export_settings(work_root: str | Path) -> dict:
+    """The export settings saved in <work_root>/settings.json; defaults when there is no such file."""
+    try:
+        return json.loads((Path(work_root) / "settings.json").read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
 
 @dataclass
 class Assembled:
@@ -55,8 +110,8 @@ class Assembled:
     page_ids: list[tuple[str, str]] = field(default_factory=list)  # (id, label) in order
     warnings: list[str] = field(default_factory=list)
 
-    def html(self) -> str:
-        return wrap_html(self)
+    def html(self, style: ExportStyle | None = None) -> str:
+        return wrap_html(self, style)
 
 
 # ---------------------------------------------------------------- fragments
@@ -137,10 +192,62 @@ def _remove_and_prune(el, stop) -> None:
         parent = gp
 
 
-def merge_continuation(prev_section, cur_section, marker) -> bool:
+_WORD = r"[^\W\d_]+"
+_COMPOUND = _WORD + r"(?:[-‐]" + _WORD + ")*"  # "government" or "self-government"
+_BROKEN_TAIL = re.compile(r"(?:(" + _COMPOUND + r")|\d)[-‐­]$")
+
+
+def document_words(doc: Document) -> set[str]:
+    """Every word of the document in lower case, hyphenated compounds as one word. It is what decides
+    whether a hyphen at a page edge belongs to the word."""
+    words: set[str] = set()
+    for page in doc.pages:
+        if not page.skip:
+            text = htmlmod.unescape(re.sub(r"<[^>]+>", " ", page.html or "")).lower().replace("‐", "-")
+            words.update(re.findall(_COMPOUND, text))
+    return words
+
+
+def knit_word(tail: str, lead: str, words: set[str] | None = None) -> str | None:
+    """Join a word broken over a page edge: `tail` is the text that ends the page, `lead` the text
+    that opens the next one. Returns the new tail (the lead follows it with no space), or None when
+    the page does not end in a broken word.
+
+    "inter-" + "national" loses the hyphen, as the transcription guidelines ask for line ends. The
+    hyphen stays when it belongs to the word: when the document spells the word with it somewhere
+    else ("self-" + "government") and never without, when the piece before it is itself a compound
+    ("mother-in-" + "law"), and before a capital or a digit ("Anglo-" + "Saxon", "1914-" + "1918")."""
+    m = _BROKEN_TAIL.search(tail)
+    if not m or not lead[:1].isalnum():
+        return None
+    if tail.endswith("­"):  # a soft hyphen is never part of the word
+        return tail[:-1]
+    start, rest = m.group(1), re.match(_WORD, lead)
+    if start is None or rest is None or not lead[:1].islower():
+        return tail
+    joined = (start + rest.group()).lower()
+    hyphenated = (start + "-" + rest.group()).lower().replace("‐", "-")
+    words = words or set()
+    if joined not in words and (hyphenated in words or "-" in start or "‐" in start):
+        return tail
+    return tail[:-1]
+
+
+def word_broken(prev_section, cur_section) -> bool:
+    """True when the page edge falls inside a hyphenated word, which makes the new page a continuation
+    whatever its continuation flags say."""
+    last, first = _last_leaf(prev_section), _first_leaf(cur_section)
+    if last is None or first is None:
+        return False
+    return (first.text or "")[:1].islower() and bool(_BROKEN_TAIL.search(_tail_text(last).rstrip()))
+
+
+def merge_continuation(prev_section, cur_section, marker, words: set[str] | None = None) -> bool:
     """Try to join the last block of prev_section with the first block of cur_section.
 
-    On success the inline `marker` is placed at the join and cur's first block is removed.
+    On success the inline `marker` is placed at the join and cur's first block is removed. A word
+    broken by the page edge is knitted together around the marker (see knit_word; `words` is the
+    document's vocabulary), so it reads as one word when the markers are left out of an export.
     """
     last = _last_leaf(prev_section)
     first = _first_leaf(cur_section)
@@ -153,8 +260,9 @@ def merge_continuation(prev_section, cur_section, marker) -> bool:
     tail = _tail_text(last).rstrip()
     lead = (first.text or "")
     joiner = " "
-    if tail.endswith("-") and lead[:1].islower():  # un-dehyphenated line break at the page edge
-        tail = tail[:-1]
+    knitted = knit_word(tail, lead, words)
+    if knitted is not None:  # un-dehyphenated line break at the page edge
+        tail = knitted
         joiner = ""
     _set_tail_text(last, tail + (" " if joiner else ""))
     last.append(marker)
@@ -352,6 +460,7 @@ def assemble(doc: Document, out_dir: str | Path | None = None) -> Assembled:
     page_ids: list[tuple[str, str]] = []
     prev_page: Page | None = None
     used_ids: set[str] = set()
+    words = document_words(doc)
 
     for page in doc.pages:
         if page.skip or not page.html.strip():
@@ -369,9 +478,10 @@ def assemble(doc: Document, out_dir: str | Path | None = None) -> Assembled:
         resolve_figures(doc, page, section, out_dir, figures, warnings)
 
         merged = False
-        if prev_page is not None and prev_page.ends_mid_paragraph and page.starts_mid_paragraph:
+        if prev_page is not None and ((prev_page.ends_mid_paragraph and page.starts_mid_paragraph)
+                                      or word_broken(main, section)):
             # The previous page's blocks are the trailing children of <main>.
-            merged = merge_continuation(main, section, make_marker(pid, label, inline=True))
+            merged = merge_continuation(main, section, make_marker(pid, label, inline=True), words)
         if not merged and prev_page is not None:
             merged = merge_continued_list(main, section, make_marker(pid, label, inline=True),
                                           f"page {page.index}", warnings)
@@ -403,16 +513,33 @@ def page_list_nav(page_ids: list[tuple[str, str]]) -> str:
             f"<ol>{items}</ol></details></nav>")
 
 
-def wrap_html(a: Assembled) -> str:
-    body = lhtml.tostring(a.main, encoding="unicode", method="html", pretty_print=True)
+def without_page_markers(main):
+    """A copy of <main> with the page markers taken out (an export with page numbers switched off).
+    The text on both sides of an inline marker closes up, so a word the page edge fell in, already
+    knitted around its marker by merge_continuation, reads as one word again."""
+    main = copy.deepcopy(main)
+    for el in [e for e in main.iter() if isinstance(e.tag, str) and e.get("role") == "doc-pagebreak"]:
+        parent, prev, tail = el.getparent(), el.getprevious(), el.tail or ""
+        if prev is not None:
+            prev.tail = (prev.tail or "") + tail
+        else:
+            parent.text = (parent.text or "") + tail
+        parent.remove(el)
+    return main
+
+
+def wrap_html(a: Assembled, style: ExportStyle | None = None) -> str:
+    style = style or ExportStyle()
+    main = a.main if style.page_numbers else without_page_markers(a.main)
+    body = lhtml.tostring(main, encoding="unicode", method="html", pretty_print=True)
     title = htmlmod.escape(a.title or "Document")
     return (
         "<!DOCTYPE html>\n"
         f'<html lang="{htmlmod.escape(a.language)}">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        f"<title>{title}</title>\n<style>{CSS}</style>\n</head>\n<body>\n"
+        f"<title>{title}</title>\n<style>{style.css()}</style>\n</head>\n<body>\n"
         '<a class="skip-link" href="#content">Skip to content</a>\n'
-        f"{body}\n{page_list_nav(a.page_ids)}\n</body>\n</html>\n"
+        f"{body}\n{page_list_nav(a.page_ids if style.page_numbers else [])}\n</body>\n</html>\n"
     )
 
 

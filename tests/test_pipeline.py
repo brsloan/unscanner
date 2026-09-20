@@ -130,6 +130,10 @@ def test_transcribe_build_validate(doc, tmp_path):
         assert "schema:accessibilityFeature" in opf and "printPageNumbers" in opf
         assert 'epub:type="page-list"' in nav and "#pg-38" in nav
         assert any(n.startswith("OEBPS/text/ch") for n in names)
+        # default export settings: book paragraphs in the EPUB only, nothing justified
+        css = z.read("OEBPS/style.css").decode()
+        assert "p { margin: 0; text-indent: 0; }" in css and "p + p," in css
+        assert "text-indent" not in html and "justify" not in html + css
         # every xhtml is well-formed XML and every image it references exists at the resolved path
         import posixpath
 
@@ -183,6 +187,46 @@ def test_heading_normalization(tmp_path, doc):
     html = a.html()
     assert html.count("<h1") == 1 and "<h1 id=\"h-1\">Sample Book</h1>" in html
     assert "<h2" in html and "<h3" in html and "<h4" not in html  # demoted then skip closed
+
+
+def test_knit_word():
+    from unscanner.assemble import knit_word
+
+    assert knit_word("the inter-", "national order") == "the inter"
+    assert knit_word("a full sentence.", "Next") is None and knit_word("a dash -", "then") is None
+    # the document's own spelling decides whether the hyphen belongs to the word
+    assert knit_word("of self-", "government", {"self-government"}) == "of self-"
+    assert knit_word("of self-", "government", {"self-government", "selfgovernment"}) == "of self"
+    assert knit_word("her mother-in-", "law") == "her mother-in-"
+    assert knit_word("the Anglo-", "Saxon") == "the Anglo-" and knit_word("1914-", "1918") == "1914-"
+    assert knit_word("soft­", "ened") == "soft"
+
+
+def test_export_without_page_numbers_knits_words(tmp_path, doc):
+    from unscanner.assemble import ExportStyle
+
+    doc.page(1).html = "<h1>T</h1><p>We speak of self-government. An inter-</p>"
+    doc.page(2).html = "<p>national order of self-</p>"  # flags not set: the broken word says it continues
+    doc.page(3).html = "<p>government.</p><p>Last.</p>"
+    doc.page(3).starts_mid_paragraph = doc.page(2).ends_mid_paragraph = True
+    for n, p in enumerate(doc.pages):
+        p.status, p.label = "done", str(10 + n)
+    a = assemble(doc, tmp_path / "out")
+    with_numbers = a.html()
+    assert with_numbers.count('id="pg-') == 3 and "inter<span" in with_numbers
+    plain = a.html(ExportStyle(indent=True, justify=True, page_numbers=False))
+    assert 'id="pg-' not in plain and "page-list" not in plain.split("</style>")[1]
+    assert "An international order of self-government.</p>" in plain
+    assert "text-indent: 1.5em" in plain and "text-align: justify" in plain
+    assert a.html().count('id="pg-') == 3  # the assembled document itself is untouched
+
+    epub = build_epub(a, tmp_path / "plain.epub", style=ExportStyle(page_numbers=False))
+    with zipfile.ZipFile(epub) as z:
+        text = "".join(z.read(n).decode() for n in z.namelist() if n.startswith("OEBPS/text/"))
+        assert "pagebreak" not in text and "An international order of self-government." in text
+        assert "page-list" not in z.read("OEBPS/nav.xhtml").decode()
+        assert "printPageNumbers" not in z.read("OEBPS/package.opf").decode()
+        assert "text-indent" not in z.read("OEBPS/style.css").decode()
 
 
 def test_image_without_crop_becomes_description(tmp_path, doc):

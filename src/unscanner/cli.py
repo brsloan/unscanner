@@ -78,18 +78,20 @@ def cmd_transcribe(args) -> None:
 
 
 def _build(doc: Document, out_root: str, epub: bool = True) -> dict:
-    from .assemble import assemble
+    from .assemble import assemble, export_style, load_export_settings
     from .epub import build_epub
 
     out_dir = Path(out_root) / slugify(Path(doc.source).stem)
     out_dir.mkdir(parents=True, exist_ok=True)
     a = assemble(doc, out_dir)
+    # Indent, justification and page numbers per format: the Export section of the UI's settings.
+    settings = load_export_settings(Path(doc.workdir).parent)
     html_path = out_dir / "index.html"
-    html_path.write_text(a.html(), encoding="utf-8")
+    html_path.write_text(a.html(export_style("html", settings)), encoding="utf-8")
     result = {"html": str(html_path), "figures": len(a.figures), "warnings": a.warnings}
     if epub:
         epub_path = build_epub(a, out_dir / (slugify(doc.title) + ".epub"), author=doc.author,
-                               source=Path(doc.source).name)
+                               source=Path(doc.source).name, style=export_style("epub", settings))
         result["epub"] = str(epub_path)
     return result
 
@@ -100,6 +102,7 @@ def cmd_build(args) -> None:
 
 
 def _validate(doc: Document, out_root: str, run_epubcheck: bool = True) -> dict:
+    from .assemble import export_style, load_export_settings
     from .validate import coverage, epubcheck, validate_html
 
     out_dir = Path(out_root) / slugify(Path(doc.source).stem)
@@ -107,6 +110,8 @@ def _validate(doc: Document, out_root: str, run_epubcheck: bool = True) -> dict:
     issues = []
     if html_path.exists():
         issues += validate_html(html_path.read_text(encoding="utf-8"))
+        if not export_style("html", load_export_settings(Path(doc.workdir).parent)).page_numbers:
+            issues = [i for i in issues if i.code != "no-pagebreaks"]  # left out on purpose
     else:
         issues.append({"severity": "error", "code": "no-build", "message": "run build first", "location": ""})
     issues = [i.to_dict() if hasattr(i, "to_dict") else i for i in issues]

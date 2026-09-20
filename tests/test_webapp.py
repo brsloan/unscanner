@@ -104,6 +104,21 @@ def test_open_edit_build_validate(client, tmp_path):
     assert r.status_code == 200
     assert not [i for i in r.json()["issues"] if i["severity"] == "error"], r.json()["issues"]
 
+    # Export settings: per format, applied by the next build
+    assert 'name="epub_page_numbers"' in client.get("/").text and '"page_numbers"' in client.get("/static/app.js").text
+    s = client.get("/api/settings").json()
+    assert (s["html_indent"], s["epub_indent"], s["html_page_numbers"], s["epub_justify"]) == (False, True, True, False)
+    client.put("/api/settings", json={"html_indent": True, "html_page_numbers": False, "epub_indent": False})
+    assert client.post(f"/api/documents/{doc_id}/build").status_code == 200
+    built = client.get(f"/api/documents/{doc_id}/preview").text
+    assert "text-indent" in built and 'id="pg-' not in built
+    codes = [i["code"] for i in client.get(f"/api/documents/{doc_id}/validate", params={"epubcheck": "false"}).json()["issues"]]
+    assert "no-pagebreaks" not in codes  # left out on purpose, so not reported
+    import zipfile
+    with zipfile.ZipFile(sorted((tmp_path / "out").glob("*/*.epub"))[-1]) as z:
+        assert "text-indent" not in z.read("OEBPS/style.css").decode()
+        assert "page-list" in z.read("OEBPS/nav.xhtml").decode()
+
 
 def test_save_versus_approve(client, tmp_path):
     pdf = make_pdf(tmp_path / "approve sample.pdf")

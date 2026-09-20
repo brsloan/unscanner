@@ -1611,6 +1611,9 @@ $("#form-settings").addEventListener("submit", async (e) => {
   // An unticked checkbox is absent from FormData; send it explicitly.
   body.send_title = e.target.elements.send_title.checked;
   body.openai_disable_thinking = e.target.elements.openai_disable_thinking.checked;
+  ["html", "epub"].forEach((fmt) => ["indent", "justify", "page_numbers"].forEach((opt) => {
+    body[`${fmt}_${opt}`] = e.target.elements[`${fmt}_${opt}`].checked;
+  }));
   // An empty key field keeps the saved key; null tells the server to forget it.
   ["anthropic_api_key", "openai_api_key"].forEach((k) => {
     if (body[k + "_forget"]) body[k] = null;

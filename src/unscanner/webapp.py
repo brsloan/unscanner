@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import keystore, project
+from .assemble import EXPORT_DEFAULTS
 from .backends.openai_compat import DEFAULT_MODEL as DEFAULT_OPENAI_MODEL
 from .document import Document, normalize_rotation, parse_page_range, slugify
 from .pdf import cached_page_png, cached_page_words, new_document
@@ -48,6 +49,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     # Send the document title with every page. A recognisable title of a well-known work makes some
     # providers more likely to refuse; turn it off for a document that keeps getting refused.
     "send_title": True,
+    # Export section: indent-style paragraphs, justification and page numbers, per output format.
+    **EXPORT_DEFAULTS,
 }
 
 

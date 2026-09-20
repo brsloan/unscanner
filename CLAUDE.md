@@ -74,7 +74,17 @@ accessibility term and stays.
   of the two: `_carry_list_items` when the break falls inside an item (the continuation flags are set,
   so the item is joined first), `merge_continued_list` when it falls between items and `start` is the
   previous list's next number. Numbers that do not line up leave two lists and a build warning.
-- Output look: `CSS` in `assemble.py` (shared by HTML and EPUB).
+- Output look: `CSS` in `assemble.py` (shared by HTML and EPUB). Below it, `BOOK_CSS` (book paragraphs:
+  no space between them, first-line indent only after another paragraph) and `JUSTIFY_CSS` are added
+  per format by the export settings.
+- Export settings: `EXPORT_DEFAULTS` in `assemble.py`, six switches `<html|epub>_<indent|justify|page_numbers>`
+  in `work/settings.json` (the Export section of the UI Settings dialog). `cli._build` reads them for
+  every build (UI, CLI, MCP) and hands each writer an `ExportStyle`. Page numbers off is the one allowed
+  exception to invariant 1: `without_page_markers` takes the markers out of a copy for that format only.
+- Words broken over a page edge: `knit_word` in `assemble.py` (called by `merge_continuation`) drops an
+  end-of-line hyphen and keeps a true one, going by how the rest of the document spells the word
+  (`document_words`). A page edge inside a hyphenated word joins the paragraphs even when the
+  continuation flags are not set (`word_broken`).
 - New validation rule: add to `validate_html` in `validate.py` and cover it in `tests/`.
 - New UI feature: `web/app.js` talks only to `/api/...` routes in `webapp.py`. Keep it vanilla JS.
 
