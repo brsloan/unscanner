@@ -7,6 +7,7 @@ skipped levels), figure cropping, id de-duplication, and the final HTML wrapper.
 
 from __future__ import annotations
 
+import base64
 import copy
 import html as htmlmod
 import json
@@ -75,7 +76,7 @@ p, li, dd { text-align: justify; -webkit-hyphens: auto; hyphens: auto; }
 # Export settings, per output format. They live in work/settings.json next to the UI's other settings
 # (the Export section of the Settings dialog) and every build reads them: UI, CLI and MCP.
 EXPORT_DEFAULTS: dict[str, bool] = {
-    "html_indent": False, "html_justify": False, "html_page_numbers": True,
+    "html_indent": False, "html_justify": False, "html_page_numbers": True, "html_embed_images": True,
     "epub_indent": True, "epub_justify": False, "epub_page_numbers": True,
 }
 
@@ -85,6 +86,7 @@ class ExportStyle:
     indent: bool = False
     justify: bool = False
     page_numbers: bool = True
+    embed_images: bool = False  # HTML only: figures inside the file as data: URIs (an EPUB keeps image files)
 
     def css(self) -> str:
         return CSS + (BOOK_CSS if self.indent else "") + (JUSTIFY_CSS if self.justify else "")
@@ -93,7 +95,8 @@ class ExportStyle:
 def export_style(fmt: str, settings: dict | None = None) -> ExportStyle:
     """The export settings of one format ("html" or "epub"), defaults where `settings` has none."""
     s = {**EXPORT_DEFAULTS, **{k: v for k, v in (settings or {}).items() if k in EXPORT_DEFAULTS}}
-    return ExportStyle(bool(s[f"{fmt}_indent"]), bool(s[f"{fmt}_justify"]), bool(s[f"{fmt}_page_numbers"]))
+    return ExportStyle(bool(s[f"{fmt}_indent"]), bool(s[f"{fmt}_justify"]), bool(s[f"{fmt}_page_numbers"]),
+                       bool(s.get(f"{fmt}_embed_images", False)))
 
 
 def load_export_settings(work_root: str | Path) -> dict:
@@ -565,9 +568,27 @@ def without_page_markers(main):
     return main
 
 
+def with_embedded_images(main, figures: dict[str, Path]):
+    """A copy of <main> with every built figure inside the document as a data: URI, so the HTML is one
+    file that can be mailed, opened with a double-click or uploaded to a course site without its
+    figures/ folder. A figure whose file cannot be read keeps its path."""
+    main = copy.deepcopy(main)
+    for img in main.iter("img"):
+        path = figures.get((img.get("src") or "").removeprefix("figures/"))
+        try:
+            data = path.read_bytes() if path else None
+        except OSError:
+            data = None
+        if data:
+            img.set("src", "data:image/png;base64," + base64.b64encode(data).decode("ascii"))
+    return main
+
+
 def wrap_html(a: Assembled, style: ExportStyle | None = None) -> str:
     style = style or ExportStyle()
     main = a.main if style.page_numbers else without_page_markers(a.main)
+    if style.embed_images:
+        main = with_embedded_images(main, a.figures)
     body = lhtml.tostring(main, encoding="unicode", method="html", pretty_print=True)
     title = htmlmod.escape(a.title or "Document")
     return (

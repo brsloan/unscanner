@@ -66,10 +66,13 @@ def validate_html(html_text: str) -> list[Issue]:
         prev = lvl
 
     for img in root.iter("img"):
+        src = img.get("src", "")
+        if src.startswith("data:"):  # an embedded image: megabytes of base64 say nothing about where it is
+            src = "embedded image" + (f" ({img.get('id')})" if img.get("id") else "")
         if img.get("alt") is None:
-            issues.append(Issue("error", "img-alt", "image without alt attribute (WCAG 1.1.1)", img.get("src", "")))
+            issues.append(Issue("error", "img-alt", "image without alt attribute (WCAG 1.1.1)", src))
         elif not img.get("alt", "").strip():
-            issues.append(Issue("info", "img-alt-empty", "image marked decorative (empty alt)", img.get("src", "")))
+            issues.append(Issue("info", "img-alt-empty", "image marked decorative (empty alt)", src))
 
     for tbl in root.iter("table"):
         if not list(tbl.iter("th")):

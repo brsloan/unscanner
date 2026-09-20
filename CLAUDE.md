@@ -78,9 +78,13 @@ accessibility term and stays.
   no space between them, first-line indent only after another paragraph) and `JUSTIFY_CSS` are added
   per format by the export settings.
 - Export settings: `EXPORT_DEFAULTS` in `assemble.py`, six switches `<html|epub>_<indent|justify|page_numbers>`
-  in `work/settings.json` (the Export section of the UI Settings dialog). `cli._build` reads them for
+  plus `html_embed_images` in `work/settings.json` (the Export section of the UI Settings dialog). `cli._build` reads them for
   every build (UI, CLI, MCP) and hands each writer an `ExportStyle`. Page numbers off is the one allowed
   exception to invariant 1: `without_page_markers` takes the markers out of a copy for that format only.
+  `html_embed_images` (on by default) makes `index.html` one self-contained file: `with_embedded_images`
+  puts each figure in a copy of `<main>` as a `data:` URI, so the file opens with a double-click or uploads to
+  an LMS without its `figures/` folder. The folder is still written (the EPUB and the UI read it), and stored
+  page HTML never holds a `data:` URI.
 - Words broken over a page edge: `knit_word` in `assemble.py` (called by `merge_continuation`) drops an
   end-of-line hyphen and keeps a true one, going by how the rest of the document spells the word
   (`document_words`). A page edge inside a hyphenated word joins the paragraphs even when the

@@ -118,6 +118,19 @@ def test_transcribe_build_validate(doc, tmp_path):
     assert "figures/p002-38-1.png" in html and (out / "figures" / "p002-38-1.png").exists()
     issues = validate_html(html)
     assert not [i for i in issues if i.severity == "error"], [i.message for i in issues]
+
+    # Images inside the file (the HTML export default): one self-contained file, the same bytes as the crop
+    import base64
+    from unscanner.assemble import ExportStyle, export_style
+    assert export_style("html").embed_images and not export_style("epub").embed_images
+    assert not export_style("html", {"html_embed_images": False}).embed_images
+    single = a.html(ExportStyle(embed_images=True))
+    crop = base64.b64encode((out / "figures" / "p002-38-1.png").read_bytes()).decode()
+    assert f'src="data:image/png;base64,{crop}"' in single and 'src="figures/' not in single
+    assert "figures/p002-38-1.png" in a.html()  # the assembled document itself is untouched
+    issues = validate_html(single)
+    assert not [i for i in issues if i.severity == "error"], [i.message for i in issues]
+    assert all(len(i.location) < 200 for i in issues)  # never the base64 as a location
     cov = coverage(doc)
     assert not [i for i in cov if i.severity == "error"]
 

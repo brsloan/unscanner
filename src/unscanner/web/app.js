@@ -1795,6 +1795,7 @@ $("#form-settings").addEventListener("submit", async (e) => {
   ["html", "epub"].forEach((fmt) => ["indent", "justify", "page_numbers"].forEach((opt) => {
     body[`${fmt}_${opt}`] = e.target.elements[`${fmt}_${opt}`].checked;
   }));
+  body.html_embed_images = e.target.elements.html_embed_images.checked;
   // An empty key field keeps the saved key; null tells the server to forget it.
   ["anthropic_api_key", "openai_api_key"].forEach((k) => {
     if (body[k + "_forget"]) body[k] = null;

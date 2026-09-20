@@ -153,9 +153,14 @@ def test_figures_survive_editor_saves_and_can_be_previewed(client, tmp_path):
         "html": html, "version": 2, "figures": [{"id": "1-1", "alt": "A grey box.", "bbox": [50, 60, 400, 420], "caption": ""}]})
     assert r.status_code == 200
     assert client.get(f"/api/documents/{doc_id}/pages/1").json()["figures"][0]["bbox"] == [50, 60, 400, 420]
-    # ...and the build crops it and the HTML references the file.
     r = client.post(f"/api/documents/{doc_id}/build")
     assert r.json()["figures"] == 1
+    # ...and the build crops it; the HTML holds the image itself unless that export setting is off.
+    assert client.get("/api/settings").json()["html_embed_images"] is True
+    assert 'name="html_embed_images"' in client.get("/").text and "html_embed_images" in client.get("/static/app.js").text
+    assert 'src="data:image/png;base64,' in client.get(f"/api/documents/{doc_id}/preview").text
+    client.put("/api/settings", json={"html_embed_images": False})
+    client.post(f"/api/documents/{doc_id}/build")
     assert 'src="figures/p001-1-1.png"' in client.get(f"/api/documents/{doc_id}/preview").text
 
 

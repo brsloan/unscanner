@@ -298,11 +298,16 @@
           <tr><th scope="row">Page numbers</th>
             <td><input name="html_page_numbers" type="checkbox" aria-label="Page numbers in the HTML"></td>
             <td><input name="epub_page_numbers" type="checkbox" aria-label="Page numbers in the EPUB"></td></tr>
+          <tr><th scope="row">Images inside the file</th>
+            <td><input name="html_embed_images" type="checkbox" aria-label="Images inside the HTML file"></td>
+            <td>always</td></tr>
         </tbody>
       </table>
       <small>Indent-style: no space between paragraphs and a first-line indent, as in a printed book (none after a heading or a break).
         Justified text is harder to read for some people. Without page numbers the printed pages can no longer be cited or navigated;
-        words the page breaks fell in are joined up. Build again to apply.</small>
+        words the page breaks fell in are joined up. Images inside the file make the HTML one file that works on its own
+        (open it with a double-click, or upload it to Brightspace) and about a third larger; without it, keep the figures folder next to it.
+        Build again to apply.</small>
     </fieldset>
     <p><label>Parallel pages <input name="workers" type="number" min="1" max="16" size="3"></label></p>
     <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Save</button></menu>
