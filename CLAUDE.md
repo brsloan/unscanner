@@ -78,13 +78,17 @@ accessibility term and stays.
   no space between them, first-line indent only after another paragraph) and `JUSTIFY_CSS` are added
   per format by the export settings.
 - Export settings: `EXPORT_DEFAULTS` in `assemble.py`, six switches `<html|epub>_<indent|justify|page_numbers>`
-  plus `html_embed_images` in `work/settings.json` (the Export section of the UI Settings dialog). `cli._build` reads them for
+  plus `html_embed_images` and `html_bookmarks` in `work/settings.json` (the Export section of the UI Settings dialog). `cli._build` reads them for
   every build (UI, CLI, MCP) and hands each writer an `ExportStyle`. Page numbers off is the one allowed
   exception to invariant 1: `without_page_markers` takes the markers out of a copy for that format only.
   `html_embed_images` (on by default) makes `index.html` one self-contained file: `with_embedded_images`
   puts each figure in a copy of `<main>` as a `data:` URI, so the file opens with a double-click or uploads to
   an LMS without its `figures/` folder. The folder is still written (the EPUB and the UI read it), and stored
   page HTML never holds a `data:` URI.
+  `html_bookmarks` (on by default) puts `bookmarks_nav`'s collapsed heading outline at the top of the HTML:
+  the same nesting as the sidebar's Headings tab, each heading a link to its place in the text, branches that
+  fold away as nested `<details>` so the file still needs no script. The `<h1>` is left out (it is the title),
+  and a document with no other heading gets no nav. An EPUB has its own TOC, so the switch is HTML-only.
   `images_grayscale` and `images_jpeg` (both off by default) make the figure files smaller: `image_options`
   hands `assemble` an `ImageOptions`, and `resolve_figures` re-encodes each crop with `pdf.compress_image`
   (Pillow, `JPEG_QUALITY`). The figures are cropped once per build, so these hold for both formats; a JPEG

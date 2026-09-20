@@ -48,6 +48,13 @@ figure.wrap.align-right { float: right; max-width: 45%; margin: 0.3em 0 0.8em 1.
 h1, h2, h3, h4, h5, h6, table, [role="doc-pagebreak"] { clear: both; }
 table { border-collapse: collapse; margin: 1em 0; } th, td { border: 1px solid #8a8a8a; padding: 0.3em 0.6em; }
 nav.page-list ol { columns: 6 5em; list-style: none; padding: 0; }
+nav.bookmarks { font-family: system-ui, sans-serif; font-size: 0.95em; margin: 0 0 2.5em; }
+nav.bookmarks ul { list-style: none; margin: 0.2em 0; padding-left: 1.1em; }
+nav.bookmarks > details > ul { padding-left: 0; }
+nav.bookmarks summary { cursor: pointer; }
+nav.bookmarks > details > summary { font-weight: 600; }
+nav.bookmarks li { margin: 0.15em 0; }
+nav.bookmarks li.leaf { padding-left: 1.1em; }  /* line a childless heading up with the branch text */
 .skip-link { position: absolute; left: -999px; } .skip-link:focus { left: 1em; top: 1em; }
 """
 
@@ -77,6 +84,7 @@ p, li, dd { text-align: justify; -webkit-hyphens: auto; hyphens: auto; }
 # (the Export section of the Settings dialog) and every build reads them: UI, CLI and MCP.
 EXPORT_DEFAULTS: dict[str, bool] = {
     "html_indent": False, "html_justify": False, "html_page_numbers": True, "html_embed_images": True,
+    "html_bookmarks": True,
     "epub_indent": True, "epub_justify": False, "epub_page_numbers": True,
     # The figure files are cropped once per build, so these two hold for both formats.
     "images_grayscale": False, "images_jpeg": False,
@@ -89,6 +97,7 @@ class ExportStyle:
     justify: bool = False
     page_numbers: bool = True
     embed_images: bool = False  # HTML only: figures inside the file as data: URIs (an EPUB keeps image files)
+    bookmarks: bool = False  # HTML only: a collapsed heading outline at the top (an EPUB has its own TOC)
 
     def css(self) -> str:
         return CSS + (BOOK_CSS if self.indent else "") + (JUSTIFY_CSS if self.justify else "")
@@ -98,7 +107,7 @@ def export_style(fmt: str, settings: dict | None = None) -> ExportStyle:
     """The export settings of one format ("html" or "epub"), defaults where `settings` has none."""
     s = {**EXPORT_DEFAULTS, **{k: v for k, v in (settings or {}).items() if k in EXPORT_DEFAULTS}}
     return ExportStyle(bool(s[f"{fmt}_indent"]), bool(s[f"{fmt}_justify"]), bool(s[f"{fmt}_page_numbers"]),
-                       bool(s.get(f"{fmt}_embed_images", False)))
+                       bool(s.get(f"{fmt}_embed_images", False)), bool(s.get(f"{fmt}_bookmarks", False)))
 
 
 @dataclass
@@ -579,6 +588,51 @@ def page_list_nav(page_ids: list[tuple[str, str]]) -> str:
             f"<ol>{items}</ol></details></nav>")
 
 
+def _bookmark_tree(items: list[tuple[int, str, str]]) -> list[dict]:
+    """A flat list of (level, text, id) as a tree: a heading takes the deeper headings that follow it
+    as its children, the same nesting the editor's Headings pane uses."""
+    root: list[dict] = []
+    stack: list[tuple[int, list[dict]]] = [(0, root)]
+    for level, text, hid in items:
+        while len(stack) > 1 and level <= stack[-1][0]:
+            stack.pop()
+        node = {"text": text, "id": hid, "children": []}
+        stack[-1][1].append(node)
+        stack.append((level, node["children"]))
+    return root
+
+
+def _bookmark_list(nodes: list[dict]) -> str:
+    """One <li> per heading, children nested inside their parent's <li>, so the list reads as an
+    outline to a screen reader too. A heading with sub-headings is a <details> that starts open, so
+    a branch folds away with no script in the file; the heading's own link sits in the summary."""
+    out = []
+    for n in nodes:
+        link = f'<a href="#{htmlmod.escape(n["id"], quote=True)}">{htmlmod.escape(n["text"])}</a>'
+        if n["children"]:
+            out.append(f"<li><details open><summary>{link}</summary>"
+                       f"{_bookmark_list(n['children'])}</details></li>")
+        else:
+            out.append(f'<li class="leaf">{link}</li>')
+    return "<ul>" + "".join(out) + "</ul>"
+
+
+def bookmarks_nav(main) -> str:
+    """A "Bookmarks" table of contents for the top of the HTML: every heading, nested, each a link to
+    its place in the text. Collapsed to one line until a reader opens it.
+
+    The <h1> is left out: it is the document title, already the first thing on the page and in the
+    browser tab. A document whose only heading is that title gets no bookmarks at all.
+    """
+    items = [(_level(el.tag), heading_text(el) or "(untitled heading)", el.get("id"))
+             for el in main.iter()
+             if isinstance(el.tag, str) and el.tag in HEADINGS and el.tag != "h1" and el.get("id")]
+    if not items:
+        return ""
+    return ('<nav class="bookmarks" aria-label="Bookmarks"><details><summary>Bookmarks</summary>'
+            f"{_bookmark_list(_bookmark_tree(items))}</details></nav>")
+
+
 def without_page_markers(main):
     """A copy of <main> with the page markers taken out (an export with page numbers switched off).
     The text on both sides of an inline marker closes up, so a word the page edge fell in, already
@@ -624,6 +678,7 @@ def wrap_html(a: Assembled, style: ExportStyle | None = None) -> str:
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         f"<title>{title}</title>\n<style>{style.css()}</style>\n</head>\n<body>\n"
         '<a class="skip-link" href="#content">Skip to content</a>\n'
+        f"{bookmarks_nav(main) if style.bookmarks else ''}\n"
         f"{body}\n{page_list_nav(a.page_ids if style.page_numbers else [])}\n</body>\n</html>\n"
     )
 

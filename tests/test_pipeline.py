@@ -238,6 +238,39 @@ def test_knit_word():
     assert knit_word("soft­", "ened") == "soft"
 
 
+def test_html_bookmarks_are_a_nested_collapsible_outline(tmp_path, doc):
+    from unscanner.assemble import ExportStyle, export_style
+    from unscanner.validate import validate_html
+
+    assert export_style("html").bookmarks  # on unless the Export settings turn it off
+    assert not export_style("html", {"html_bookmarks": False}).bookmarks
+    assert not export_style("epub", {"html_bookmarks": True}).bookmarks  # an EPUB has its own TOC
+
+    doc.page(1).html = "<h1>Sample Book</h1><h2>Chapter One</h2><p>Text.</p><h3>A part<br>of it</h3><p>More.</p>"
+    doc.page(2).html = "<h2>Chapter Two</h2><p>Text.</p>"
+    doc.page(3).html = "<p>Text.</p>"
+    for n, p in enumerate(doc.pages):
+        p.status, p.label = "done", str(10 + n)
+    a = assemble(doc, tmp_path / "out")
+    assert "Bookmarks" not in a.html()  # the switch off: no nav, whatever the settings default is
+
+    head = a.html(ExportStyle(bookmarks=True)).split("</style>")[1]
+    assert '<nav class="bookmarks" aria-label="Bookmarks"><details><summary>Bookmarks</summary>' in head
+    # the h1 is the title, already at the top of the page; a chapter with sub-headings folds away
+    assert "<summary>Sample Book" not in head
+    assert '<li><details open><summary><a href="#h-2">Chapter One</a></summary>' in head
+    assert '<li class="leaf"><a href="#h-3">A part of it</a></li></ul></details></li>' in head
+    assert '<li class="leaf"><a href="#h-4">Chapter Two</a></li>' in head
+    assert head.index("Bookmarks") < head.index("<main")  # at the beginning, before the text
+    assert [i.code for i in validate_html(a.html(ExportStyle(bookmarks=True)))] == []
+
+    # nothing to list but the title: no bookmarks at all
+    doc.page(1).html = "<h1>Sample Book</h1><p>Text.</p>"
+    doc.page(2).html = "<p>Text.</p>"
+    plain = assemble(doc, tmp_path / "out2").html(ExportStyle(bookmarks=True))
+    assert "bookmarks" not in plain.split("</style>")[1]
+
+
 def test_export_without_page_numbers_knits_words(tmp_path, doc):
     from unscanner.assemble import ExportStyle
 

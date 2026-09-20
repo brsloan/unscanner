@@ -108,10 +108,16 @@ def test_open_edit_build_validate(client, tmp_path):
     assert 'name="epub_page_numbers"' in client.get("/").text and '"page_numbers"' in client.get("/static/app.js").text
     s = client.get("/api/settings").json()
     assert (s["html_indent"], s["epub_indent"], s["html_page_numbers"], s["epub_justify"]) == (False, True, True, False)
-    client.put("/api/settings", json={"html_indent": True, "html_page_numbers": False, "epub_indent": False})
+    assert s["html_bookmarks"] is True
+    assert 'name="html_bookmarks"' in client.get("/").text and '"html_bookmarks"' in client.get("/static/app.js").text
+    client.put("/api/settings", json={"html_indent": True, "html_page_numbers": False, "epub_indent": False,
+                                      "html_bookmarks": True})
+    client.put(f"/api/documents/{doc_id}/pages/3", json={"html": "<h2>Third</h2><p>Third.</p>", "label": "39"})
     assert client.post(f"/api/documents/{doc_id}/build").status_code == 200
     built = client.get(f"/api/documents/{doc_id}/preview").text
     assert "text-indent" in built and 'id="pg-' not in built
+    # the heading outline, at the top of the HTML, each heading a link to its place in the text
+    assert '<summary>Bookmarks</summary>' in built and '<a href="#h-2">Third</a>' in built
     codes = [i["code"] for i in client.get(f"/api/documents/{doc_id}/validate", params={"epubcheck": "false"}).json()["issues"]]
     assert "no-pagebreaks" not in codes  # left out on purpose, so not reported
     import zipfile

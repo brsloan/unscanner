@@ -303,6 +303,9 @@
           <tr><th scope="row">Images inside the file</th>
             <td><input name="html_embed_images" type="checkbox" aria-label="Images inside the HTML file"></td>
             <td>always</td></tr>
+          <tr><th scope="row">Bookmarks (table of contents)</th>
+            <td><input name="html_bookmarks" type="checkbox" aria-label="Bookmarks in the HTML"></td>
+            <td>always</td></tr>
         </tbody>
       </table>
       <p><label><input name="images_grayscale" type="checkbox"> grayscale images</label>
@@ -313,6 +316,8 @@
         Justified text is harder to read for some people. Without page numbers the printed pages can no longer be cited or navigated;
         words the page breaks fell in are joined up. Images inside the file make the HTML one file that works on its own
         (open it with a double-click, or upload it to Brightspace) and about a third larger; without it, keep the figures folder next to it.
+        Bookmarks put a collapsed list of the document's headings at the top of the HTML, each one a link, with branches that fold away;
+        an EPUB always has this as its own table of contents.
         Build again to apply.</small>
     </fieldset>
     <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Save</button></menu>
