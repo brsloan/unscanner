@@ -237,6 +237,11 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         return HTMLResponse((WEB_DIR / "index.html").read_text(encoding="utf-8"),
                             headers={"Cache-Control": "no-cache"})
 
+    # Pages without the <link rel="icon"> (a built index.html, the API) make browsers ask for this.
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon() -> FileResponse:
+        return FileResponse(WEB_DIR / "favicon.svg", media_type="image/svg+xml")
+
     @app.middleware("http")
     async def revalidate_static(request: Request, call_next):
         response = await call_next(request)

@@ -19,6 +19,14 @@ def client(tmp_path):
         yield c
 
 
+def test_favicon_is_linked_and_served(client):
+    assert '<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">' in client.get("/").text
+    for url in ("/static/favicon.svg", "/favicon.ico"):
+        r = client.get(url)
+        assert r.status_code == 200 and r.headers["content-type"].startswith("image/svg+xml")
+        assert r.text.lstrip().startswith("<svg")
+
+
 def test_sanitize_normalizes_editor_output():
     dirty = ('<div style="color:red"><b>Bold</b> and <i>it</i> <span class="x">plain</span> '
              '<span lang="fr">bonjour</span></div><div><br></div><script>x()</script>'
