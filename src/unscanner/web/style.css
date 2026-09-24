@@ -61,7 +61,9 @@ body.dragging iframe, body.dragging img { pointer-events: none; }
 /* Only the page list scrolls, so the document picker and filter above it stay in view.
    padding-right keeps the page labels clear of an overlay scrollbar, which widens on hover */
 .page-list { list-style: none; margin: 0; padding: 0 12px 0 0; font-size: 0.9em; flex: 1; min-height: 0; overflow: auto; }
-.page-list li { display: flex; align-items: center; gap: 0.35em; padding: 0.12em 0.3em; border-radius: 3px; cursor: pointer; white-space: nowrap; }
+/* position: relative keeps each row's .visually-hidden status (position: absolute) inside the row; without
+   it the labels of a long list are placed against the page and stretch it to the list's full height */
+.page-list li { position: relative; display: flex; align-items: center; gap: 0.35em; padding: 0.12em 0.3em; border-radius: 3px; cursor: pointer; white-space: nowrap; }
 .page-list li:hover { background: var(--sel); }
 .page-list li[aria-current="true"] { background: var(--sel); font-weight: 600; }
 .page-list li.picked { background: var(--sel); box-shadow: inset 3px 0 0 var(--accent); }

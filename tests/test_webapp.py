@@ -93,6 +93,8 @@ def test_open_edit_build_validate(client, tmp_path):
     assert 'id="btn-open"' in html and 'id="btn-save-all"' in html
     assert "doc-select" not in html and "doc-select" not in js
     assert "function renderRecent()" in js
+    # the page list's hidden status labels stay in their row, so a long document does not stretch the page
+    assert ".page-list li { position: relative;" in client.get("/static/style.css").text
     # File > Help opens a dialog explaining the features in plain words
     assert 'id="btn-help" type="button" role="menuitem"' in html and 'id="dlg-help"' in html
     assert '$("#btn-help").addEventListener' in js
