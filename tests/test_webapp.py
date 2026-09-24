@@ -84,7 +84,7 @@ def test_open_edit_build_validate(client, tmp_path):
     assert 'e.key === "F2"' in client.get("/static/app.js").text
     # arrow keys get the caret out of a table that ends or starts the page
     assert "function escapeTable(e)" in client.get("/static/app.js").text
-    # the File menu holds Open PDF, Save, Recent documents, Documents, Export, Import and Settings;
+    # the File menu holds Open PDF, Save, Recent projects, Manage projects, Export, Import and Settings;
     # Open PDF and Save stay on the toolbar too, and the old document dropdown is gone
     html, js = client.get("/").text, client.get("/static/app.js").text
     assert 'id="btn-file"' in html and 'aria-haspopup="menu"' in html and 'id="file-menu" class="app-menu" role="menu"' in html
@@ -93,6 +93,8 @@ def test_open_edit_build_validate(client, tmp_path):
     assert 'id="btn-open"' in html and 'id="btn-save-all"' in html
     assert "doc-select" not in html and "doc-select" not in js
     assert "function renderRecent()" in js
+    # a project is the work on a PDF; the menu says "project" so the two are not confused
+    assert ">Recent projects <" in html and ">Manage projects…</button>" in html and "Recent documents" not in html
     # the open document's title is in the title bar, not on the page
     assert "doc-title" not in html and "function setWindowTitle(title)" in js
     # the UI code is revalidated on every load, so a restart picks up changes to it

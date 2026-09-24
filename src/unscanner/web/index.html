@@ -18,10 +18,10 @@
       <button id="menu-save" type="button" role="menuitem" disabled title="Save every page with unsaved edits (Ctrl+S)">Save</button>
       <div class="menu-sep" role="separator"></div>
       <div class="menu-sub">
-        <button id="menu-recent" type="button" role="menuitem" aria-haspopup="menu" aria-expanded="false" aria-controls="recent-menu" title="Documents opened on this computer, most recent first">Recent documents <span class="menu-arrow" aria-hidden="true">▸</span></button>
-        <div id="recent-menu" class="app-menu" role="menu" aria-label="Recent documents" hidden></div>
+        <button id="menu-recent" type="button" role="menuitem" aria-haspopup="menu" aria-expanded="false" aria-controls="recent-menu" title="Projects opened on this computer, most recent first">Recent projects <span class="menu-arrow" aria-hidden="true">▸</span></button>
+        <div id="recent-menu" class="app-menu" role="menu" aria-label="Recent projects" hidden></div>
       </div>
-      <button id="btn-documents" type="button" role="menuitem" title="Every project on this computer: reopen, locate a moved PDF, or remove">Documents…</button>
+      <button id="btn-documents" type="button" role="menuitem" title="Every project on this computer: reopen, locate a moved PDF, or remove">Manage projects…</button>
       <div class="menu-sep" role="separator"></div>
       <button id="btn-export" type="button" role="menuitem" disabled title="Download this project as a file to keep next to the PDF: a backup, or to continue on another computer">Export project</button>
       <button id="btn-import" type="button" role="menuitem" title="Load a project file exported here or on another computer">Import project…</button>
@@ -263,11 +263,11 @@
 </dialog>
 
 <dialog id="dlg-documents" class="dlg-documents">
-  <h2>Documents</h2>
+  <h2>Manage projects</h2>
   <p><small>Every PDF opened on this computer and the work done on it. Removing a project deletes its transcription, not the PDF. <span class="window-only">A project whose PDF was moved or renamed can be pointed at the file again with Locate.</span></small></p>
-  <table id="documents-table"><thead><tr><th scope="col">Document</th><th scope="col">PDF</th><th scope="col">Pages</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+  <table id="documents-table"><thead><tr><th scope="col">Title</th><th scope="col">PDF</th><th scope="col">Pages</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
     <tbody></tbody></table>
-  <p id="documents-empty" hidden>No documents yet. Open a PDF to start.</p>
+  <p id="documents-empty" hidden>No projects yet. Open a PDF to start.</p>
   <menu><button id="btn-cleanup" type="button" hidden title="Remove every project whose PDF is no longer where it was">Remove all whose PDF is missing</button>
     <span class="spacer"></span><button type="button" class="dlg-cancel">Close</button></menu>
 </dialog>

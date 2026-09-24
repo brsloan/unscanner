@@ -25,7 +25,7 @@ button:focus-visible, a:focus-visible, [contenteditable]:focus-visible, .gutter:
 /* ---- top bar: one line, never wraps */
 .topbar { display: flex; align-items: center; gap: 0.35em; padding: 0.25em 0.6em; border-bottom: 1px solid var(--line); background: var(--panel); flex: none; overflow-x: auto; white-space: nowrap; }
 .topbar h1 { font-size: 1em; margin: 0 0.4em 0 0; }
-/* File menu: a menu-bar button with a drop-down (role=menu), and Recent documents as a submenu to its right. */
+/* File menu: a menu-bar button with a drop-down (role=menu), and Recent projects as a submenu to its right. */
 .menubar { position: relative; flex: none; }
 .menubar > button[aria-expanded="true"] { background: var(--sel); border-color: var(--accent); }
 .app-menu { position: fixed; z-index: 30; display: flex; flex-direction: column; min-width: 13em; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 5px; box-shadow: 0 4px 14px rgb(0 0 0 / 0.25); white-space: nowrap; }

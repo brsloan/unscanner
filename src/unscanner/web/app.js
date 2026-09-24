@@ -435,7 +435,7 @@ async function openDoc(docId, pageToShow) {
   }
   state.doc = await api(`/documents/${docId}`);
   localStorage.setItem("unscanner.lastDoc", docId);
-  const i = state.docs.findIndex((d) => d.doc_id === docId);  // Recent documents: the one just opened comes first
+  const i = state.docs.findIndex((d) => d.doc_id === docId);  // Recent projects: the one just opened comes first
   if (i > 0) state.docs.unshift(...state.docs.splice(i, 1));
   setWindowTitle(state.doc.title || docId);
   renderRecent(); renderPages(); renderMeta();
@@ -1617,7 +1617,7 @@ async function bulkPages(action) {
   renderPages(); renderMeta();
 }
 
-// ---- File menu: Open PDF, Save, Recent documents (a submenu), Documents, Export, Import, Settings.
+// ---- File menu: Open PDF, Save, Recent projects (a submenu), Manage projects, Export, Import, Settings.
 // The popups are position: fixed (the top bar scrolls sideways and would clip them) and placed from
 // the button that opens them. Keyboard: arrows move, Right/Left open and close the submenu, Escape closes.
 const fileMenu = $("#file-menu"), recentMenu = $("#recent-menu");
@@ -1657,7 +1657,7 @@ function renderRecent() {
   recentMenu.innerHTML = state.docs.length ? state.docs.map((d) =>
     `<button type="button" role="menuitem" data-doc="${d.doc_id}"${d.doc_id === current ? ' aria-current="true"' : ""}>` +
     `<span class="check" aria-hidden="true">${d.doc_id === current ? "✓" : ""}</span><span class="label">${escapeHtml(d.title || d.doc_id)}${d.source_found ? "" : " (PDF missing)"}</span></button>`).join("")
-    : '<button type="button" role="menuitem" disabled>No documents yet</button>';
+    : '<button type="button" role="menuitem" disabled>No projects yet</button>';
 }
 $("#btn-file").addEventListener("click", () => (fileMenu.hidden ? openFileMenu(false) : closeFileMenu(false)));
 $("#btn-file").addEventListener("keydown", (e) => {
