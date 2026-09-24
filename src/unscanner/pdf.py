@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import io
+import re
 import shutil
 from functools import lru_cache
 from pathlib import Path
@@ -232,6 +233,33 @@ def _now() -> str:
     return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
 
 
+# Titles and authors that PDF software writes by itself: a converter's "Microsoft Word - <file name>",
+# a file name, an id, a placeholder, a server's service account. The PDF's file name makes a better
+# title than these, and no author is better than a machine's.
+_APP_PREFIX = re.compile(r"^(microsoft\s+)?(word|excel|powerpoint|publisher|office)\s+-\s+", re.I)
+_FILE_NAME = re.compile(r"\.(docx?|rtf|odt|wpd|pptx?|xlsx?|pdf|txt|html?|tiff?|jpe?g|png|indd|qxd|e?ps)$", re.I)
+_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-|[0-9a-f]{16}", re.I)
+_PLACEHOLDER = re.compile(r"^(untitled|no title|title|none|unknown|(scanned |microsoft word )?"
+                          r"(document|scan|image|page|presentation)) ?\d*$", re.I)
+_MACHINE_AUTHOR = re.compile(r"^(svc|service)[-_.]|^(administrator|admin|user|owner|default|unknown|none|"
+                             r"author|scanner|windows user|microsoft office user|registered user)$", re.I)
+
+
+def usable_title(value: str | None) -> str:
+    """The title stored in a PDF, or "" when software made it up rather than a person."""
+    value = (value or "").strip()
+    if (not value or _APP_PREFIX.match(value) or _FILE_NAME.search(value) or _ID.search(value)
+            or _PLACEHOLDER.match(value) or ("_" in value and " " not in value)):
+        return ""
+    return value
+
+
+def usable_author(value: str | None) -> str:
+    """The author stored in a PDF, or "" when it is an account or placeholder rather than a person."""
+    value = (value or "").strip()
+    return "" if _MACHINE_AUTHOR.search(value) else value
+
+
 def new_document(pdf_path: str | Path, work_root: str | Path, title: str = "", author: str = "",
                  language: str = "en") -> Document:
     """Open a PDF: its project when it has one here (found by the file's content, so a renamed or moved
@@ -261,8 +289,8 @@ def new_document(pdf_path: str | Path, work_root: str | Path, title: str = "", a
     doc = Document(
         source=str(pdf_path),
         workdir=str(workdir),
-        title=title or (meta.get("title") or "").strip() or pdf_path.stem,
-        author=author or (meta.get("author") or "").strip(),
+        title=title or usable_title(meta.get("title")) or pdf_path.stem,
+        author=author or usable_author(meta.get("author")),
         language=language,
         pages=pages,
         fingerprint=fp,

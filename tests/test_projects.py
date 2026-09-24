@@ -200,3 +200,26 @@ def test_output_folder_is_named_like_the_work_folder(tmp_path):
         r = c.post(f"/api/documents/{doc_id}/build", json={"epub": False})
         assert r.status_code == 200, r.text
         assert (tmp_path / "out" / doc_id / "built.html").exists()
+
+
+def test_a_title_or_author_made_by_software_is_not_used(tmp_path):
+    import pymupdf
+
+    from unscanner.pdf import usable_author, usable_title
+
+    for made_up in ["Microsoft Word - $ASQ102201_supp_undefined_5CB76878-AF29-11E0-8D1D-9A29D352ABB1.doc",
+                    "Microsoft PowerPoint - Week 3", "chapter3.docx", "Smith_2011_ch3", "Untitled", "Document1",
+                    "Scanned Document", "scan 0001", "reading 5cb76878af2911e08d1d", "  "]:
+        assert usable_title(made_up) == "", made_up
+    for real in ["The Sumter Slave Bounty", "1984", "Word and Object", "Chapter 3: Reconstruction"]:
+        assert usable_title(real) == real
+    for made_up in ["svc-activepdf", "Administrator", "Microsoft Office User", "owner"]:
+        assert usable_author(made_up) == "", made_up
+    assert usable_author(" Eric Foner ") == "Eric Foner"
+
+    path = make_pdf(tmp_path / "Sumter Slave Bounty.pdf")
+    with pymupdf.open(str(path)) as p:
+        p.set_metadata({"title": "Microsoft Word - $ASQ102201_supp.doc", "author": "svc-activepdf"})
+        p.saveIncr()
+    doc = new_document(path, tmp_path / "work")
+    assert doc.title == "Sumter Slave Bounty" and doc.author == ""
