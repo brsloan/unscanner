@@ -93,6 +93,8 @@ def test_open_edit_build_validate(client, tmp_path):
     assert 'id="btn-open"' in html and 'id="btn-save-all"' in html
     assert "doc-select" not in html and "doc-select" not in js
     assert "function renderRecent()" in js
+    # the open document's title is in the title bar, not on the page
+    assert "doc-title" not in html and "function setWindowTitle(title)" in js
     # the UI code is revalidated on every load, so a restart picks up changes to it
     assert client.get("/").headers["cache-control"] == "no-cache"
     assert client.get("/static/app.js").headers["cache-control"] == "no-cache"
@@ -425,3 +427,22 @@ def test_outline_lists_headings_for_the_headings_sidebar(client, tmp_path):
     client.put(f"/api/documents/{doc_id}/pages/2", json={"html": "<h5>Deeper</h5>", "label": "8", "version": 1})
     assert client.get(f"/api/documents/{doc_id}/outline").json()["headings"][2]["level"] == 5
     assert client.get("/api/documents/nope/outline").status_code == 404
+
+
+def test_window_title_follows_the_open_document(client, monkeypatch):
+    from unscanner import desktop
+
+    # in a browser tab there is no window: the page sets its own document.title, the server does nothing
+    r = client.put("/api/app/title", json={"title": "Sumter Slave Bounty"})
+    assert r.json() == {"title": "Sumter Slave Bounty - Unscanner", "window": False}
+
+    class FakeWindow:
+        titles: list[str] = []
+
+        def set_title(self, title):
+            self.titles.append(title)
+
+    monkeypatch.setattr(desktop, "window", FakeWindow())
+    assert client.put("/api/app/title", json={"title": " Sumter Slave Bounty "}).json()["window"] is True
+    assert client.put("/api/app/title", json={"title": ""}).json()["title"] == "Unscanner"
+    assert FakeWindow.titles == ["Sumter Slave Bounty - Unscanner", "Unscanner"]

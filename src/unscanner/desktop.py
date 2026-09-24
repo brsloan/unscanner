@@ -100,6 +100,14 @@ def pick_file(kind: str, directory: str = "") -> str | None:
     return str(chosen[0]) if chosen else None
 
 
+def set_title(title: str) -> None:
+    """Put `title` in the window's title bar (the page keeps its own document.title for a browser tab).
+    Raises RuntimeError when the UI is not in a window."""
+    if window is None:
+        raise RuntimeError("no window")
+    window.set_title(title)
+
+
 # ---------------------------------------------------------------- without a console
 
 def has_console() -> bool:

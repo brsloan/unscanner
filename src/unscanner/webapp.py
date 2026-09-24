@@ -96,6 +96,10 @@ class PickRequest(BaseModel):
     kind: str = "pdf"  # "pdf" | "project"
 
 
+class TitleRequest(BaseModel):
+    title: str = ""  # the open document's title; empty when none is open
+
+
 class PropertiesUpdate(BaseModel):
     title: str
     author: str = ""
@@ -278,6 +282,17 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             return {"path": desktop.pick_file(req.kind)}
         except RuntimeError as e:
             raise HTTPException(409, "not in a window: choose the file in the form instead") from e
+
+    @app.put("/api/app/title")
+    def set_app_title(req: TitleRequest) -> dict[str, Any]:
+        """Name the window after the open document: "<title> - Unscanner", or "Unscanner" with none open.
+        {title} as set, and window: false (nothing done) when the UI is in a browser tab."""
+        title = f"{req.title.strip()} - Unscanner" if req.title.strip() else "Unscanner"
+        try:
+            desktop.set_title(title)
+        except RuntimeError:
+            return {"title": title, "window": False}
+        return {"title": title, "window": True}
 
     @app.get("/api/documents")
     def list_documents() -> list[dict[str, Any]]:

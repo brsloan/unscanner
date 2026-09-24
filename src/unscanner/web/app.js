@@ -413,6 +413,13 @@ async function loadDocs(selectId) {
   else if (selectId) await openDoc("");
 }
 
+// The open document's title goes in the title bar: the tab's for a browser, the window's (through the
+// server, which holds the pywebview window) in the app. Nothing on the page repeats it.
+function setWindowTitle(title) {
+  document.title = title ? `${title} - Unscanner` : "Unscanner";
+  if (state.app && state.app.window) api("/app/title", { method: "PUT", body: { title } }).catch(() => {});
+}
+
 async function openDoc(docId, pageToShow) {
   storeDraftNow();  // keep unsaved edits of the page we are leaving, whatever document it belongs to
   if ($("#dlg-properties").open) $("#dlg-properties").close("cancel");  // it belongs to the document we are leaving
@@ -421,8 +428,8 @@ async function openDoc(docId, pageToShow) {
   state.picked.clear(); state.pickAnchor = null; closePageMenu();
   if (!docId) {  // no document (the last one was removed): an empty editor, and nothing to run on it
     state.doc = null; state.page = null; state.pageData = null; state.dirty = false;
-    $("#editor").innerHTML = ""; $("#doc-meta").textContent = ""; $("#doc-title").textContent = "";
-    renderRecent();
+    $("#editor").innerHTML = ""; $("#doc-meta").textContent = "";
+    setWindowTitle(""); renderRecent();
     ["#btn-transcribe", "#btn-build", "#btn-validate", "#btn-properties", "#btn-export"].forEach((b) => ($(b).disabled = true));
     renderPages(); return;
   }
@@ -430,7 +437,7 @@ async function openDoc(docId, pageToShow) {
   localStorage.setItem("unscanner.lastDoc", docId);
   const i = state.docs.findIndex((d) => d.doc_id === docId);  // Recent documents: the one just opened comes first
   if (i > 0) state.docs.unshift(...state.docs.splice(i, 1));
-  $("#doc-title").textContent = state.doc.title || docId;
+  setWindowTitle(state.doc.title || docId);
   renderRecent(); renderPages(); renderMeta();
   if (!state.doc.source_found) {
     showBanner(`The PDF is not at ${state.doc.source}. The pages can be read and exported; to see the scans again, point the project at the file.`,
@@ -1968,7 +1975,7 @@ function showProperties(d) {
   Object.assign(state.doc, { title: d.title, author: d.author, language: d.language });
   const entry = state.docs.find((x) => x.doc_id === d.doc_id);
   if (entry) entry.title = d.title;
-  if (state.doc.doc_id === d.doc_id) $("#doc-title").textContent = d.title || d.doc_id;
+  if (state.doc.doc_id === d.doc_id) setWindowTitle(d.title || d.doc_id);
   renderRecent();
 }
 $("#form-properties").addEventListener("submit", async (e) => {
