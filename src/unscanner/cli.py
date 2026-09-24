@@ -12,7 +12,8 @@
   unscanner export <pdf|workdir> [-o file]    write the project file (default: next to the PDF)
   unscanner import <file.unscanner.json> [--pdf P] [--replace]
   unscanner serve  [--work work]  (MCP server over stdio)
-  unscanner ui     [--port 8765] [--no-browser]   (local web UI)
+  unscanner ui     [--port 8765] [--browser] [--no-browser] [--no-console]   (local web UI: its own window
+                   when pywebview is installed, else a browser tab)
 """
 
 from __future__ import annotations
@@ -206,9 +207,35 @@ def cmd_serve(args) -> None:
 
 
 def cmd_ui(args) -> None:
+    import os
+    import traceback
+
+    from . import desktop
+
+    if args.no_console and not (args.browser or args.no_browser):
+        # start-unscanner.bat: when the UI can open in its own window, hand over to a copy with no console
+        # (see desktop.py); otherwise stay here, in the browser, where the console can stop the app.
+        if (desktop.pythonw() and desktop.port_free(args.host, args.port)
+                and desktop.window_engine()[0] is not None):
+            desktop.detach([a for a in args.argv if a != "--no-console"])
+            print("Unscanner is opening in its own window.")
+            return
+    if not desktop.has_console():  # the pythonw copy: output to work/unscanner.log
+        desktop.log_to_file(args.work)
     from .webapp import serve
 
-    serve(args.work, args.out, host=args.host, port=args.port, open_browser=not args.no_browser)
+    try:
+        serve(args.work, args.out, host=args.host, port=args.port, open_browser=not args.no_browser,
+              window=not args.browser, console=desktop.log_path is None)
+    except (Exception, SystemExit) as e:
+        if isinstance(e, SystemExit) and not e.code:
+            raise
+        traceback.print_exc()
+        if desktop.log_path is not None:
+            desktop.show_error(f"Unscanner stopped with an error: {type(e).__name__}: {e}")
+        elif os.environ.get(desktop.PAUSE_ENV):  # a console the app opened itself would close at once
+            input("\nUnscanner stopped with an error. Press Enter to close this window.")
+        raise SystemExit(1) from e
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -255,9 +282,14 @@ def main(argv: list[str] | None = None) -> None:
     p.set_defaults(func=cmd_import)
     p = sub.add_parser("serve"); p.set_defaults(func=cmd_serve)
     p = sub.add_parser("ui"); p.add_argument("--host", default="127.0.0.1"); p.add_argument("--port", type=int, default=8765)
-    p.add_argument("--no-browser", action="store_true"); p.set_defaults(func=cmd_ui)
+    p.add_argument("--browser", action="store_true", help="open a browser tab even when pywebview could show a window")
+    p.add_argument("--no-browser", action="store_true", help="open nothing, only serve")
+    p.add_argument("--no-console", action="store_true",
+                   help="Windows: when the UI can open in its own window, run without this console (output in "
+                        "work/unscanner.log); start-unscanner.bat uses it"); p.set_defaults(func=cmd_ui)
 
     args = ap.parse_args(argv)
+    args.argv = list(sys.argv[1:] if argv is None else argv)
     args.func(args)
 
 

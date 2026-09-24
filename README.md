@@ -79,8 +79,18 @@ Environment variables (CLI flags override them):
 ## Local web UI
 
 ```bash
-python -m unscanner.cli ui          # opens http://127.0.0.1:8765 in your browser
+python -m unscanner.cli ui          # opens http://127.0.0.1:8765 in its own window, or your browser
 ```
+
+With the optional `pywebview` package (`pip install -e .[window]`; the portable zip has it) the UI opens
+in a window of its own, and closing the window stops the app. On Windows this needs the Microsoft Edge
+WebView2 Runtime, which Windows 11 includes. Started from `start-unscanner.bat` (`ui --no-console`) it
+also runs without a console window: the console closes after a moment, messages go to
+`work/unscanner.log`, and an error that stops the app appears in a message box. Without pywebview or
+WebView2 it opens in your browser as before, the console stays, and closing it or Ctrl+C stops the app. `--browser` opens a browser tab anyway, and `--no-browser` only serves.
+In the window, downloads (HTML, EPUB, Export project) ask where to save, and the HTML preview opens in
+your browser. Unsaved drafts and layout are kept in `work/.webview/`, apart from the browser's copy, so
+save your pages before switching between the two.
 
 The UI is for the review step, which is where the human time goes. It shows the scanned page next
 to an editor for that page's transcription, with the page list colour-coded by approval status (green approved,

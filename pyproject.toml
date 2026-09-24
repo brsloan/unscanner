@@ -26,6 +26,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest"]
 keyring = ["keyring>=24"]  # keep API keys in the OS credential store instead of work/settings.json
+window = ["pywebview>=6"]  # `unscanner ui` in its own window instead of a browser tab (Windows: WebView2)
 
 [project.scripts]
 unscanner = "unscanner.cli:main"

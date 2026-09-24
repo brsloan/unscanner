@@ -23,11 +23,11 @@ def fake_embed_zip(tmp_path: Path) -> Path:
     return p
 
 
-def test_project_info_reads_dependencies_and_keyring():
+def test_project_info_reads_dependencies_and_extras():
     version, deps = bp.project_info(ROOT)
     assert version
     names = " ".join(deps)
-    assert "pymupdf" in names and "rapidocr" in names and "keyring" in names
+    assert "pymupdf" in names and "rapidocr" in names and "keyring" in names and "pywebview" in names
 
 
 def test_build_lays_out_a_portable_folder_and_zip(tmp_path):

@@ -44,9 +44,12 @@ PORTABLE_README = """\
 unscanner, portable copy for Windows
 ====================================
 
-Start: double-click start-unscanner.bat. The web UI opens in your browser at http://127.0.0.1:8765.
-Close the black window to stop it. Nothing is installed and no admin rights are needed; your work is
-kept in the work\\ and out\\ folders next to this file.
+Start: double-click start-unscanner.bat. A black window flashes up, then Unscanner opens in its own
+window (the very first start takes a little longer); close that window to stop it. Its messages go to
+work\\unscanner.log. On a computer without the Microsoft Edge WebView2 Runtime (Windows 11 has it) it
+opens in your browser at http://127.0.0.1:8765 instead and the black window stays: close that to stop it.
+Nothing is installed and no admin rights are needed; your work is kept in the
+work\\ and out\\ folders next to this file.
 
 If Windows says it protected your PC: right-click the downloaded zip, Properties, tick Unblock, OK,
 and unzip it again (or click More info, Run anyway).
@@ -77,10 +80,14 @@ rem Documents are kept in this folder's work\\ and out\\ wherever you run it fro
 """
 
 
+PORTABLE_EXTRAS = ("keyring", "window")  # API keys in Windows Credential Manager; the UI in its own window
+
+
 def project_info(root: Path = ROOT) -> tuple[str, list[str]]:
-    """The version and the runtime dependencies (plus the keyring extra) from pyproject.toml."""
+    """The version and the runtime dependencies (plus PORTABLE_EXTRAS) from pyproject.toml."""
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]
-    return project["version"], project["dependencies"] + project["optional-dependencies"]["keyring"]
+    extras = [dep for name in PORTABLE_EXTRAS for dep in project["optional-dependencies"][name]]
+    return project["version"], project["dependencies"] + extras
 
 
 def fetch_python(version: str, cache: Path) -> Path:
@@ -108,8 +115,14 @@ def unpack_python(embed_zip: Path, python_dir: Path) -> None:
     pth.write_text("\n".join(lines + ["..\\src", "import site"]) + "\n", encoding="utf-8")
 
 
+# Wheels only, so nothing native gets compiled on the build machine; these pure-Python packages are
+# published as source only (proxy-tools: a dependency of pywebview).
+SOURCE_ONLY = ("proxy-tools",)
+
+
 def install_dependencies(deps: list[str], site_packages: Path) -> None:
     subprocess.run([sys.executable, "-m", "pip", "install", "--target", str(site_packages), "--only-binary=:all:",
+                    *(f"--no-binary={name}" for name in SOURCE_ONLY),
                     "--no-compile", "--disable-pip-version-check", *deps], check=True)
 
 

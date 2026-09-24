@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import keystore, project
+from . import desktop, keystore, project
 from .assemble import EXPORT_DEFAULTS, image_mime, outline
 from .backends.openai_compat import DEFAULT_MODEL as DEFAULT_OPENAI_MODEL
 from .document import Document, normalize_rotation, parse_page_range, slugify
@@ -726,14 +726,58 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
 
 
 def serve(work_root: str = "work", out_root: str = "out", host: str = "127.0.0.1", port: int = 8765,
-          open_browser: bool = True) -> None:
+          open_browser: bool = True, window: bool = True, console: bool = True) -> None:
+    """Run the UI. open_browser=False only serves (for a browser someone opens themselves). Otherwise the
+    UI opens in its own window when pywebview is installed and can show it (window=False: never), and
+    closing the window stops the app; else in a browser tab, and Ctrl+C stops it.
+
+    console=False is the pythonw copy start-unscanner.bat hands over to (see desktop.py): it has only a
+    log file, so errors go to a message box, and when the window cannot open it hands over to a copy
+    with a console instead of running a browser tab nothing could stop."""
     import webbrowser
 
     import uvicorn
 
     app = create_app(work_root, out_root)
     url = f"http://{host}:{port}/"
-    if open_browser:
-        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
-    print(f"unscanner UI at {url}  (Ctrl+C to stop)")
-    uvicorn.run(app, host=host, port=port, log_level="warning")
+    server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="warning"))
+    webview, why_not = desktop.window_engine() if open_browser and window else (None, "")
+    if why_not:
+        print(f"Opening the browser instead of a window: {why_not}.")
+    if webview is None and not console and open_browser:
+        desktop.reopen_with_console()
+        return
+    if webview is None:
+        if open_browser:
+            threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+        print(f"unscanner UI at {url}  (Ctrl+C to stop)")
+        server.run()
+        return
+
+    # pywebview needs the main thread, so the server runs beside it.
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    while not server.started and thread.is_alive():
+        time.sleep(0.05)
+    if not thread.is_alive():  # uvicorn has said why (into the log, without a console)
+        if not console:
+            desktop.show_error(f"Unscanner could not start at {url}. Is it already open? Another program may be "
+                               f"using port {port}.")
+        return
+    print(f"unscanner UI at {url}, in its own window. Close the window to stop.")
+    try:
+        desktop.open_window(webview, url, work_root)
+    except Exception as e:  # noqa: BLE001 - no window is no reason to stop: the browser works
+        print(f"Could not open a window ({type(e).__name__}: {e}); opening the browser instead.")
+        if not console:  # this copy cannot be stopped from a browser tab: hand over to one that can
+            server.should_exit = True
+            thread.join(10)
+            desktop.reopen_with_console()
+            return
+        print("Ctrl+C to stop.")
+        webbrowser.open(url)
+        with contextlib.suppress(KeyboardInterrupt):
+            while thread.is_alive():
+                thread.join(0.5)
+    server.should_exit = True
+    thread.join(10)
