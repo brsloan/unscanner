@@ -22,6 +22,12 @@ pip install -e .
 Python 3.11+. Optional for EPUB validation: Java 21 and [EPUBCheck](https://www.w3.org/publishing/epubcheck/)
 unpacked into `tools/epubcheck-*/` (or set `EPUBCHECK_JAR` to point at `epubcheck.jar` elsewhere).
 
+**For colleagues without Python (Windows):** `python scripts/build_portable.py` makes
+`dist/unscanner-<version>-win64.zip` (about 165 MB, or 130 MB with `--no-epubcheck`). It holds its own
+Python and every dependency. People unzip it anywhere and double-click `start-unscanner.bat`: nothing to
+install and no admin rights needed. `src/unscanner/prompts.py` stays an ordinary file they can edit. See
+`PORTABLE.txt` in the zip.
+
 **Before your first run, edit `CONTEXT` at the top of `src/unscanner/prompts.py`.** It tells the model
 who is doing the work and on what legal basis (a university library's accessibility service, source
 held lawfully, use reviewed by counsel) so that faithful transcription is not mistaken for a copyright

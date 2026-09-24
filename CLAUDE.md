@@ -25,6 +25,7 @@ changes small, plain, and covered by tests.
 | `src/unscanner/diff.py` | word-level diff of the scan's word boxes against the editor's words (the Diff button): `missing` / `changed` boxes on the scan, `extra` / `changed` words in the editor. Display only: the editor highlights use the CSS Custom Highlight API, so nothing is added to the page HTML |
 | `src/unscanner/project.py` | Export project / Import project: a document's state as one portable `<pdf name>.unscanner.json` (no paths, no PDF) to keep next to the PDF. Import needs the same PDF, sanitizes the HTML, refuses to overwrite an existing project without `replace`, and on a replace lifts every page version so open editors get a 409. UI buttons, `/api/documents/{id}/export`, `/api/projects/import`, CLI `export` / `import` |
 | `src/unscanner/session.py` | `work/session.json`: what the UI shows (for `get_current_view`) and agent navigation requests (`show_page`) |
+| `scripts/build_portable.py` | the portable Windows zip: python.org's embeddable Python with the dependencies in `python/`, the source as plain files in `src/`, and the same `start-unscanner.bat` (it uses `python\python.exe` when that exists). Launchers run `python.exe -s` because the `._pth` file does not keep out the user's own site-packages |
 
 The program was called `remediate` until September 2026. Three things still accept the old name so
 nobody loses work: `keystore.LEGACY_SERVICE` (saved API keys), `project.LEGACY_FORMATS` (exported
@@ -124,6 +125,7 @@ pip install -e .[dev]
 python -m pytest -q          # synthetic PDF, mocked HTTP; no API key needed
 python -m unscanner.cli ui   # web UI at http://127.0.0.1:8765
 python -m unscanner.cli serve   # MCP server on stdio (see .mcp.json)
+python scripts/build_portable.py   # dist/unscanner-<version>-win64.zip, needs Windows and network
 ```
 
 Sample scans live in `pdfs/` (not committed). `work/` and `out/` are generated.
