@@ -38,6 +38,16 @@ leave alone. `unscanner-cli.exe` next to it is the command line; for Claude over
 code changes need a rebuild, but the prompts are edited in the app (see below). The installer is not
 signed: Windows SmartScreen asks once ("More info", then "Run anyway").
 
+**Releases:** pushing a tag `v<version>` builds both on GitHub (`.github/workflows/release.yml`: tests,
+then the portable zip and the installer on a Windows runner) and publishes them as a GitHub release.
+Set the same version in `pyproject.toml` and `src/unscanner/__init__.py` first; a tag that does not
+match stops the run before anything is built.
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
 **Before your first run, open Settings > Edit prompts in the web UI and rewrite "Who is doing the work
 and why".** It tells the model who is doing the work and on what legal basis (a university library's
 accessibility service, source held lawfully, use reviewed by counsel) so that faithful transcription is

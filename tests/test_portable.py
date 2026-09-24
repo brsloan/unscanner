@@ -30,6 +30,13 @@ def test_project_info_reads_dependencies_and_extras():
     assert "pymupdf" in names and "rapidocr" in names and "keyring" in names and "pywebview" in names
 
 
+def test_version_is_the_same_in_pyproject_and_the_package():
+    # The release workflow names the build after pyproject.toml and checks the tag against both.
+    import unscanner
+
+    assert bp.project_info(ROOT)[0] == unscanner.__version__
+
+
 def test_build_lays_out_a_portable_folder_and_zip(tmp_path):
     zip_path = bp.build(ROOT, tmp_path / "dist", fake_embed_zip(tmp_path), install=False, epubcheck=False)
     folder = tmp_path / "dist" / "unscanner"
