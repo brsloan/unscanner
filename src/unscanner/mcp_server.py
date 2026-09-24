@@ -29,7 +29,7 @@ from mcp.server.mcpserver.utilities.types import Image
 from .document import Document, parse_page_range, slugify
 from .pdf import cached_page_png, new_document
 from .pipeline import apply_result, ensure_draft_text
-from .prompts import GUIDELINES, normalize_result
+from .prompts import guidelines, normalize_result
 from .session import Session
 
 server = MCPServer(
@@ -155,8 +155,9 @@ def get_status(doc_id: str) -> dict[str, Any]:
 @server.tool()
 def get_guidelines() -> str:
     """The transcription contract (HTML rules, page-number labels, footnotes, figures, continuation flags).
-    Read this once before writing page HTML with set_page so your output matches what the assembler expects."""
-    return GUIDELINES
+    Read this once before writing page HTML with set_page so your output matches what the assembler expects.
+    It includes the house rules this library set in the web UI (Settings > Edit prompts)."""
+    return guidelines(_work_root())
 
 
 @server.tool()

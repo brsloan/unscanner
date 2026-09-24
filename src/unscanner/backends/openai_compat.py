@@ -70,14 +70,14 @@ class OpenAICompatBackend(Backend):
             return {}
         return {"chat_template_kwargs": {"enable_thinking": False}, "reasoning_effort": "none"}
 
-    def transcribe(self, image_png: bytes, user_prompt: str) -> tuple[dict, dict]:
+    def transcribe(self, image_png: bytes, user_prompt: str, system: str | None = None) -> tuple[dict, dict]:
         img = base64.standard_b64encode(image_png).decode()
         body: dict = {
             "model": self.model,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
             "messages": [
-                {"role": "system", "content": GUIDELINES},
+                {"role": "system", "content": system or GUIDELINES},
                 {"role": "user", "content": [
                     {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img}"}},
                     {"type": "text", "text": user_prompt},

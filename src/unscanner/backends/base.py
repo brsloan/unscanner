@@ -46,8 +46,9 @@ class Backend(ABC):
     model: str = ""
 
     @abstractmethod
-    def transcribe(self, image_png: bytes, user_prompt: str) -> tuple[dict, dict]:
-        """Return (normalized result dict, usage dict). Raise BackendError on unrecoverable failure."""
+    def transcribe(self, image_png: bytes, user_prompt: str, system: str | None = None) -> tuple[dict, dict]:
+        """Return (normalized result dict, usage dict). Raise BackendError on unrecoverable failure.
+        system is the system prompt (prompts.guidelines() with the library's edits); None means the built-in one."""
 
     def describe_image(self, image_png: bytes, prompt: str, max_tokens: int | None = None) -> str:
         """Return the model's plain-text answer about an image (alt text, or a region re-read as a

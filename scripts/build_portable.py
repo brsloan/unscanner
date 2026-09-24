@@ -7,7 +7,7 @@ The folder it makes (dist/unscanner/, zipped as dist/unscanner-<version>-win64.z
     start-unscanner.bat   the web UI (the same launcher as the repo; it prefers python\\python.exe)
     unscanner.bat         the command line, with work\\ and out\\ kept in this folder
     python\\               Windows' embeddable Python from python.org, dependencies in Lib\\site-packages
-    src\\unscanner\\        the program as plain .py files, so prompts.py can still be edited in place
+    src\\unscanner\\        the program as plain .py files, so a library can still adapt it in place
     tools\\epubcheck-*\\    copied when the repo has it (it still needs Java on the machine)
 
 Run it on 64-bit Windows with the same Python minor version as the embedded one (pip installs wheels
@@ -51,7 +51,8 @@ kept in the work\\ and out\\ folders next to this file.
 If Windows says it protected your PC: right-click the downloaded zip, Properties, tick Unblock, OK,
 and unzip it again (or click More info, Run anyway).
 
-Before the first real run, edit CONTEXT at the top of src\\unscanner\\prompts.py (see README.md).
+Before the first real run, open Settings > Edit prompts and make "Who is doing the work and why" true
+for your institution (see README.md). Your prompts are kept in work\\prompts\\.
 Everything in src\\unscanner is plain Python and takes effect the next time you start the app.
 
 Command line: unscanner.bat <command> ..., e.g.  unscanner.bat status work\\my-reading
@@ -64,8 +65,8 @@ Without the UI, run it over stdio with this folder's Python:
 
 EPUB validation (epubcheck) runs only when Java 21 or newer is installed.
 
-Updating: unzip the new version to a new folder and move your work\\ folder (and any edits you made to
-src\\unscanner\\prompts.py) across.
+Updating: unzip the new version to a new folder and move your work\\ folder across. It holds your
+documents, settings and prompts.
 """
 
 CLI_BAT = """\

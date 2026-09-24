@@ -1897,6 +1897,48 @@ $("#form-settings").addEventListener("submit", async (e) => {
   catch (err) { setStatus("Settings not saved: " + err.message, true); }
 });
 
+// ------------------------------------------------------------------ prompts (Settings > Edit prompts)
+// The library's own texts for the editable parts of the prompts, kept in work/prompts/ (see prompts.py).
+const dlgPrompts = wireDialog("#dlg-prompts");
+const promptDefaults = {};
+function fillPrompts(list) {
+  const f = $("#form-prompts");
+  list.forEach((p) => {
+    const fs = f.querySelector(`fieldset[data-prompt="${p.name}"]`);
+    if (!fs) return;
+    promptDefaults[p.name] = p.default;
+    f.elements[p.name].value = p.text;
+    fs.querySelector(".prompt-default").textContent = p.default;
+    const state = fs.querySelector(".prompt-state");
+    state.textContent = !p.customized ? "Built-in text."
+      : `Changed for this library, saved in ${p.file}.` + (p.default_changed
+        ? " The built-in text has been improved since this was changed: compare it below and bring over what you want." : "");
+    state.classList.toggle("warn", !!p.default_changed);
+  });
+}
+$("#btn-prompts").addEventListener("click", async () => {
+  try { fillPrompts((await api("/prompts")).prompts); }
+  catch (err) { setStatus("Prompts not loaded: " + err.message, true); return; }
+  dlgPrompts.showModal();
+  // start each box at the top, not at the end where setting its value left the caret
+  $("#form-prompts").querySelectorAll("textarea").forEach((ta) => { ta.setSelectionRange(0, 0); ta.scrollTop = 0; });
+});
+$("#form-prompts").querySelectorAll(".prompt-reset").forEach((b) => b.addEventListener("click", () => {
+  const name = b.closest("fieldset").dataset.prompt;
+  const ta = $("#form-prompts").elements[name];
+  ta.value = promptDefaults[name];
+  ta.focus();
+}));
+$("#form-prompts").addEventListener("submit", async (e) => {
+  const body = {};
+  Object.keys(promptDefaults).forEach((k) => (body[k] = e.target.elements[k].value));
+  try {
+    const changed = (await api("/prompts", { method: "PUT", body })).prompts.filter((p) => p.customized).length;
+    setStatus(changed ? `Prompts saved: ${changed} of ${Object.keys(body).length} changed from the built-in text. They apply to the next page transcribed.`
+      : "Prompts saved: all built-in text.");
+  } catch (err) { setStatus("Prompts not saved: " + err.message, true); }
+});
+
 function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
 // ------------------------------------------------------------------ start

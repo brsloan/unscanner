@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import datetime as dt
 import threading
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
 
 from .backends import Backend, BackendError, RefusalError
 from .document import Document, Figure, Page
 from .pdf import cached_page_png, draft_text_for_page
-from .prompts import build_user_prompt
+from .prompts import build_user_prompt, guidelines
 from .sanitize import sanitize_fragment
 
 TAIL_CHARS = 400
@@ -78,6 +79,7 @@ def transcribe_pages(doc: Document, backend: Backend, indexes: list[int], force:
     """
     todo = [i for i in indexes if force or doc.page(i).status in ("pending", "error")]
     ensure_draft_text(doc, todo)
+    system = guidelines(Path(doc.workdir).parent)  # with the library's edits in work/prompts/, read once per run
     lock = threading.Lock()
     usage_total = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0}
     done = errors = refused = fell_back = 0
@@ -87,14 +89,14 @@ def transcribe_pages(doc: Document, backend: Backend, indexes: list[int], force:
         try:
             png = cached_page_png(doc, i).read_bytes()
             prompt = page_prompt(doc, i, instructions, send_title=send_title)
-            result, usage = backend.transcribe(png, prompt)
+            result, usage = backend.transcribe(png, prompt, system=system)
             return i, result, usage, None, backend, ""
         except RefusalError as e:
             refusal = f"{backend.model} refused this page: {e}"
             if fallback is None:
                 return i, None, None, refusal, backend, refusal
             try:
-                result, usage = fallback.transcribe(png, prompt)
+                result, usage = fallback.transcribe(png, prompt, system=system)
                 return i, result, usage, None, fallback, refusal
             except BackendError as e2:
                 return i, None, None, f"{refusal} | fallback {fallback.model}: {e2}", fallback, refusal

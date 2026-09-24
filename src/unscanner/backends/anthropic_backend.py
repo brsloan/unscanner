@@ -37,13 +37,13 @@ class AnthropicBackend(Backend):
         # Credentials resolve from ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN / an `ant auth login` profile.
         self.client = client or anthropic.Anthropic(api_key=api_key)
 
-    def _request_kwargs(self, image_png: bytes, user_prompt: str) -> dict:
+    def _request_kwargs(self, image_png: bytes, user_prompt: str, system: str | None = None) -> dict:
         img = base64.standard_b64encode(image_png).decode()
         kwargs: dict = dict(
             model=self.model,
             max_tokens=self.max_tokens,
             # Stable system prompt first so it is served from the prompt cache on every page.
-            system=[{"type": "text", "text": GUIDELINES, "cache_control": {"type": "ephemeral"}}],
+            system=[{"type": "text", "text": system or GUIDELINES, "cache_control": {"type": "ephemeral"}}],
             messages=[{
                 "role": "user",
                 "content": [
@@ -67,8 +67,8 @@ class AnthropicBackend(Backend):
                 self.use_fallbacks = False
         return self.client.messages.create(**kwargs)
 
-    def transcribe(self, image_png: bytes, user_prompt: str) -> tuple[dict, dict]:
-        kwargs = self._request_kwargs(image_png, user_prompt)
+    def transcribe(self, image_png: bytes, user_prompt: str, system: str | None = None) -> tuple[dict, dict]:
+        kwargs = self._request_kwargs(image_png, user_prompt, system)
         resp = None
         for attempt in range(4):
             try:

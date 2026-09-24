@@ -39,6 +39,9 @@ def test_openai_compat_request_shape():
     assert body["response_format"] == {"type": "json_object"}
     assert result["label"] == "12" and result["ends_mid_paragraph"] is True
     assert usage["input_tokens"] == 100
+    # a library's edited guidelines (prompts.guidelines(work)) replace the built-in system prompt
+    be.transcribe(b"\x89PNG", "This is PDF page 3 of 9.", system="CONTEXT: ours")
+    assert seen["body"]["messages"][0] == {"role": "system", "content": "CONTEXT: ours"}
 
 
 def test_anthropic_request_shape():
@@ -71,6 +74,9 @@ def test_anthropic_request_shape():
     assert "thinking" not in body  # adaptive thinking is the default on Opus 5
     assert result["html"] == "<p>Hello</p>"
     assert usage["cache_read_input_tokens"] == 1200
+    assert body["system"][0]["text"] == GUIDELINES
+    be.transcribe(b"\x89PNG", "This is PDF page 1 of 2.", system="CONTEXT: ours")
+    assert seen["body"]["system"][0] == {"type": "text", "text": "CONTEXT: ours", "cache_control": {"type": "ephemeral"}}
 
 
 def test_anthropic_missing_key_is_a_clear_backend_error(monkeypatch):

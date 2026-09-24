@@ -53,7 +53,7 @@ class FakeBackend(Backend):
                     "The footnote text.</p></aside>", "figures": [], "notes": "footnote page"},
     }
 
-    def transcribe(self, image_png: bytes, user_prompt: str):
+    def transcribe(self, image_png: bytes, user_prompt: str, system=None):
         idx = int(user_prompt.split("This is PDF page ")[1].split(" ")[0])
         return normalize_result(self.results[idx]), {"input_tokens": 10, "output_tokens": 5}
 
@@ -397,7 +397,7 @@ def test_fatal_error_cancels_the_queue(doc, monkeypatch):
     calls = []
 
     class Slow(FakeBackend):
-        def transcribe(self, png, prompt):
+        def transcribe(self, png, prompt, system=None):
             calls.append(prompt)
             _time.sleep(0.05)
             return super().transcribe(png, prompt)

@@ -10,7 +10,7 @@ changes small, plain, and covered by tests.
 |---|---|
 | `src/unscanner/document.py` | on-disk state: `work/<doc>/doc.json`, one `Page` record per PDF page. The stored `workdir`/`source` are absolute; `Document.load` re-points them when the project folder was renamed or moved |
 | `src/unscanner/pdf.py` | render pages, text layer, RapidOCR fallback, figure cropping |
-| `src/unscanner/prompts.py` | **the transcription contract** (`GUIDELINES`), JSON schema, result normalization |
+| `src/unscanner/prompts.py` | **the transcription contract** (`GUIDELINES` = `CONTEXT` + `TASK` + `RULES`), JSON schema, result normalization; a library's own texts for the editable parts in `work/prompts/` |
 | `src/unscanner/backends/` | model backends: `anthropic_backend.py` (Claude API), `openai_compat.py` (Ollama/vLLM/etc.) |
 | `src/unscanner/pipeline.py` | batch transcription, resumable, threaded |
 | `src/unscanner/assemble.py` | per-page HTML -> one document: page markers, paragraph joins, heading normalization |
@@ -53,10 +53,17 @@ accessibility term and stays.
 
 ## Where to make common changes
 
-- House style for headings, footnotes, figures, what to drop: edit `GUIDELINES` in `prompts.py`
-  (used by both backends and returned by the MCP `get_guidelines` tool).
-- Who is doing the work and why (the institution, the legal basis): `CONTEXT` at the top of
-  `prompts.py`. It is there to stop copyright false positives; keep it truthful for your institution.
+- House style for headings, footnotes, figures, what to drop: `RULES` in `prompts.py`. Who is doing the
+  work and why (the institution, the legal basis): `CONTEXT`; it is there to stop copyright false
+  positives, so keep it truthful. Both, and `TABLE_RULES`, are only the built-in defaults: a library changes
+  them in the UI (Settings > Edit prompts, `GET`/`PUT /api/prompts`), which writes `work/prompts/context.txt`,
+  `rules.txt`, `table-rules.txt`. `guidelines(work_root)` and `build_table_prompt(text, work_root)` put the
+  pieces together; `pipeline.transcribe_pages` reads them once per run from the document's work folder and
+  hands them to `Backend.transcribe(..., system=)`, and the MCP `get_guidelines` tool returns the same text.
+  `TASK` (the JSON output contract) is not editable: `normalize_result` and `OUTPUT_SCHEMA` depend on it.
+  `based-on.json` records which default each file was edited from, so the dialog can say when an update
+  improved a default the library replaced. Changing a default in code changes it for every library that has
+  not replaced it.
 - Model refusals: a backend raises `RefusalError` (not a plain `BackendError`) when a model declines
   a page; `pipeline.transcribe_pages(fallback=...)` retries such pages once on a second backend and
   marks them `needs_review`. Settings: `fallback_backend`, `send_title`; CLI `--fallback`, `--no-title`.

@@ -25,14 +25,21 @@ unpacked into `tools/epubcheck-*/` (or set `EPUBCHECK_JAR` to point at `epubchec
 **For colleagues without Python (Windows):** `python scripts/build_portable.py` makes
 `dist/unscanner-<version>-win64.zip` (about 165 MB, or 130 MB with `--no-epubcheck`). It holds its own
 Python and every dependency. People unzip it anywhere and double-click `start-unscanner.bat`: nothing to
-install and no admin rights needed. `src/unscanner/prompts.py` stays an ordinary file they can edit. See
+install and no admin rights needed. The source stays plain `.py` files a library can adapt. See
 `PORTABLE.txt` in the zip.
 
-**Before your first run, edit `CONTEXT` at the top of `src/unscanner/prompts.py`.** It tells the model
-who is doing the work and on what legal basis (a university library's accessibility service, source
-held lawfully, use reviewed by counsel) so that faithful transcription is not mistaken for a copyright
-problem. It is sent with every page. Those statements were true where this tool was written; make them
-true for your institution, or remove what does not apply.
+**Before your first run, open Settings > Edit prompts in the web UI and rewrite "Who is doing the work
+and why".** It tells the model who is doing the work and on what legal basis (a university library's
+accessibility service, source held lawfully, use reviewed by counsel) so that faithful transcription is
+not mistaken for a copyright problem. It is sent with every page. Those statements were true where this
+tool was written; make them true for your institution, or remove what does not apply.
+
+The same dialog holds the house style (headings, footnotes, tables, figures, what to drop) and the
++Table rules. Your versions are saved as text files in `work/prompts/` (`context.txt`, `rules.txt`,
+`table-rules.txt`), which the CLI and the MCP server use too; you can also edit or share those files
+directly. Delete one, or empty its box, to go back to the built-in text. The dialog tells you when an
+update has improved a built-in text you replaced. The JSON output format the program reads is not
+editable. The built-in texts are `CONTEXT`, `RULES` and `TABLE_RULES` in `src/unscanner/prompts.py`.
 
 If the `unscanner` command is not on your PATH (pip's user Scripts folder often is not), use
 `python -m unscanner.cli` in its place everywhere below.
@@ -124,7 +131,8 @@ amber needs review, grey not transcribed, red error) and review pages opened fir
   live progress; **Build** writes the HTML and EPUB and shows download links plus a preview;
   **Validate** shows the checks in a panel with links that jump to the offending page.
 - **Open PDF…** takes a path on this computer or an upload (copied into `work/_inbox/`).
-- **Settings** stores the backend choice, model, effort and endpoint URL in `work/settings.json`.
+- **Settings** stores the backend choice, model, effort and endpoint URL in `work/settings.json`;
+  **Edit prompts…** in it changes what the model is told (see Install).
   API keys go to the operating system's credential store (Windows Credential Manager, macOS
   Keychain, GNOME Keyring/KWallet) when the optional `keyring` package is installed
   (`pip install -e .[keyring]`); a key already in `settings.json` is moved there the next time the

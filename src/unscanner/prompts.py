@@ -1,9 +1,18 @@
-"""The transcription contract shared by every backend and by agents using the MCP server directly."""
+"""The transcription contract shared by every backend and by agents using the MCP server directly.
+
+Three parts of the prompts are a library's to change without touching code: CONTEXT, RULES and
+TABLE_RULES below are the defaults, and a text file in work/prompts/ (written by the UI's Settings >
+Edit prompts, or by hand) replaces one. The rest, the task and the JSON output contract, stays here
+because normalize_result and OUTPUT_SCHEMA depend on it. guidelines() and build_table_prompt() put
+the pieces together.
+"""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+from pathlib import Path
 
 from .document import normalize_rotation
 
@@ -21,7 +30,8 @@ not being asked to recall or reproduce a work from memory, to generate new text,
 Verbatim transcription is required because anything less is not an accessible equivalent.
 """
 
-GUIDELINES = CONTEXT + """
+# The task and the output contract: fixed, the backends parse exactly these keys.
+TASK = """
 You are converting one page of a scanned document (usually a book chapter or article used as a
 university course reading) into accessible semantic HTML that meets WCAG 2.1 AA. You are given the
 page image (authoritative) and, when available, a draft OCR text (helpful but error-prone). Treat the
@@ -41,6 +51,11 @@ OUTPUT: a single JSON object with these keys:
   notes                 short free text: anything illegible, uncertain, or that a human should check.
                         Empty string if nothing.
 
+"""
+
+# House style: what the HTML looks like. Every result still goes through sanitize_fragment, so a
+# rule here can change what a model writes but never widen the allowed vocabulary.
+RULES = """\
 HTML RULES
 - Transcribe ALL the body text on the page, word for word. Never summarize, shorten, or paraphrase.
   Preserve the author's spelling, punctuation and wording; fix only obvious OCR errors.
@@ -108,6 +123,8 @@ HTML RULES
 - Escape &, <, > in text. Use straight or curly quotes as printed; do not "fix" them.
 """
 
+GUIDELINES = CONTEXT + TASK + RULES  # the built-in system prompt; guidelines() applies a library's edits
+
 OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
@@ -168,9 +185,12 @@ def build_user_prompt(page_index: int, n_pages: int, draft_text: str, prev_tail:
 
 # The +Table button in the UI: a person dragged a box over a region the page transcription did not
 # recognize as a table, and the model sees only that crop. Keep the table rules in step with GUIDELINES.
-TABLE_PROMPT = CONTEXT + """
+TABLE_TASK = """
 This image is one region cut out of a scanned page. The person reviewing the page has marked it as a
 table that the first transcription ran together as ordinary text. Transcribe it as one HTML <table>.
+"""
+
+TABLE_RULES = """\
 - Every word and figure in the image goes into the table, word for word, in reading order. Never
   summarize, and never add text that is not printed.
 - One <tr> per printed row and one cell per column, so two numbers on a line never run together. An
@@ -182,16 +202,106 @@ table that the first transcription ran together as ordinary text. Transcribe it 
 - Dot leaders (rows of periods leading to a number) are layout: never reproduce them.
 - A total or subtotal is an ordinary row. Rules and brackets drawn on the page are not transcribed.
 - Use only table, caption, thead, tbody, tr, th, td, em, strong, sup, sub. No styles, no classes.
-Return only the <table> element, with no commentary and no code fence.
 """
 
+TABLE_RETURN = "Return only the <table> element, with no commentary and no code fence.\n"
 
-def build_table_prompt(text: str = "") -> str:
+TABLE_PROMPT = CONTEXT + TABLE_TASK + TABLE_RULES + TABLE_RETURN  # built-in; build_table_prompt applies edits
+
+
+# ---------------------------------------------------------------- a library's own prompt texts
+
+PROMPT_DEFAULTS = {"context": CONTEXT, "rules": RULES, "table_rules": TABLE_RULES}
+PROMPT_FILES = {"context": "context.txt", "rules": "rules.txt", "table_rules": "table-rules.txt"}
+BASED_ON_FILE = "based-on.json"  # which default each file was edited from, to tell when a default changed
+
+
+def prompt_dir(work_root: str | Path) -> Path:
+    return Path(work_root) / "prompts"
+
+
+def _clean(text: str) -> str:
+    return text.replace("\r\n", "\n").strip() + "\n"
+
+
+def _digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+
+
+def _based_on(work_root: str | Path) -> dict[str, str]:
+    try:
+        data = json.loads((prompt_dir(work_root) / BASED_ON_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def prompt_texts(work_root: str | Path | None = None) -> dict[str, str]:
+    """The editable parts in use: each work/prompts/ file that exists and is not blank, else the default."""
+    texts = dict(PROMPT_DEFAULTS)
+    if work_root is None:
+        return texts
+    for name, file in PROMPT_FILES.items():
+        try:
+            text = (prompt_dir(work_root) / file).read_text(encoding="utf-8-sig")
+        except OSError:
+            continue
+        if text.strip():
+            texts[name] = _clean(text)
+    return texts
+
+
+def prompt_status(work_root: str | Path) -> list[dict]:
+    """Each editable part with its default, whether this library changed it, and whether the built-in
+    default has changed since (an update to the program improved a text the library had replaced)."""
+    texts, based = prompt_texts(work_root), _based_on(work_root)
+    out = []
+    for name, default in PROMPT_DEFAULTS.items():
+        customized = texts[name] != default
+        out.append({"name": name, "file": str(prompt_dir(work_root) / PROMPT_FILES[name]), "text": texts[name],
+                    "default": default, "customized": customized,
+                    "default_changed": customized and based.get(name, _digest(default)) != _digest(default)})
+    return out
+
+
+def save_prompts(work_root: str | Path, edits: dict[str, str]) -> None:
+    """Store edited parts. A blank text, or one equal to the default, removes the file (back to default)."""
+    unknown = set(edits) - set(PROMPT_DEFAULTS)
+    if unknown:
+        raise ValueError(f"unknown prompt: {', '.join(sorted(unknown))}; use {', '.join(PROMPT_DEFAULTS)}")
+    folder = prompt_dir(work_root)
+    folder.mkdir(parents=True, exist_ok=True)
+    current, based = prompt_texts(work_root), _based_on(work_root)
+    for name, text in edits.items():
+        default = PROMPT_DEFAULTS[name]
+        text = _clean(text) if text.strip() else default
+        path = folder / PROMPT_FILES[name]
+        if text == default:
+            path.unlink(missing_ok=True)
+            based.pop(name, None)
+        elif text != current[name]:
+            path.write_text(text, encoding="utf-8")
+            based[name] = _digest(default)
+    if based:
+        (folder / BASED_ON_FILE).write_text(json.dumps(based, indent=1), encoding="utf-8")
+    else:
+        (folder / BASED_ON_FILE).unlink(missing_ok=True)
+
+
+def guidelines(work_root: str | Path | None = None) -> str:
+    """The system prompt for page transcription, with this work folder's edits applied."""
+    texts = prompt_texts(work_root)
+    return texts["context"] + TASK + texts["rules"]
+
+
+def build_table_prompt(text: str = "", work_root: str | Path | None = None) -> str:
     """The +Table prompt; `text` is what is known of the region's wording (the reviewer's selected
     transcription, else the scan's words inside the box)."""
+    texts = prompt_texts(work_root)
+    prompt = texts["context"] + TABLE_TASK + texts["table_rules"] + TABLE_RETURN
     if not text.strip():
-        return TABLE_PROMPT
-    return (TABLE_PROMPT + "\nTEXT OF THIS REGION from the current transcription or OCR (the wording helps; its line "
+        return prompt
+    return (prompt + "\nTEXT OF THIS REGION from the current transcription or OCR (the wording helps; its line "
             "breaks and order may be wrong, and the image is authoritative):\n" + text.strip()[:6000])
 
 

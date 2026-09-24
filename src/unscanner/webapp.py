@@ -26,7 +26,7 @@ from .backends.openai_compat import DEFAULT_MODEL as DEFAULT_OPENAI_MODEL
 from .document import Document, normalize_rotation, parse_page_range, slugify
 from .pdf import cached_page_png, cached_page_words, new_document
 from .pipeline import apply_result, ensure_draft_text
-from .prompts import GUIDELINES
+from .prompts import guidelines, prompt_status, save_prompts
 from .sanitize import sanitize_fragment
 from .session import Session
 
@@ -475,7 +475,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             raise HTTPException(400, f"backend not configured: {e}") from e
         try:
             reply = backend.describe_image(crop_png(cached_page_png(doc, n).read_bytes(), box),
-                                           build_table_prompt(text), max_tokens=TABLE_MAX_TOKENS)
+                                           build_table_prompt(text, work_root), max_tokens=TABLE_MAX_TOKENS)
         except BackendError as e:
             raise HTTPException(502, str(e)) from e
         except Exception as e:  # noqa: BLE001 - surface the reason to the UI instead of a bare 500
@@ -705,8 +705,22 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         return public_settings(cur)
 
     @app.get("/api/guidelines")
-    def guidelines() -> JSONResponse:
-        return JSONResponse({"guidelines": GUIDELINES})
+    def get_guidelines() -> JSONResponse:
+        return JSONResponse({"guidelines": guidelines(work_root)})
+
+    # The library's own prompt texts (Settings > Edit prompts): files in work/prompts/, see prompts.py.
+    @app.get("/api/prompts")
+    def get_prompts() -> dict[str, Any]:
+        return {"prompts": prompt_status(work_root)}
+
+    @app.put("/api/prompts")
+    def put_prompts(edits: dict[str, str]) -> dict[str, Any]:
+        """{name: text} for any of context, rules, table_rules; an empty text goes back to the default."""
+        try:
+            save_prompts(work_root, edits)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        return {"prompts": prompt_status(work_root)}
 
     return app
 

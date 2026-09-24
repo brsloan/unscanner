@@ -119,7 +119,7 @@ class RefusingBackend(FakeBackend):
     def __init__(self):
         self.prompts: list[str] = []
 
-    def transcribe(self, image_png: bytes, user_prompt: str):
+    def transcribe(self, image_png: bytes, user_prompt: str, system=None):
         self.prompts.append(user_prompt)
         idx = int(user_prompt.split("This is PDF page ")[1].split(" ")[0])
         if idx in self.refuse:
@@ -159,7 +159,7 @@ def test_fallback_that_also_fails_reports_both(doc):
     class Broken(FakeBackend):
         model = "broken-1"
 
-        def transcribe(self, image_png, user_prompt):
+        def transcribe(self, image_png, user_prompt, system=None):
             raise BackendError("connection error")
 
     summary = transcribe_pages(doc, RefusingBackend(), [2], fallback=Broken(), workers=1)

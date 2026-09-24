@@ -302,6 +302,10 @@
       <p><label><input name="send_title" type="checkbox"> send the document title with each page</label>
         <small>The title helps with headings, but a well-known title makes some providers refuse. Untick for a document that keeps getting refused.</small></p>
     </fieldset>
+    <fieldset><legend>Prompts</legend>
+      <p><button id="btn-prompts" type="button">Edit prompts…</button>
+        <small>What the model is told with every page: who is doing the work and why, and the house style for headings, footnotes, tables and figures.</small></p>
+    </fieldset>
     <fieldset><legend>Export</legend>
       <table class="export-options">
         <thead><tr><td></td><th scope="col">HTML</th><th scope="col">EPUB</th></tr></thead>
@@ -334,6 +338,40 @@
         Bookmarks put a collapsed list of the document's headings at the top of the HTML, each one a link, with branches that fold away;
         an EPUB always has this as its own table of contents.
         Build again to apply.</small>
+    </fieldset>
+    <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Save</button></menu>
+  </form>
+</dialog>
+
+<dialog id="dlg-prompts" class="dlg-prompts" aria-labelledby="prompts-title">
+  <form method="dialog" id="form-prompts">
+    <h2 id="prompts-title">Prompts</h2>
+    <small>Changes apply to the next page transcribed; pages already done keep their text until they are transcribed again.
+      They are saved as text files in the work folder's prompts folder, so they travel with your work and survive updates.
+      The output format the program reads is fixed and not shown here. An empty box means the built-in text.</small>
+    <fieldset data-prompt="context"><legend id="prompt-context-title">Who is doing the work and why</legend>
+      <small id="prompt-context-help">Sent first, with every page and every +Table. It keeps faithful transcription from being mistaken for a
+        copyright problem, so make every statement in it true for your institution.</small>
+      <p class="prompt-state"></p>
+      <textarea name="context" wrap="off" rows="8" aria-labelledby="prompt-context-title" aria-describedby="prompt-context-help"></textarea>
+      <p><button type="button" class="prompt-reset">Use the built-in text</button></p>
+      <details><summary>Built-in text</summary><pre class="prompt-default"></pre></details>
+    </fieldset>
+    <fieldset data-prompt="rules"><legend id="prompt-rules-title">Transcription rules (house style)</legend>
+      <small id="prompt-rules-help">Headings, footnotes, tables, figures and what to drop. Keep the rule to transcribe all the body text
+        word for word: without it models shorten and summarize. Whatever the rules say, the result is still reduced to the
+        allowed accessible HTML.</small>
+      <p class="prompt-state"></p>
+      <textarea name="rules" wrap="off" rows="18" aria-labelledby="prompt-rules-title" aria-describedby="prompt-rules-help"></textarea>
+      <p><button type="button" class="prompt-reset">Use the built-in text</button></p>
+      <details><summary>Built-in text</summary><pre class="prompt-default"></pre></details>
+    </fieldset>
+    <fieldset data-prompt="table_rules"><legend id="prompt-table_rules-title">+Table rules</legend>
+      <small id="prompt-table_rules-help">Used when you drag a box over a table on the scan. Keep them in step with the table rules above.</small>
+      <p class="prompt-state"></p>
+      <textarea name="table_rules" wrap="off" rows="10" aria-labelledby="prompt-table_rules-title" aria-describedby="prompt-table_rules-help"></textarea>
+      <p><button type="button" class="prompt-reset">Use the built-in text</button></p>
+      <details><summary>Built-in text</summary><pre class="prompt-default"></pre></details>
     </fieldset>
     <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Save</button></menu>
   </form>
