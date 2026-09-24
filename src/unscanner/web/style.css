@@ -237,6 +237,20 @@ body:not(.in-window) .window-only, body.in-window .browser-only { display: none;
 .dlg-prompts pre { white-space: pre-wrap; font-size: 0.8rem; color: var(--muted); max-height: 20em; overflow: auto; }
 .dlg-prompts .prompt-state { margin: 0.3em 0; }
 .dlg-prompts .prompt-state.warn { color: var(--warn); }
+/* File > Help: long reading text, so a readable measure and type size rather than the UI's compact 13px */
+.dlg-help { width: min(46em, calc(100vw - 2em)); max-width: none; max-height: calc(100vh - 3em); font-size: 14px; line-height: 1.5; }
+.dlg-help h3 { font-size: 1.05em; margin: 1.4em 0 0.4em; padding-top: 0.6em; border-top: 1px solid var(--line); }
+.dlg-help a { color: var(--accent); }
+.dlg-help section { scroll-margin-top: 0.5em; }
+.help-toc { columns: 2 14em; padding-left: 1.2em; margin: 0.4em 0; }
+.help-legend { list-style: none; padding-left: 0.5em; }
+.help-legend .dot { display: inline-block; margin-right: 0.35em; }
+.help-list dt { font-weight: 600; margin-top: 0.5em; }
+.help-list dd { margin-left: 1.2em; }
+.help-keys { border-collapse: collapse; }
+.help-keys th, .help-keys td { text-align: left; padding: 0.2em 1em 0.2em 0; border-bottom: 1px solid var(--line); }
+.dlg-help kbd { font: 0.9em ui-monospace, Consolas, monospace; padding: 0 0.3em; border: 1px solid var(--line); border-radius: 3px; background: var(--bg); }
+.dlg-help menu { position: sticky; bottom: -1em; background: var(--panel); padding: 0.5em 0 1em; }
 .export-options { border-collapse: collapse; margin: 0.3em 0 0.5em; }
 .export-options th, .export-options td { padding: 0.15em 0.9em 0.15em 0; text-align: center; font-weight: normal; }
 .export-options th[scope="row"] { text-align: left; }

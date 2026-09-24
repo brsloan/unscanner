@@ -93,6 +93,11 @@ def test_open_edit_build_validate(client, tmp_path):
     assert 'id="btn-open"' in html and 'id="btn-save-all"' in html
     assert "doc-select" not in html and "doc-select" not in js
     assert "function renderRecent()" in js
+    # File > Help opens a dialog explaining the features in plain words
+    assert 'id="btn-help" type="button" role="menuitem"' in html and 'id="dlg-help"' in html
+    assert '$("#btn-help").addEventListener' in js
+    for topic in ("help-steps", "help-pages", "help-figures", "help-keys"):
+        assert f'href="#{topic}"' in html and f'id="{topic}"' in html, topic
     # a project is the work on a PDF; the menu says "project" so the two are not confused
     assert ">Recent projects <" in html and ">Manage projects…</button>" in html and "Recent documents" not in html
     # the open document's title is in the title bar, not on the page

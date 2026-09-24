@@ -2077,6 +2077,13 @@ function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&
 // the window), or remove it. Projects pile up otherwise: people open a PDF, deliver, and delete the PDF.
 const dlgDocuments = wireDialog("#dlg-documents"), dlgRemove = wireDialog("#dlg-remove");
 $("#btn-documents").addEventListener("click", async () => { await renderDocuments(); dlgDocuments.showModal(); });
+
+// File > Help: static text in the markup; open it at the top, not where it was last scrolled to.
+$("#btn-help").addEventListener("click", () => {
+  const dlg = $("#dlg-help");
+  dlg.showModal();
+  dlg.scrollTop = 0;
+});
 async function renderDocuments() {
   state.docs = await api("/documents");
   const body = $("#documents-table tbody");

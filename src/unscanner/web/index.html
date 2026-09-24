@@ -27,6 +27,8 @@
       <button id="btn-import" type="button" role="menuitem" title="Load a project file exported here or on another computer">Import project…</button>
       <div class="menu-sep" role="separator"></div>
       <button id="btn-settings" type="button" role="menuitem">Settings…</button>
+      <div class="menu-sep" role="separator"></div>
+      <button id="btn-help" type="button" role="menuitem" title="How to use Unscanner, in plain words">Help…</button>
     </div>
   </div>
   <button id="btn-open" type="button">Open PDF…</button>
@@ -398,6 +400,315 @@
       <details><summary>Built-in text</summary><pre class="prompt-default"></pre></details>
     </fieldset>
     <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Save</button></menu>
+  </form>
+</dialog>
+
+<!-- File > Help. Written for someone who has never used the program: plain words, no file names or
+     jargon. When a feature is added or changed, change its section here too. -->
+<dialog id="dlg-help" class="dlg-help" aria-labelledby="help-title">
+  <form method="dialog">
+    <h2 id="help-title">Unscanner help</h2>
+    <nav aria-label="Help topics">
+      <ul class="help-toc">
+        <li><a href="#help-what">What Unscanner does</a></li>
+        <li><a href="#help-steps">The steps, start to finish</a></li>
+        <li><a href="#help-screen">Finding your way around</a></li>
+        <li><a href="#help-pages">The list of pages</a></li>
+        <li><a href="#help-scan">The scanned page</a></li>
+        <li><a href="#help-editing">Correcting the text</a></li>
+        <li><a href="#help-figures">Pictures (figures)</a></li>
+        <li><a href="#help-tables">Tables</a></li>
+        <li><a href="#help-page-details">Page number, skip and notes</a></li>
+        <li><a href="#help-saving">Saving your work</a></li>
+        <li><a href="#help-build">Making the finished files</a></li>
+        <li><a href="#help-file-menu">The File menu</a></li>
+        <li><a href="#help-settings">Settings</a></li>
+        <li><a href="#help-keys">Keyboard shortcuts</a></li>
+        <li><a href="#help-words">Words used in Unscanner</a></li>
+      </ul>
+    </nav>
+
+    <section aria-labelledby="help-what">
+      <h3 id="help-what">What Unscanner does</h3>
+      <p>A scanned PDF is really a set of photographs of pages. A screen reader cannot read a photograph aloud, text cannot be
+        made larger or searched, and the headings cannot be used to jump around. Unscanner turns the scan into real text that
+        everyone can use.</p>
+      <p>An AI model reads each page and writes out its text. You check that text against the scan, correct anything it got
+        wrong, and approve the page. When every page is done, Unscanner makes two files: a web page (HTML) and an e-book (EPUB).
+        Both keep the original printed page numbers, so a reader can still cite and find “page 42”.</p>
+      <p>Your original PDF is never changed.</p>
+    </section>
+
+    <section aria-labelledby="help-steps">
+      <h3 id="help-steps">The steps, start to finish</h3>
+      <ol>
+        <li><strong>Open PDF…</strong> and choose the scan. The first time you open a PDF, a box asks for its title, author and
+          language; the title and author are often printed on the first pages, and you can look at the scan while you type.</li>
+        <li><strong>Transcribe…</strong> sends the pages to the AI model, which writes out their text. This runs on its own; you
+          can start checking pages that are finished while the rest are still being read.</li>
+        <li>Go through the pages one at a time. Compare the text on the right with the scan in the middle, correct what is wrong,
+          and click <strong>Approve &amp; next</strong> (or press F2).</li>
+        <li><strong>Build</strong> makes the finished web page and e-book. <strong>HTML</strong> and <strong>EPUB</strong> buttons
+          then appear in the top bar to download them.</li>
+        <li><strong>Validate</strong> checks the result for accessibility problems. Click a problem to go to its page, fix it,
+          and Build again.</li>
+      </ol>
+      <p>You can stop at any point and come back later: open the project again from <strong>File &gt; Recent projects</strong>.</p>
+    </section>
+
+    <section aria-labelledby="help-screen">
+      <h3 id="help-screen">Finding your way around</h3>
+      <p>The window has three columns:</p>
+      <ul>
+        <li><strong>On the left</strong>, the list of pages, or of the document’s headings.</li>
+        <li><strong>In the middle</strong>, the scanned page, as a picture.</li>
+        <li><strong>On the right</strong>, the text of that page, which you can edit like a word processor document.</li>
+      </ul>
+      <p>Drag the thin bars between the columns to make one wider. The line at the very bottom of the window shows what just
+        happened, such as “Saved” or an error; click ▲ at its right end to read a long message in full.</p>
+    </section>
+
+    <section aria-labelledby="help-pages">
+      <h3 id="help-pages">The list of pages</h3>
+      <p>Click a page to show it. The coloured dot beside each page says how far along it is:</p>
+      <ul class="help-legend">
+        <li><span class="dot" aria-hidden="true"></span> Grey: not read yet.</li>
+        <li><span class="dot needs_review" aria-hidden="true"></span> Amber: read by the model, or saved by you, but not
+          approved yet.</li>
+        <li><span class="dot done" aria-hidden="true"></span> Green: approved by a person.</li>
+        <li><span class="dot error" aria-hidden="true"></span> Red: something went wrong reading it; hover over the page to see
+          why, then try Transcribe again for that page or type the text yourself.</li>
+      </ul>
+      <p>The number on the right of a page is its printed page number. A pencil (✎) means it has changes you have not saved.
+        A small <strong>M</strong> means the AI model wrote it last, and a <strong>C</strong> that Claude, working as an assistant
+        alongside you, changed it.</p>
+      <p><strong>Show</strong> picks which pages are listed: all of them, only those that still need work, or only those with
+        pictures or tables. The ◀ ▶ arrows and Approve &amp; next then step through just those pages.</p>
+      <p>To change several pages at once, hold Ctrl and click each one (or click one and Shift+click another to pick all the
+        pages between), then right-click for Approve, Needs review, Skip or Don’t skip.</p>
+      <p>The <strong>Headings</strong> tab lists the document’s headings, like the navigation pane in Word. Click one to go to
+        it. Click the small triangle beside a heading to fold away or show the headings under it.</p>
+    </section>
+
+    <section aria-labelledby="help-scan">
+      <h3 id="help-scan">The scanned page</h3>
+      <ul>
+        <li><strong>◀ ▶</strong> go to the previous and next page.</li>
+        <li><strong>Fit</strong> shows the whole page; <strong>Fill</strong> makes it as wide as the column. The slider on the
+          right zooms in and out.</li>
+        <li><strong>Click a word on the scan</strong> to put the cursor on that word in the text.</li>
+        <li><strong>Follow</strong> scrolls the scan to keep up with where you are typing, and <strong>Mark</strong> puts a red
+          dot on the scan beside that word, so you never lose your place.</li>
+        <li><strong>Diff</strong> (in the top bar) highlights the differences between the scan and the text. Words that are on the
+          scan but missing from the text get a red box on the scan; words that differ get a dashed amber box. In the text, extra
+          or different words are underlined the same way. The number on the button counts the differences. It is a guide, not a
+          verdict: running heads and page numbers are meant to be left out, and they show up as differences too.</li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="help-editing">
+      <h3 id="help-editing">Correcting the text</h3>
+      <p>Type in the text column as you would in any word processor. The toolbar above it:</p>
+      <dl class="help-list">
+        <dt>Paragraph / Heading 1–6 / …</dt>
+        <dd>Shows what kind of text the cursor is in. Choose another to change it. Headings matter: screen reader users jump
+          from heading to heading, so use Heading 1 for the title only, Heading 2 for chapters, Heading 3 for sections within
+          them, and so on, without skipping a level.</dd>
+        <dt><strong>B</strong> and <em>I</em></dt>
+        <dd>Bold and italic, where the printed page uses them for emphasis.</dd>
+        <dt>x<sup>2</sup></dt>
+        <dd>Raised text, as in footnote numbers.</dd>
+        <dt><span class="small-caps-icon">Aa</span></dt>
+        <dd>Small capitals, as printed. Type the words normally; Unscanner shows them in small capitals.</dd>
+        <dt>• and 1.</dt>
+        <dd>Bulleted and numbered lists. <strong>n.</strong> sets the number a list starts at, for a list that carries on from
+          the page before.</dd>
+        <dt>Alignment buttons</dt>
+        <dd>Left, centred or right, for headings and lines that are set that way on the page.</dd>
+        <dt>Alt, +Fig</dt>
+        <dd>For pictures; see <a href="#help-figures">Pictures</a>.</dd>
+        <dt>+Table</dt>
+        <dd>See <a href="#help-tables">Tables</a>.</dd>
+        <dt>Ω</dt>
+        <dd>Inserts a symbol that is hard to type, such as ½, —, § or °.</dd>
+        <dt>Lang</dt>
+        <dd>Marks the selected words as another language (for example <code>fr</code> for French or <code>la</code> for Latin),
+          so a screen reader pronounces them correctly.</dd>
+        <dt>Clear</dt>
+        <dd>Removes bold, italic and other formatting from the selected text.</dd>
+        <dt>Source</dt>
+        <dd>Shows the page as HTML code. Only needed for unusual fixes; you can ignore it.</dd>
+        <dt>Draft</dt>
+        <dd>Shows the rough text the computer found on the scan before the AI model read it. Handy for copying a passage the
+          model skipped.</dd>
+      </dl>
+      <p>Only formatting that helps a reader is kept. Fonts, sizes and colours are not: the reader’s own device decides how the
+        text looks, which is what lets them make it larger or have it read aloud.</p>
+    </section>
+
+    <section aria-labelledby="help-figures">
+      <h3 id="help-figures">Pictures (figures)</h3>
+      <p>A picture in the text is cut out of the scan. Click a picture in the text to open its panel below the text:</p>
+      <ul>
+        <li><strong>Alt text</strong> describes the picture for someone who cannot see it: what it shows and why it matters
+          here. Leave it empty only for a purely decorative picture. <strong>AI autofill</strong> asks the model to write a
+          description for you to check.</li>
+        <li><strong>Draw crop</strong>: drag a box over the picture on the scan. Drag the box to move it, or its corners to
+          resize it.</li>
+        <li><strong>↺ ↻</strong> turn the picture a quarter turn.</li>
+        <li><strong>wrap text</strong> lets the text flow beside the picture; use the alignment buttons to put it on the left or
+          right.</li>
+      </ul>
+      <p>To add a picture the model missed, put the cursor where it belongs, click <strong>+Fig</strong>, and draw its box on
+        the scan.</p>
+    </section>
+
+    <section aria-labelledby="help-tables">
+      <h3 id="help-tables">Tables</h3>
+      <p>Sometimes the model runs a table together as ordinary text. To fix it, select that text, click
+        <strong>+Table</strong>, and drag a box over the table on the scan. The model reads just that part of the page again and
+        puts a proper table in place of the selected text. Check it, then save the page as usual.</p>
+    </section>
+
+    <section aria-labelledby="help-page-details">
+      <h3 id="help-page-details">Page number, skip and notes</h3>
+      <p>Below the text are settings for the page as a whole:</p>
+      <dl class="help-list">
+        <dt>p.</dt>
+        <dd>The page number printed on the page (such as <code>42</code> or <code>xii</code>). This is the number readers see and
+          cite in the finished files. Leave it empty for a page with no printed number.</dd>
+        <dt>starts mid-¶ / ends mid-¶</dt>
+        <dd>Tick these when a paragraph runs over from one page to the next, so it is joined back into one paragraph in the
+          finished files.</dd>
+        <dt>skip</dt>
+        <dd>Leaves the page out of the finished files entirely: for blank pages, library stamps and the like.</dd>
+        <dt>Notes</dt>
+        <dd>The model writes here when it was unsure of something, and you can add notes for whoever checks the page next. A
+          ⚠ on the Notes button means the page has notes. The Notes button shows and hides this box.</dd>
+        <dt>Approve</dt>
+        <dd>Saves the page and marks it checked (green). <strong>Approve &amp; next</strong> does the same and moves on.</dd>
+      </dl>
+    </section>
+
+    <section aria-labelledby="help-saving">
+      <h3 id="help-saving">Saving your work</h3>
+      <p><strong>Save</strong> (or Ctrl+S) saves every page you have changed; the number on the button says how many. A saved
+        page that is not approved stays amber.</p>
+      <p>If you move to another page without saving, your changes are kept and still marked with ✎, even if the program is
+        closed, until you save them.</p>
+      <p>Someone else, or Claude as an assistant, may be working on the same document. If a page you are editing is changed by
+        them, a yellow bar appears above the text. You can load their version or keep your own; nothing is overwritten
+        without asking.</p>
+      <p>All your work is kept on this computer. To keep a copy of it, or carry on at another computer, use
+        <strong>File &gt; Export project</strong>.</p>
+    </section>
+
+    <section aria-labelledby="help-build">
+      <h3 id="help-build">Making the finished files</h3>
+      <p><strong>Build</strong> puts all the pages together into one web page (HTML) and one e-book (EPUB). It saves any unsaved
+        pages first. Its results appear at the bottom of the window, with a link to preview the web page and any warnings, such
+        as a skipped heading level.</p>
+      <p>Pages that are not approved are still included, so you can build at any time to see how it is going.</p>
+      <p>Download the files with the <strong>HTML</strong> and <strong>EPUB</strong> buttons in the top bar. Unless you change it
+        in Settings, the HTML file is one self-contained file that opens with a double-click and can be uploaded to a learning management system as it is.</p>
+      <p><strong>Validate</strong> checks the finished files against accessibility rules. Problems are listed as errors
+        (should be fixed), warnings (worth a look) and notes. Click a page number in the list to go there. Build again after
+        fixing.</p>
+      <p><strong>Properties…</strong> changes the title, author and language that the finished files carry.</p>
+    </section>
+
+    <section aria-labelledby="help-file-menu">
+      <h3 id="help-file-menu">The File menu</h3>
+      <dl class="help-list">
+        <dt>Open PDF…</dt>
+        <dd>Start on a scan, or go back to one opened before. The PDF stays where it is. If you open the same PDF again, even
+          from another folder or under another name, your earlier work comes back with it.</dd>
+        <dt>Save</dt>
+        <dd>Saves every changed page.</dd>
+        <dt>Recent projects</dt>
+        <dd>Every document you have worked on, the most recent first. A project is the work you have done on one PDF.</dd>
+        <dt>Manage projects…</dt>
+        <dd>Lists all your projects. <strong>Locate</strong> tells Unscanner where a PDF went after it was moved or renamed.
+          <strong>Remove</strong> deletes the work done on a PDF (never the PDF itself); you are offered an export first.</dd>
+        <dt>Export project</dt>
+        <dd>Saves the work on this document as one file, to keep beside the PDF as a backup or to hand to a colleague.</dd>
+        <dt>Import project…</dt>
+        <dd>Loads an exported project file. It only works with the PDF it was made from; you can leave the PDF out if it has
+          been opened on this computer before.</dd>
+        <dt>Settings…</dt>
+        <dd>See <a href="#help-settings">Settings</a>.</dd>
+      </dl>
+    </section>
+
+    <section aria-labelledby="help-settings">
+      <h3 id="help-settings">Settings</h3>
+      <p>Most settings are set up once, often by whoever supports Unscanner at your institution.</p>
+      <dl class="help-list">
+        <dt>Backend and model</dt>
+        <dd>Which AI model reads the pages: Claude, from Anthropic, or a model your institution runs itself. Each needs its
+          address or key filled in.</dd>
+        <dt>Parallel pages</dt>
+        <dd>How many pages are read at the same time. Lower it if the model reports being busy or overloaded.</dd>
+        <dt>When a model refuses a page</dt>
+        <dd>A model sometimes declines to transcribe a page, mistaking it for a copyright problem. Here you choose a second model
+          to try instead, and whether to send the document’s title along (a famous title can make refusals more likely).</dd>
+        <dt>Edit prompts…</dt>
+        <dd>The standing instructions the model is given with every page: who is doing this work and why, and your house style
+          for headings, footnotes, tables and pictures.</dd>
+        <dt>Export</dt>
+        <dd>How the finished files look: book-style paragraphs, justified text, whether to show page numbers, pictures inside
+          the HTML file, a list of headings at the top of the HTML, and smaller (grey or JPEG) pictures. Build again for a
+          change to take effect.</dd>
+      </dl>
+      <p>When you transcribe, the <strong>Transcribe…</strong> box also lets you choose which pages to read (for example
+        <code>all</code>, <code>5</code> or <code>1-10,14</code>), redo pages already read, and add instructions for just this
+        run, such as “read the left column before the right”.</p>
+    </section>
+
+    <section aria-labelledby="help-keys">
+      <h3 id="help-keys">Keyboard shortcuts</h3>
+      <table class="help-keys">
+        <thead><tr><th scope="col">Keys</th><th scope="col">What they do</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>F2</kbd></td><td>Approve this page and go to the next</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Enter</kbd></td><td>Approve this page</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td>Save every changed page</td></tr>
+          <tr><td><kbd>Alt</kbd>+<kbd>←</kbd> / <kbd>Alt</kbd>+<kbd>→</kbd></td><td>Previous / next page</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>Ctrl</kbd>+<kbd>I</kbd></td><td>Bold / italic</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd> to <kbd>6</kbd></td><td>Heading 1 to 6</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>0</kbd></td><td>Ordinary paragraph</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>8</kbd> / <kbd>7</kbd></td><td>Bulleted / numbered list</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>=</kbd> / <kbd>Ctrl</kbd>+<kbd>=</kbd></td><td>Raised / lowered text</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd></td><td>Small capitals</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>\</kbd></td><td>Clear formatting</td></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>Undo</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Close a menu or box like this one</td></tr>
+        </tbody>
+      </table>
+      <p>Hover the mouse over any button to see what it does and its shortcut.</p>
+    </section>
+
+    <section aria-labelledby="help-words">
+      <h3 id="help-words">Words used in Unscanner</h3>
+      <dl class="help-list">
+        <dt>Alt text</dt>
+        <dd>A written description of a picture, read aloud by a screen reader in its place.</dd>
+        <dt>EPUB</dt>
+        <dd>The standard e-book format, opened by e-book readers and apps such as Apple Books or Thorium.</dd>
+        <dt>HTML</dt>
+        <dd>A web page. It opens in any web browser.</dd>
+        <dt>Project</dt>
+        <dd>The work done on one PDF: its text, corrections and approvals.</dd>
+        <dt>Screen reader</dt>
+        <dd>Software that reads the screen aloud for people who are blind or have low vision.</dd>
+        <dt>Transcribe</dt>
+        <dd>Write out the text of a page word for word.</dd>
+        <dt>WCAG</dt>
+        <dd>The international accessibility standard the finished files are made to meet.</dd>
+      </dl>
+    </section>
+
+    <menu><button value="close" class="primary">Close</button></menu>
   </form>
 </dialog>
 
