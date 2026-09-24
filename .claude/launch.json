@@ -12,6 +12,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "unscanner.cli", "ui", "--no-browser", "--port", "8766"],
       "port": 8766
+    },
+    {
+      "name": "website",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "8780", "--directory", "website"],
+      "port": 8780
     }
   ]
 }

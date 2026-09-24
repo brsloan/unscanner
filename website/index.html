@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Unscanner</title>
+<meta name="description" content="Unscanner turns scanned PDFs into accessible HTML and EPUB that meet WCAG 2.1 AA, with the printed page numbers kept so readers can still cite by page. Free and open source.">
+<meta property="og:title" content="Unscanner">
+<meta property="og:description" content="Scanned pages in. Accessible, citable text out. Free and open source, for libraries and disability services.">
+<meta property="og:image" content="unscanner-light.png">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:wght@400;600&family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,600;0,700;1,400&family=Libre+Caslon+Text:ital,wght@0,400;1,400&display=swap">
+<style>
+  /* Colours come from the app's own icon: its blue, the scanner's amber bar, the grey of an unread scan. */
+  :root {
+    --ground: #f5f7fb;
+    --surface: #ffffff;
+    --sunk: #e9eef6;
+    --ink: #121a2c;
+    --ink-soft: #445069;
+    --rule: #d3dbe8;
+    --scan: #6b778b;
+    --accent: #1d4ed8;
+    --accent-ink: #ffffff;
+    --accent-soft: #dbe5fb;
+    --amber: #fbbf24;
+    --amber-ink: #7a4d00;
+    --green: #15803d;
+    --red: #b91c1c;
+    --code-bg: #121a2c;
+    --code-ink: #e3e9f5;
+    --code-dim: #8fa0bd;
+    --code-hi: #fbbf24;
+    --shadow: 0 1px 2px rgb(18 26 44 / .06), 0 12px 40px -12px rgb(18 26 44 / .22);
+
+    --f-body: "Atkinson Hyperlegible Next", "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --f-print: "Libre Caslon Text", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    --f-mono: "Atkinson Hyperlegible Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+    --wrap: 72rem;
+    --gutter: clamp(1rem, 4vw, 2.5rem);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --ground: #0d1320;
+      --surface: #151d2e;
+      --sunk: #1b2438;
+      --ink: #e7ecf5;
+      --ink-soft: #a9b4c9;
+      --rule: #2a3550;
+      --scan: #7c889c;
+      --accent: #8aa9ff;
+      --accent-ink: #0d1320;
+      --accent-soft: #1d2b52;
+      --amber-ink: #fbbf24;
+      --green: #4ade80;
+      --red: #f87171;
+      --code-bg: #0a0f1a;
+      --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 16px 48px -12px rgb(0 0 0 / .7);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0d1320;
+    --surface: #151d2e;
+    --sunk: #1b2438;
+    --ink: #e7ecf5;
+    --ink-soft: #a9b4c9;
+    --rule: #2a3550;
+    --scan: #7c889c;
+    --accent: #8aa9ff;
+    --accent-ink: #0d1320;
+    --accent-soft: #1d2b52;
+    --amber-ink: #fbbf24;
+    --green: #4ade80;
+    --red: #f87171;
+    --code-bg: #0a0f1a;
+    --shadow: 0 1px 2px rgb(0 0 0 / .4), 0 16px 48px -12px rgb(0 0 0 / .7);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font: 400 1.0625rem/1.65 var(--f-body);
+    text-rendering: optimizeLegibility;
+  }
+  img { max-width: 100%; height: auto; display: block; }
+  a { color: var(--accent); text-underline-offset: .18em; text-decoration-thickness: .08em; }
+  a:hover { text-decoration-thickness: .14em; }
+  :focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; border-radius: 3px; }
+  h1, h2, h3 { text-wrap: balance; line-height: 1.15; margin: 0; }
+  p { margin: 0; }
+  code, kbd, pre { font-family: var(--f-mono); font-size: .9em; }
+  kbd {
+    display: inline-block; padding: .05em .45em; border: 1px solid var(--rule); border-bottom-width: 2px;
+    border-radius: 4px; background: var(--surface); font-size: .82em; line-height: 1.4;
+  }
+  :not(pre) > code { background: var(--sunk); padding: .08em .35em; border-radius: 4px; }
+
+  .wrap { max-width: var(--wrap); margin-inline: auto; padding-inline: var(--gutter); }
+  .prose { max-width: 40rem; }
+  .skip {
+    position: absolute; left: -999px; top: .5rem; z-index: 10;
+    background: var(--accent); color: var(--accent-ink); padding: .5rem 1rem; border-radius: 6px;
+  }
+  .skip:focus { left: 1rem; }
+
+  /* ---- Top bar ---- */
+  .top { border-bottom: 1px solid var(--rule); background: var(--ground); }
+  .top .wrap { display: flex; align-items: center; gap: 1rem 2rem; flex-wrap: wrap; padding-block: .85rem; }
+  .brand { display: flex; align-items: center; gap: .6rem; font-weight: 700; font-size: 1.15rem; color: var(--ink); text-decoration: none; }
+  .brand svg { width: 2rem; height: 2rem; flex: none; }
+  .top nav { margin-left: auto; }
+  .top nav ul { display: flex; flex-wrap: wrap; gap: .25rem 1.25rem; list-style: none; margin: 0; padding: 0; }
+  .top nav a { color: var(--ink-soft); text-decoration: none; font-size: .95rem; }
+  .top nav a:hover { color: var(--ink); text-decoration: underline; }
+
+  /* ---- Hero ---- */
+  .hero { padding-block: clamp(3rem, 8vw, 5.5rem) clamp(2rem, 5vw, 3rem); }
+  .eyebrow {
+    font-family: var(--f-mono); font-size: .8rem; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  .hero h1 { margin-top: 1.25rem; display: grid; gap: .1em; }
+  /* The headline is the app's icon in words: the scan below the scanner's light bar, clean text above it. */
+  .hero .clean {
+    font-weight: 700; font-size: clamp(2.4rem, 6.4vw, 4.6rem); letter-spacing: -.02em; color: var(--ink);
+    order: 1;
+  }
+  .hero .bar {
+    order: 2; height: .5rem; border-radius: 99px; background: var(--amber);
+    width: min(100%, 42rem); margin-block: .35em .25em;
+    box-shadow: 0 0 24px 2px rgb(251 191 36 / .45);
+    transform-origin: left center;
+    animation: sweep 1.4s cubic-bezier(.2,.7,.2,1) both .15s;
+  }
+  .hero .scanned {
+    order: 3;
+    font-family: var(--f-print); font-weight: 400; font-size: clamp(1.9rem, 5vw, 3.6rem);
+    color: var(--scan); letter-spacing: .01em;
+    text-shadow: 0 0 1.5px currentColor, .5px .5px 0 rgb(138 150 168 / .35);
+    filter: blur(.35px);
+  }
+  @keyframes sweep { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @media (prefers-reduced-motion: reduce) { .hero .bar { animation: none; } }
+  .lede { margin-top: 1.75rem; font-size: clamp(1.1rem, 2vw, 1.3rem); color: var(--ink-soft); max-width: 38rem; }
+  .lede strong { color: var(--ink); font-weight: 600; }
+  .ctas { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+  .btn {
+    display: inline-flex; align-items: center; gap: .55rem; padding: .8rem 1.3rem; border-radius: 8px;
+    font-weight: 600; text-decoration: none; border: 2px solid var(--accent); line-height: 1.2;
+  }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.ghost { color: var(--accent); background: transparent; }
+  .btn.ghost:hover { background: var(--accent-soft); }
+  .btn svg { width: 1.15em; height: 1.15em; flex: none; }
+  .fine { margin-top: 1rem; font-size: .9rem; color: var(--ink-soft); }
+
+  /* ---- Screenshot ---- */
+  .shot-wrap { padding-bottom: clamp(3rem, 7vw, 5rem); }
+  .shot { margin: 0; }
+  .shot-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: .9rem; }
+  .shot-head p { font-size: .95rem; color: var(--ink-soft); }
+  .seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; padding: 3px; background: var(--surface); }
+  .seg button {
+    font: 600 .85rem/1 var(--f-body); color: var(--ink-soft); background: none; border: 0; border-radius: 6px;
+    padding: .5rem .85rem; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .frame {
+    position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--rule);
+    box-shadow: var(--shadow); background: var(--surface);
+  }
+  .frame img { width: 100%; }
+  .shot[data-shot="light"] .img-dark, .shot[data-shot="dark"] .img-light { display: none; }
+  .pin {
+    position: absolute; transform: translate(-50%, -50%);
+    width: clamp(1.25rem, 2.4vw, 1.9rem); height: clamp(1.25rem, 2.4vw, 1.9rem);
+    display: grid; place-items: center; border-radius: 50%;
+    background: var(--amber); color: #1a1200; font: 700 clamp(.65rem, 1.2vw, .95rem)/1 var(--f-body);
+    box-shadow: 0 0 0 3px rgb(18 26 44 / .85), 0 4px 10px rgb(0 0 0 / .3);
+  }
+  .legend {
+    list-style: none; margin: 1.25rem 0 0; padding: 0;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: .9rem 2rem;
+    counter-reset: pin;
+  }
+  .legend li { display: grid; grid-template-columns: 1.75rem 1fr; gap: .6rem; font-size: .95rem; color: var(--ink-soft); counter-increment: pin; }
+  .legend li::before {
+    content: counter(pin); width: 1.6rem; height: 1.6rem; border-radius: 50%; display: grid; place-items: center;
+    background: var(--amber); color: #1a1200; font-weight: 700; font-size: .85rem;
+  }
+  .legend b { color: var(--ink); font-weight: 600; }
+
+  /* ---- Sections ---- */
+  section { padding-block: clamp(3.5rem, 8vw, 6rem); border-top: 1px solid var(--rule); }
+  section h2 { font-size: clamp(1.75rem, 3.6vw, 2.6rem); letter-spacing: -.015em; }
+  section .intro { margin-top: 1rem; color: var(--ink-soft); font-size: 1.125rem; max-width: 40rem; }
+  .split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(2rem, 5vw, 4.5rem); align-items: start; }
+  @media (max-width: 52rem) { .split { grid-template-columns: 1fr; } }
+
+  .problem { background: var(--surface); }
+  .problem .split p + p { margin-top: 1rem; }
+  .cannot { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-top: 1px solid var(--rule); }
+  .cannot li { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding-block: .85rem; border-bottom: 1px solid var(--rule); }
+  .cannot .no { color: var(--ink-soft); }
+  .cannot .no::before { content: "Scan: "; font-family: var(--f-mono); font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--red); display: block; }
+  .cannot .yes::before { content: "Unscanner: "; font-family: var(--f-mono); font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--green); display: block; }
+  .cannot-head { font-weight: 600; margin-bottom: .75rem; }
+
+  /* Steps: a real sequence, so they are numbered. */
+  .steps { list-style: none; margin: 2.5rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr)); gap: 0; counter-reset: step; border-left: 1px solid var(--rule); }
+  .steps li { counter-increment: step; padding: 0 1.25rem 1.5rem; border-right: 1px solid var(--rule); }
+  .steps li::before {
+    content: counter(step); display: block; font-family: var(--f-mono); font-weight: 600; font-size: .85rem;
+    color: var(--accent); margin-bottom: .6rem;
+  }
+  .steps h3 { font-size: 1.15rem; }
+  .steps p { margin-top: .4rem; font-size: .96rem; color: var(--ink-soft); }
+  @media (max-width: 40rem) {
+    .steps { border-left: 0; }
+    .steps li { border-right: 0; border-top: 1px solid var(--rule); padding: 1rem 0; }
+  }
+
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 2.25rem 3rem; margin-top: 2.75rem; }
+  .features h3 { font-size: 1.15rem; display: flex; align-items: baseline; gap: .5rem; }
+  .features p { margin-top: .45rem; color: var(--ink-soft); }
+  .dot { width: .7rem; height: .7rem; border-radius: 50%; display: inline-block; flex: none; transform: translateY(-.05em); }
+  .statuses { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin-top: .6rem; font-size: .9rem; color: var(--ink-soft); }
+  .statuses span { display: inline-flex; align-items: center; gap: .4rem; }
+
+  /* Page-number section: the one place the output markup is shown. */
+  .citable { background: var(--surface); }
+  pre.code {
+    margin: 0; background: var(--code-bg); color: var(--code-ink); border-radius: 10px;
+    padding: 1.25rem 1.4rem; overflow-x: auto; font-size: .88rem; line-height: 1.7;
+    box-shadow: var(--shadow); tab-size: 2;
+  }
+  pre.code .c { color: var(--code-dim); }
+  pre.code .hi { color: var(--code-hi); }
+  .code-cap { margin-top: .75rem; font-size: .9rem; color: var(--ink-soft); }
+  .points { margin: 1.75rem 0 0; padding: 0; list-style: none; display: grid; gap: 1.1rem; }
+  .points li { padding-left: 1.4rem; position: relative; }
+  .points li::before { content: ""; position: absolute; left: 0; top: .62em; width: .6rem; height: .18rem; background: var(--amber); border-radius: 2px; }
+  .points b { font-weight: 600; }
+
+  .formats { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1.5rem; margin-top: 2.5rem; }
+  .format { border: 1px solid var(--rule); border-radius: 10px; padding: 1.5rem; background: var(--surface); }
+  .format .ext { font-family: var(--f-mono); font-size: .8rem; letter-spacing: .06em; color: var(--accent); text-transform: uppercase; }
+  .format h3 { margin-top: .35rem; font-size: 1.3rem; }
+  .format ul { margin: .9rem 0 0; padding-left: 1.1rem; color: var(--ink-soft); display: grid; gap: .4rem; }
+  .checks { margin-top: 3rem; }
+  .checks h3 { font-size: 1.15rem; }
+  .checklist { list-style: none; margin: 1rem 0 0; padding: 0; columns: 16rem; column-gap: 2.5rem; }
+  .checklist li { break-inside: avoid; padding: .35rem 0 .35rem 1.6rem; position: relative; color: var(--ink-soft); }
+  .checklist li::before {
+    content: ""; position: absolute; left: .1rem; top: .72em; width: .7rem; height: .38rem;
+    border-left: 2.5px solid var(--green); border-bottom: 2.5px solid var(--green); transform: rotate(-45deg);
+  }
+
+  .table-wrap { overflow-x: auto; margin-top: 1.5rem; }
+  table { border-collapse: collapse; width: 100%; font-size: .96rem; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: .65rem .9rem .65rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  thead th { font-family: var(--f-mono); font-size: .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); font-weight: 600; }
+  td.num, th.num { text-align: right; padding-right: 0; padding-left: .9rem; }
+  .table-note { margin-top: .75rem; font-size: .88rem; color: var(--ink-soft); }
+
+  .claude { background: var(--surface); }
+  .convo { display: grid; gap: .9rem; margin: 0; padding: 0; list-style: none; }
+  .convo li { border-radius: 10px; padding: .9rem 1.1rem; max-width: 34rem; font-size: .98rem; }
+  .convo .you { background: var(--accent-soft); justify-self: end; }
+  .convo .them { background: var(--sunk); }
+  .convo .who { display: block; font-family: var(--f-mono); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: .25rem; }
+  .convo .event { background: none; border: 1px dashed var(--amber); color: var(--ink-soft); font-size: .9rem; justify-self: center; text-align: center; }
+
+  .get { display: grid; grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr)); gap: 1.5rem; margin-top: 2.5rem; }
+  .get > div { border: 1px solid var(--rule); border-radius: 10px; padding: 1.5rem; background: var(--surface); display: flex; flex-direction: column; gap: .75rem; }
+  .get > div.pick { border: 2px solid var(--accent); }
+  .get h3 { font-size: 1.25rem; }
+  .get .tag { font-family: var(--f-mono); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+  .get p { color: var(--ink-soft); font-size: .96rem; }
+  .get pre.code { font-size: .8rem; padding: .9rem 1rem; box-shadow: none; }
+  .get .btn { align-self: flex-start; margin-top: auto; }
+
+  footer { border-top: 1px solid var(--rule); padding-block: 2.5rem 3rem; color: var(--ink-soft); font-size: .92rem; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 1rem 2.5rem; justify-content: space-between; }
+  footer p + p { margin-top: .4rem; }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Unscanner home">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="6" fill="#1d4ed8"/>
+        <path d="M8 4h11l5 5v19H8z" fill="#fff"/>
+        <path d="M19 4v5h5z" fill="#93b4f5"/>
+        <path d="M8 18h16v10H8z" fill="#c7d2e4"/>
+        <rect x="11" y="9" width="6" height="2.5" fill="#1d4ed8"/>
+        <rect x="11" y="13.5" width="10" height="1.5" fill="#1a1a1a"/>
+        <rect x="5" y="17" width="22" height="2" rx="1" fill="#fbbf24"/>
+        <rect x="11" y="21" width="10" height="1.5" fill="#8a96a8"/>
+        <rect x="11" y="24" width="8" height="1.5" fill="#8a96a8"/>
+      </svg>
+      Unscanner
+    </a>
+    <nav aria-label="Sections">
+      <ul>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#review">Reviewing</a></li>
+        <li><a href="#citable">Page numbers</a></li>
+        <li><a href="#output">Output</a></li>
+        <li><a href="#models">Models</a></li>
+        <li><a href="#get">Download</a></li>
+        <li><a href="https://github.com/brsloan/unscanner">GitHub</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <div class="hero wrap" id="top">
+    <p class="eyebrow">Free and open source · for libraries and disability services</p>
+    <h1>
+      <span class="clean">Accessible, citable text out.</span>
+      <span class="bar" aria-hidden="true"></span>
+      <span class="scanned">Scanned pages in.</span>
+    </h1>
+    <p class="lede">
+      Unscanner turns scanned course readings into <strong>HTML and EPUB that meet WCAG 2.1 AA</strong>.
+      An AI model reads each page, a person checks it against the scan, and the printed page numbers
+      stay in the text, so a student using a screen reader can still find and cite page 42.
+    </p>
+    <div class="ctas">
+      <a class="btn primary" href="https://github.com/brsloan/unscanner/releases/latest">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0-5-5m5 5 5-5M4 20h16"/></svg>
+        Download for Windows
+      </a>
+      <a class="btn ghost" href="https://github.com/brsloan/unscanner">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+        View the source
+      </a>
+    </div>
+    <p class="fine">Version 0.2.0 · MIT licence · Windows installer or portable zip, or Python on any system</p>
+  </div>
+
+  <div class="shot-wrap wrap">
+    <figure class="shot" id="shot" data-shot="light">
+      <div class="shot-head">
+        <p>Page 15 of a 1,150-page county history, open for review.</p>
+        <div class="seg" role="group" aria-label="Screenshot theme">
+          <button type="button" id="shot-light" data-set="light" aria-pressed="true">Light</button>
+          <button type="button" id="shot-dark" data-set="dark" aria-pressed="false">Dark</button>
+        </div>
+      </div>
+      <div class="frame">
+        <img class="img-light" src="unscanner-light.png" width="1920" height="1008"
+             alt="The Unscanner window in its light theme. On the left, a list of the book's 1,150 pages with coloured status dots. In the middle, the scanned Preface page of History of Clinton County, Indiana. On the right, the same page as editable text under a heading toolbar. The word 'destinies' is highlighted in both as a difference to check, and a red dot on the scan marks the word the cursor is on.">
+        <img class="img-dark" src="unscanner-dark.png" width="1920" height="1008"
+             alt="The same Unscanner window in its dark theme: page list, scanned Preface page and editable text side by side, with 'destinies' highlighted in both and a red dot on the scan marking the cursor's word.">
+        <span class="pin" style="left:7.6%;top:24%" aria-hidden="true">1</span>
+        <span class="pin" style="left:50.5%;top:20%" aria-hidden="true">2</span>
+        <span class="pin" style="left:25.5%;top:44.7%" aria-hidden="true">3</span>
+        <span class="pin" style="left:60.8%;top:23%" aria-hidden="true">4</span>
+        <span class="pin" style="left:76.2%;top:46.9%" aria-hidden="true">5</span>
+        <span class="pin" style="left:70.3%;top:94.6%" aria-hidden="true">6</span>
+      </div>
+      <figcaption>
+        <ol class="legend">
+          <li><span><b>Every page, colour-coded.</b> Green is approved by a person; the M says a model wrote it last.</span></li>
+          <li><span><b>The scan itself</b>, with Fit, Fill and zoom, so nothing is checked from memory.</span></li>
+          <li><span><b>The two sides follow each other.</b> The red dot marks the word your cursor is on in the text, and a click on the scan finds a word in the text.</span></li>
+          <li><span><b>An editor that only writes accessible HTML</b>: headings, lists, small caps, language, figures, tables.</span></li>
+          <li><span><b>Diff checks the text against the scan.</b> Here it found one word to look at, “destinies”, underlined in the text and boxed on the scan.</span></li>
+          <li><span><b>Approve &amp; next</b>, or <kbd>F2</kbd>. Most of the work is this one key.</span></li>
+        </ol>
+      </figcaption>
+    </figure>
+  </div>
+
+  <section class="problem" aria-labelledby="problem-h">
+    <div class="wrap split">
+      <div>
+        <h2 id="problem-h">A scan is a photograph of a page</h2>
+        <div class="intro">
+          <p>Course packs, interlibrary loans and digitised book chapters arrive as scans. They look like text,
+          but to a screen reader they are pictures. Unscanner turns them into real text that anyone
+          can read, and leaves your original PDF exactly as it was.</p>
+        </div>
+      </div>
+      <div>
+        <p class="cannot-head">What changes for the reader</p>
+        <ul class="cannot">
+          <li><span class="no">Silence, or a jumble of OCR errors</span><span class="yes">Read aloud correctly, foreign phrases included</span></li>
+          <li><span class="no">Zooming makes the page blurry</span><span class="yes">Text reflows at any size, on any screen</span></li>
+          <li><span class="no">Nothing to search</span><span class="yes">Every word searchable and copyable</span></li>
+          <li><span class="no">Scroll and hope</span><span class="yes">Headings to jump by, a table of contents</span></li>
+          <li><span class="no">Figures are part of the photo</span><span class="yes">Figures with written descriptions (alt text)</span></li>
+          <li><span class="no">Page numbers in the picture</span><span class="yes">Printed page numbers to navigate and cite by</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="how" aria-labelledby="how-h">
+    <div class="wrap">
+      <h2 id="how-h">From scan to finished files</h2>
+      <p class="intro">You can stop at any step and pick it up later. Your work is saved as you go.</p>
+      <ol class="steps">
+        <li><h3>Open the PDF</h3><p>Choose the scan. Title, author and language come from the file where they can, and you can check them against the title page.</p></li>
+        <li><h3>Transcribe</h3><p>An AI model writes out each page, several at a time, in the background. Start checking finished pages while the rest are still being read.</p></li>
+        <li><h3>Review</h3><p>Compare text and scan, fix what is wrong, and approve. Pages the model was unsure of come first.</p></li>
+        <li><h3>Build</h3><p>All pages become one web page and one e-book, with paragraphs joined back up across page breaks.</p></li>
+        <li><h3>Validate</h3><p>Accessibility checks, each problem linked to its page. Fix, build again, done.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="review" aria-labelledby="review-h">
+    <div class="wrap">
+      <h2 id="review-h">Built for the part that takes people’s time</h2>
+      <p class="intro">A model can transcribe a book overnight. Someone still has to check it before it goes to a
+        student with an accommodation. Everything in Unscanner is there to make that check fast and hard to get wrong.</p>
+      <div class="features">
+        <div>
+          <h3>Scan and text side by side</h3>
+          <p>The page as printed in the middle, its text on the right. Drag the dividers to taste; the widths are remembered.</p>
+        </div>
+        <div>
+          <h3>Never lose your place</h3>
+          <p><b>Follow</b> scrolls the scan to the line you are typing on. <b>Mark</b> puts a small dot beside the word.
+            Click any word on the scan and the cursor jumps to it in the text.</p>
+        </div>
+        <div>
+          <h3>Diff against the scan</h3>
+          <p>Words on the scan but missing from the text get a red box; words that differ get a dashed amber one, and the
+            same words are underlined in the editor.</p>
+        </div>
+        <div>
+          <h3>Know where every page stands</h3>
+          <div class="statuses">
+            <span><i class="dot" style="background:#9aa4b5"></i>not read</span>
+            <span><i class="dot" style="background:var(--amber)"></i>needs review</span>
+            <span><i class="dot" style="background:var(--green)"></i>approved</span>
+            <span><i class="dot" style="background:var(--red)"></i>error</span>
+          </div>
+          <p>Show only the pages that need work, or only those with figures or tables. Ctrl+click several to approve or skip them together.</p>
+        </div>
+        <div>
+          <h3>Figures, cropped from the scan</h3>
+          <p>The model finds the pictures; you adjust the crop box on the scan, turn a picture, set it to wrap, and
+            write alt text, or let <b>AI autofill</b> draft one for you to check.</p>
+        </div>
+        <div>
+          <h3>Tables the model ran together</h3>
+          <p>Select the jumbled text, click <b>+Table</b>, and drag a box over the table on the scan. Just that part of
+            the page is read again and comes back as a real table with header cells.</p>
+        </div>
+        <div>
+          <h3>A headings pane, like Word’s</h3>
+          <p>The Headings tab shows the document’s outline as it takes shape. Fold branches away, and click a heading to go to its page.</p>
+        </div>
+        <div>
+          <h3>Nothing lost, nothing overwritten</h3>
+          <p>Unsaved edits survive moving between pages and even closing the app. If someone else changes a page you are
+            editing, you choose whose version to keep.</p>
+        </div>
+        <div>
+          <h3>Keyboard first</h3>
+          <p><kbd>F2</kbd> approves and moves on, <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>6</kbd> set heading
+            levels, <kbd>Alt</kbd>+<kbd>←</kbd>/<kbd>→</kbd> turn pages. A plain-language Help guide is in the File menu.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="citable" id="citable" aria-labelledby="citable-h">
+    <div class="wrap split">
+      <div>
+        <h2 id="citable-h">Page 81 is still page 81</h2>
+        <p class="intro">A reading assigned as “pages 74 to 96” has to work that way for every student. Unscanner keeps
+          the printed page number of every page as a marker in the text, and puts it exactly where the page turns,
+          even in the middle of a sentence.</p>
+        <ul class="points">
+          <li><b>Screen readers announce it</b> and let the reader jump to any page, from the EPUB’s page list or the HTML’s.</li>
+          <li><b>Paragraphs are joined back up</b> across the page turn, and a word hyphenated over the edge is mended the way
+            the rest of the book spells it.</li>
+          <li><b>Numbered lists carry on</b> across pages as one list, not two lists both starting at 1.</li>
+          <li><b>Roman numerals and unnumbered pages</b> are kept as printed; running heads and library stamps are dropped.</li>
+        </ul>
+      </div>
+      <div>
+        <pre class="code" tabindex="0" aria-label="Example of the HTML Unscanner writes where a paragraph runs over a page break"><code><span class="c">&lt;!-- the end of page 80 and the start of 81, one paragraph --&gt;</span>
+&lt;p&gt;From a trackless wilderness and virgin
+prairie it has come to be a center of
+prosperity, with systems of rail<span class="hi">&lt;span
+  role="doc-pagebreak" id="pg-81"
+  aria-label="Page 81"&gt;81&lt;/span&gt;</span>ways,
+grand educational institutions and
+splendid industries.&lt;/p&gt;</code></pre>
+        <p class="code-cap">The marker sits inside the joined paragraph, at the exact point the printed page turns, and <code>#pg-81</code> links straight to it.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="output" aria-labelledby="output-h">
+    <div class="wrap">
+      <h2 id="output-h">Two files, ready to hand over</h2>
+      <p class="intro">The text is kept to what helps a reader: real headings, lists, tables, emphasis, figures and
+        footnotes. Fonts, sizes and colours are left to the reader’s own device, which is what lets them enlarge the text or
+        have it read aloud. There is no way to type an inaccessible layout into the editor.</p>
+      <div class="formats">
+        <div class="format">
+          <p class="ext">.html</p>
+          <h3>One web page</h3>
+          <ul>
+            <li>A single self-contained file, pictures included: it opens with a double-click and uploads to Canvas, Moodle or Blackboard as it is</li>
+            <li>A folding outline of headings at the top</li>
+            <li>Linked footnotes and a list of every page</li>
+          </ul>
+        </div>
+        <div class="format">
+          <p class="ext">.epub</p>
+          <h3>One e-book</h3>
+          <ul>
+            <li>EPUB 3 with a table of contents and a page list, for Apple Books, Thorium and screen-reader apps</li>
+            <li>EPUB Accessibility 1.1 metadata, including <code>printPageNumbers</code></li>
+            <li>Checked with the W3C’s epubcheck: zero errors</li>
+          </ul>
+        </div>
+        <div class="format">
+          <p class="ext">Settings</p>
+          <h3>Your house style</h3>
+          <ul>
+            <li>Book-style indented paragraphs, justified text, page numbers shown or hidden, for each format</li>
+            <li>Greyscale or JPEG pictures for smaller files</li>
+            <li>Your original PDF is never changed</li>
+          </ul>
+        </div>
+      </div>
+      <div class="checks">
+        <h3>Checked before it leaves your desk</h3>
+        <ul class="checklist">
+          <li>Every page’s word count compared with the scan’s, to catch skipped or invented text</li>
+          <li>Anything the model was unsure of flagged for a person</li>
+          <li>Exactly one top-level heading, and no skipped heading levels</li>
+          <li>A description on every image</li>
+          <li>Header cells on every table</li>
+          <li>Document language and title set</li>
+          <li>Unique ids and no broken links</li>
+          <li>A page marker for every page</li>
+          <li>epubcheck on the finished e-book</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section id="models" aria-labelledby="models-h">
+    <div class="wrap split">
+      <div>
+        <h2 id="models-h">Claude, or a model you run yourself</h2>
+        <p class="intro">Use Claude through Anthropic’s API, or any vision model your institution hosts behind an
+          OpenAI-compatible address: Ollama, vLLM, LM Studio. Pages never go anywhere you have not chosen.</p>
+        <ul class="points">
+          <li><b>Tell the model who you are.</b> The standing instructions say who is doing the work and on what legal
+            basis, so a faithful transcription is not mistaken for a copyright problem. Edit them in Settings for your institution.</li>
+          <li><b>A second opinion on refusals.</b> If a model declines a page, Unscanner can try it once on another model and flag it for review.</li>
+          <li><b>Your house rules.</b> How to treat headings, footnotes, tables and figures is plain text you can change, without touching code.</li>
+          <li><b>Keys stay private.</b> API keys go to Windows Credential Manager or the macOS Keychain, and are never shown again.</li>
+        </ul>
+      </div>
+      <div>
+        <p class="cannot-head">Rough cost of a reading, at list prices</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th scope="col">Model</th><th scope="col" class="num">Per page</th><th scope="col" class="num">50-page chapter</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">Claude Opus</th><td class="num">about $0.04</td><td class="num">about $2</td></tr>
+              <tr><th scope="row">Claude Sonnet</th><td class="num">about $0.02</td><td class="num">about $1</td></tr>
+              <tr><th scope="row">Claude Haiku</th><td class="num">about $0.01</td><td class="num">about $0.50</td></tr>
+              <tr><th scope="row">Your own GPU</th><td class="num">electricity</td><td class="num">electricity</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="table-note">A sensible routine: run everything through a local model or Sonnet, then re-run only the flagged pages on Opus.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="claude" id="claude" aria-labelledby="claude-h">
+    <div class="wrap split">
+      <div>
+        <h2 id="claude-h">Work alongside Claude</h2>
+        <p class="intro">Unscanner is also an MCP server. Keep the app open, talk to Claude Desktop or Claude Code in
+          another window, and Claude sees the page you are on.</p>
+        <ul class="points">
+          <li><b>No page numbers needed.</b> “This table is wrong” is enough: Claude looks at the same scan and text you do.</li>
+          <li><b>Its edits appear in your window</b> within seconds, marked with a C, waiting for you to approve.</li>
+          <li><b>It can point you somewhere</b>, bringing a page up on your screen, or re-run the model on a range with extra instructions.</li>
+          <li><b>Or hand it the whole job.</b> “Remediate this PDF into accessible HTML and EPUB” runs open, transcribe, build and validate for you.</li>
+        </ul>
+      </div>
+      <ol class="convo" aria-label="Example exchange with Claude">
+        <li class="you"><span class="who">You</span>The two columns on this page came out interleaved.</li>
+        <li class="them"><span class="who">Claude</span>I see it on page 212: the model read across both columns. I’ve re-read the page left column first and saved it for your review.</li>
+        <li class="event">Page 212 updated by Claude · Approve to confirm</li>
+        <li class="you"><span class="who">You</span>Do the same for any other two-column pages.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section aria-labelledby="yours-h">
+    <div class="wrap">
+      <h2 id="yours-h">Yours to keep, move and adapt</h2>
+      <div class="features">
+        <div>
+          <h3>Everything on your computer</h3>
+          <p>Projects live in your Documents folder. Nothing needs a server or an account, apart from the model you choose.</p>
+        </div>
+        <div>
+          <h3>Projects that follow the PDF</h3>
+          <p>Unscanner recognises a PDF by its content, so a renamed or moved scan opens straight back into your earlier work.</p>
+        </div>
+        <div>
+          <h3>Hand it to a colleague</h3>
+          <p>Export a project as one small file to keep beside the PDF, back up, or carry on at another desk.</p>
+        </div>
+        <div>
+          <h3>Made to be changed</h3>
+          <p>Plain Python and one HTML page, with no build step, and a guide written so a library can adapt it with Claude’s help. MIT licensed.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="get" aria-labelledby="get-h">
+    <div class="wrap">
+      <h2 id="get-h">Get Unscanner</h2>
+      <p class="intro">No administrator rights needed for any of these.</p>
+      <div class="get">
+        <div class="pick">
+          <p class="tag">Recommended on Windows</p>
+          <h3>Installer</h3>
+          <p>Installs for you alone and adds Unscanner to the Start menu. It opens in its own window. The installer is not
+            signed yet, so Windows asks once: choose “More info”, then “Run anyway”.</p>
+          <a class="btn primary" href="https://github.com/brsloan/unscanner/releases/latest">Unscanner-Setup .exe</a>
+        </div>
+        <div>
+          <p class="tag">Windows, nothing installed</p>
+          <h3>Portable zip</h3>
+          <p>Unzip it anywhere, even a USB stick, and double-click <code>start-unscanner.bat</code>. Python and everything else are inside.</p>
+          <a class="btn ghost" href="https://github.com/brsloan/unscanner/releases/latest">unscanner-win64 .zip</a>
+        </div>
+        <div>
+          <p class="tag">Windows, macOS, Linux</p>
+          <h3>From source</h3>
+          <p>With Python 3.11 or later:</p>
+<pre class="code" tabindex="0" aria-label="Commands to install from source"><code>git clone https://github.com/brsloan/unscanner
+cd unscanner
+pip install -e .[window]
+python -m unscanner.cli ui</code></pre>
+          <a class="btn ghost" href="https://github.com/brsloan/unscanner#readme">Read the README</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div>
+      <p><b>Unscanner</b>: scanned PDFs to accessible HTML and EPUB.</p>
+      <p>© 2026 Ben Sloan · <a href="https://github.com/brsloan/unscanner/blob/main/LICENSE">MIT licence</a></p>
+    </div>
+    <div>
+      <p><a href="https://github.com/brsloan/unscanner">Source on GitHub</a> · <a href="https://github.com/brsloan/unscanner/releases">Releases</a> · <a href="https://github.com/brsloan/unscanner/issues">Report a problem</a></p>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // The screenshot follows the visitor's light or dark setting until they pick one.
+  (function () {
+    var fig = document.getElementById('shot');
+    var buttons = fig.querySelectorAll('.seg button');
+    function show(which) {
+      fig.setAttribute('data-shot', which);
+      buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.set === which)); });
+    }
+    var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)');
+    if (dark && dark.matches) show('dark');
+    buttons.forEach(function (b) { b.addEventListener('click', function () { show(b.dataset.set); }); });
+  })();
+</script>
+</body>
+</html>
