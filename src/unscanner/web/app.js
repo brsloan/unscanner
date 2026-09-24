@@ -408,10 +408,8 @@ $("#banner-primary").addEventListener("click", () => {});
 // ------------------------------------------------------------------ documents
 async function loadDocs(selectId) {
   state.docs = await api("/documents");  // most recently opened first
-  const sel = $("#doc-select");
-  sel.innerHTML = '<option value="">— document —</option>' +
-    state.docs.map((d) => `<option value="${d.doc_id}">${escapeHtml(d.title || d.doc_id)}${d.source_found ? "" : " (PDF missing)"}</option>`).join("");
-  if (selectId && state.docs.some((d) => d.doc_id === selectId)) { sel.value = selectId; await openDoc(selectId); }
+  renderRecent();
+  if (selectId && state.docs.some((d) => d.doc_id === selectId)) await openDoc(selectId);
   else if (selectId) await openDoc("");
 }
 
@@ -423,13 +421,17 @@ async function openDoc(docId, pageToShow) {
   state.picked.clear(); state.pickAnchor = null; closePageMenu();
   if (!docId) {  // no document (the last one was removed): an empty editor, and nothing to run on it
     state.doc = null; state.page = null; state.pageData = null; state.dirty = false;
-    $("#editor").innerHTML = ""; $("#doc-meta").textContent = "";
+    $("#editor").innerHTML = ""; $("#doc-meta").textContent = ""; $("#doc-title").textContent = "";
+    renderRecent();
     ["#btn-transcribe", "#btn-build", "#btn-validate", "#btn-properties", "#btn-export"].forEach((b) => ($(b).disabled = true));
     renderPages(); return;
   }
   state.doc = await api(`/documents/${docId}`);
   localStorage.setItem("unscanner.lastDoc", docId);
-  renderPages(); renderMeta();
+  const i = state.docs.findIndex((d) => d.doc_id === docId);  // Recent documents: the one just opened comes first
+  if (i > 0) state.docs.unshift(...state.docs.splice(i, 1));
+  $("#doc-title").textContent = state.doc.title || docId;
+  renderRecent(); renderPages(); renderMeta();
   if (!state.doc.source_found) {
     showBanner(`The PDF is not at ${state.doc.source}. The pages can be read and exported; to see the scans again, point the project at the file.`,
       { label: "Locate PDF…", run: () => locatePdf(docId) }, { label: "Remove project…", run: () => askRemove(docId) });
@@ -465,8 +467,7 @@ function renderMeta() {
   const draftCount = drafts.size;
   el.textContent = `${s.done || 0}/${state.doc.page_count} approved · ${s.needs_review || 0} review${draftCount ? ` · ${draftCount} unsaved` : ""}`;
   el.title = `${state.doc.page_count} pages · ${s.done || 0} approved · ${s.needs_review || 0} need review · ${s.pending || 0} not transcribed · ${s.error || 0} errors · ${draftCount} with unsaved edits`;
-  const all = $("#btn-save-all");
-  all.disabled = !draftCount; all.textContent = draftCount ? `Save (${draftCount})` : "Save";
+  for (const b of [$("#btn-save-all"), $("#menu-save")]) { b.disabled = !draftCount; b.textContent = draftCount ? `Save (${draftCount})` : "Save"; }
 }
 
 // ------------------------------------------------------------------ drafts: unsaved edits kept per page, in memory and localStorage
@@ -909,7 +910,7 @@ async function poll() {
       state.lastRequestAt = req.at;
       await api("/session/requested", { method: "DELETE" });
       const go = async () => {
-        if (req.doc_id !== state.doc.doc_id) { $("#doc-select").value = req.doc_id; await openDoc(req.doc_id, req.page); }
+        if (req.doc_id !== state.doc.doc_id) await openDoc(req.doc_id, req.page);
         else await loadPage(req.page);
         if (req.note) setStatus("Claude: " + req.note);
       };
@@ -1608,7 +1609,87 @@ async function bulkPages(action) {
   } catch (e) { setStatus("Could not change the pages: " + e.message, true); }
   renderPages(); renderMeta();
 }
-$("#doc-select").addEventListener("change", (e) => openDoc(e.target.value));
+
+// ---- File menu: Open PDF, Save, Recent documents (a submenu), Documents, Export, Import, Settings.
+// The popups are position: fixed (the top bar scrolls sideways and would clip them) and placed from
+// the button that opens them. Keyboard: arrows move, Right/Left open and close the submenu, Escape closes.
+const fileMenu = $("#file-menu"), recentMenu = $("#recent-menu");
+function placeMenu(menu, anchor, beside) {
+  const r = anchor.getBoundingClientRect();
+  menu.hidden = false;
+  let left = beside ? r.right + 2 : r.left, top = beside ? r.top - 5 : r.bottom + 2;
+  if (left + menu.offsetWidth > innerWidth - 4) left = beside ? Math.max(0, r.left - menu.offsetWidth - 2) : Math.max(0, innerWidth - menu.offsetWidth - 4);
+  if (top + menu.offsetHeight > innerHeight - 4) top = Math.max(0, innerHeight - menu.offsetHeight - 4);
+  menu.style.left = left + "px"; menu.style.top = top + "px";
+}
+function menuItems(menu) { return [...menu.querySelectorAll(':scope > [role="menuitem"], :scope > .menu-sub > [role="menuitem"]')].filter((b) => !b.disabled); }
+function openRecent(focusFirst) {
+  placeMenu(recentMenu, $("#menu-recent"), true);
+  $("#menu-recent").setAttribute("aria-expanded", "true");
+  if (focusFirst) (menuItems(recentMenu)[0] || $("#menu-recent")).focus();
+}
+function closeRecent(refocus) {
+  recentMenu.hidden = true;
+  $("#menu-recent").setAttribute("aria-expanded", "false");
+  if (refocus) $("#menu-recent").focus();
+}
+function openFileMenu(focusFirst) {
+  placeMenu(fileMenu, $("#btn-file"), false);
+  $("#btn-file").setAttribute("aria-expanded", "true");
+  if (focusFirst) menuItems(fileMenu)[0].focus();
+}
+function closeFileMenu(refocus) {
+  if (fileMenu.hidden) return;
+  closeRecent(false);
+  fileMenu.hidden = true;
+  $("#btn-file").setAttribute("aria-expanded", "false");
+  if (refocus) $("#btn-file").focus();
+}
+function renderRecent() {
+  const current = state.doc ? state.doc.doc_id : "";
+  recentMenu.innerHTML = state.docs.length ? state.docs.map((d) =>
+    `<button type="button" role="menuitem" data-doc="${d.doc_id}"${d.doc_id === current ? ' aria-current="true"' : ""}>` +
+    `<span class="check" aria-hidden="true">${d.doc_id === current ? "✓" : ""}</span><span class="label">${escapeHtml(d.title || d.doc_id)}${d.source_found ? "" : " (PDF missing)"}</span></button>`).join("")
+    : '<button type="button" role="menuitem" disabled>No documents yet</button>';
+}
+$("#btn-file").addEventListener("click", () => (fileMenu.hidden ? openFileMenu(false) : closeFileMenu(false)));
+$("#btn-file").addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); openFileMenu(true); }
+});
+$("#menu-open").addEventListener("click", () => $("#btn-open").click());
+$("#menu-save").addEventListener("click", saveAll);
+$("#menu-recent").addEventListener("click", () => (recentMenu.hidden ? openRecent(true) : closeRecent(true)));
+$("#menu-recent").addEventListener("pointerenter", () => openRecent(false));
+fileMenu.addEventListener("pointerover", (e) => {  // moving on to another item folds the submenu away
+  const b = e.target.closest('[role="menuitem"]');
+  if (b && b.id !== "menu-recent" && !recentMenu.contains(b)) closeRecent(false);
+});
+fileMenu.addEventListener("click", (e) => {  // the item's own handler has run: close the menu
+  const b = e.target.closest('[role="menuitem"]');
+  if (b && b.id !== "menu-recent") closeFileMenu(false);
+});
+recentMenu.addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-doc]");
+  if (b) { closeFileMenu(false); openDoc(b.dataset.doc); }
+});
+fileMenu.addEventListener("keydown", (e) => {
+  const inRecent = recentMenu.contains(document.activeElement);
+  if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); if (inRecent) closeRecent(true); else closeFileMenu(true); return; }
+  if (e.key === "Tab") { closeFileMenu(false); return; }
+  if (e.key === "ArrowRight" && document.activeElement === $("#menu-recent")) { e.preventDefault(); openRecent(true); return; }
+  if (e.key === "ArrowLeft" && inRecent) { e.preventDefault(); closeRecent(true); return; }
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
+  e.preventDefault();
+  const items = menuItems(inRecent ? recentMenu : fileMenu);
+  if (!items.length) return;
+  const at = items.indexOf(document.activeElement);
+  const to = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : (at + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+  items[to].focus();
+});
+document.addEventListener("pointerdown", (e) => { if (!e.target.closest("#file-menu, #btn-file")) closeFileMenu(false); });
+window.addEventListener("blur", () => closeFileMenu(false));
+window.addEventListener("resize", () => closeFileMenu(false));
+$(".topbar").addEventListener("scroll", () => closeFileMenu(false));
 
 // ---- sidebar tabs: Pages or Headings
 const SIDEBAR_TABS = ["pages", "headings"];
@@ -1885,8 +1966,10 @@ $("#btn-properties").addEventListener("click", async () => {
 });
 function showProperties(d) {
   Object.assign(state.doc, { title: d.title, author: d.author, language: d.language });
-  const opt = $(`#doc-select option[value="${d.doc_id}"]`);
-  if (opt) opt.textContent = d.title || d.doc_id;
+  const entry = state.docs.find((x) => x.doc_id === d.doc_id);
+  if (entry) entry.title = d.title;
+  if (state.doc.doc_id === d.doc_id) $("#doc-title").textContent = d.title || d.doc_id;
+  renderRecent();
 }
 $("#form-properties").addEventListener("submit", async (e) => {
   const f = new FormData(e.target);
@@ -2007,7 +2090,7 @@ $("#documents-table").addEventListener("click", async (e) => {
   const btn = e.target.closest("button[data-act]");
   if (!btn) return;
   const docId = btn.closest("tr").dataset.doc;
-  if (btn.dataset.act === "open") { dlgDocuments.close(); $("#doc-select").value = docId; await openDoc(docId); }
+  if (btn.dataset.act === "open") { dlgDocuments.close(); await openDoc(docId); }
   else if (btn.dataset.act === "locate") await locatePdf(docId);
   else if (btn.dataset.act === "remove") askRemove(docId);
 });

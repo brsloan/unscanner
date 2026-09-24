@@ -11,24 +11,37 @@
 <a class="skip-link" href="#editor">Skip to editor</a>
 <header class="topbar">
   <h1>Unscanner</h1>
-  <label for="doc-select" class="visually-hidden">Document</label>
-  <select id="doc-select" title="The document being worked on"><option value="">— document —</option></select>
+  <div class="menubar">
+    <button id="btn-file" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="file-menu">File</button>
+    <div id="file-menu" class="app-menu" role="menu" aria-label="File" hidden>
+      <button id="menu-open" type="button" role="menuitem">Open PDF…</button>
+      <button id="menu-save" type="button" role="menuitem" disabled title="Save every page with unsaved edits (Ctrl+S)">Save</button>
+      <div class="menu-sep" role="separator"></div>
+      <div class="menu-sub">
+        <button id="menu-recent" type="button" role="menuitem" aria-haspopup="menu" aria-expanded="false" aria-controls="recent-menu" title="Documents opened on this computer, most recent first">Recent documents <span class="menu-arrow" aria-hidden="true">▸</span></button>
+        <div id="recent-menu" class="app-menu" role="menu" aria-label="Recent documents" hidden></div>
+      </div>
+      <button id="btn-documents" type="button" role="menuitem" title="Every project on this computer: reopen, locate a moved PDF, or remove">Documents…</button>
+      <div class="menu-sep" role="separator"></div>
+      <button id="btn-export" type="button" role="menuitem" disabled title="Download this project as a file to keep next to the PDF: a backup, or to continue on another computer">Export project</button>
+      <button id="btn-import" type="button" role="menuitem" title="Load a project file exported here or on another computer">Import project…</button>
+      <div class="menu-sep" role="separator"></div>
+      <button id="btn-settings" type="button" role="menuitem">Settings…</button>
+    </div>
+  </div>
+  <span id="doc-title" class="doc-title" title="The document being worked on"></span>
   <button id="btn-open" type="button">Open PDF…</button>
   <input id="open-file" type="file" accept="application/pdf" hidden>  <!-- a browser tab uploads; the window opens in place -->
-  <button id="btn-documents" type="button" title="Every project on this computer: reopen, locate a moved PDF, or remove">Documents…</button>
   <button id="btn-save-all" type="button" disabled title="Save every page with unsaved edits (Ctrl+S)">Save</button>
   <button id="btn-transcribe" type="button" disabled>Transcribe…</button>
   <button id="btn-build" type="button" disabled>Build</button>
   <button id="btn-validate" type="button" disabled>Validate</button>
   <a id="lnk-html" class="button" hidden download>HTML</a>
   <a id="lnk-epub" class="button" hidden download>EPUB</a>
-  <button id="btn-export" type="button" disabled title="Download this project as a file to keep next to the PDF: a backup, or to continue on another computer">Export project</button>
-  <button id="btn-import" type="button" title="Load a project file exported here or on another computer">Import project…</button>
   <span class="spacer"></span>
   <button id="btn-diff" type="button" aria-pressed="true" title="Highlight where the transcription differs from the text found on the scan">Diff <span id="diff-count" class="diff-count" hidden></span></button>
   <button id="btn-notes" type="button" aria-pressed="true" title="Show or hide the notes panel">Notes <span id="notes-warn" class="warn" role="img" aria-label="this page has notes" hidden>⚠</span></button>
   <button id="btn-properties" type="button" disabled title="Title, author and language of the output HTML and EPUB">Properties…</button>
-  <button id="btn-settings" type="button">Settings</button>
 </header>
 
 <div class="layout" id="layout">
