@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import ntpath
 import posixpath
@@ -22,6 +23,58 @@ def slugify(text: str) -> str:
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
     text = re.sub(r"[^A-Za-z0-9]+", "-", text).strip("-").lower()
     return text[:80] or "document"
+
+
+FINGERPRINT_SAMPLE = 1_000_000  # bytes hashed from each end of the PDF
+
+
+def fingerprint(pdf_path: str | Path) -> str:
+    """What identifies a PDF: its size and a hash of its first and last megabyte. Milliseconds on a
+    gigabyte file, and a changed file changes it (a scan's page images are spread through the file, and
+    an edit moves the cross-reference table at the end). Two PDFs that merely share a name differ."""
+    p = Path(pdf_path)
+    size = p.stat().st_size
+    h = hashlib.sha256(str(size).encode())
+    with p.open("rb") as fh:
+        h.update(fh.read(FINGERPRINT_SAMPLE))
+        if size > FINGERPRINT_SAMPLE:
+            fh.seek(max(FINGERPRINT_SAMPLE, size - FINGERPRINT_SAMPLE))
+            h.update(fh.read(FINGERPRINT_SAMPLE))
+    return h.hexdigest()[:16]
+
+
+def doc_id_for(pdf_path: str | Path, fp: str) -> str:
+    """The work folder name of a new project: the PDF's name, and enough of the fingerprint that two
+    PDFs with the same name get two folders."""
+    return f"{slugify(Path(pdf_path).stem)[:60].rstrip('-')}-{fp[:8]}"
+
+
+def project_dirs(work_root: str | Path) -> list[Path]:
+    """Every work folder that holds a project."""
+    return [wd for wd in sorted(Path(work_root).glob("*/")) if Document.exists(wd)]
+
+
+def find_project(work_root: str | Path, fp: str, pdf_name: str = "") -> Path | None:
+    """The work folder of the project made from the PDF with fingerprint `fp`, or None.
+
+    Projects made before fingerprints (folder named after the PDF alone, no fingerprint stored) are
+    matched by the PDF's name when their own PDF is gone or is the same file, and given the fingerprint
+    so the match is by content from then on."""
+    legacy = None
+    for wd in project_dirs(work_root):
+        doc = Document.load(wd)
+        if doc.fingerprint == fp:
+            return wd
+        if not doc.fingerprint and pdf_name and wd.name == slugify(Path(pdf_name).stem):
+            legacy = doc
+    if legacy is None:
+        return None
+    src = Path(legacy.source)
+    if src.is_file() and fingerprint(src) != fp:
+        return None  # its own PDF is still there and is a different file
+    legacy.fingerprint = fp
+    legacy.save()
+    return Path(legacy.workdir)
 
 
 def _retry_locked(action: Callable[[], T], attempts: int = 20, delay: float = 0.05) -> T:
@@ -97,6 +150,8 @@ class Document:
     author: str = ""
     language: str = "en"
     pages: list[Page] = field(default_factory=list)
+    fingerprint: str = ""  # of the PDF (see fingerprint()); "" in projects made before it was recorded
+    opened_at: str = ""  # when the project was last opened; the UI lists the most recent first
 
     # ---- persistence -------------------------------------------------
     @property
@@ -166,7 +221,9 @@ class Document:
             counts[p.status] = counts.get(p.status, 0) + 1
         return {
             "source": self.source,
+            "source_found": Path(self.source).is_file(),
             "workdir": self.workdir,
+            "opened_at": self.opened_at,
             "title": self.title,
             "author": self.author,
             "language": self.language,

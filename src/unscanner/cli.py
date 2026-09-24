@@ -30,10 +30,7 @@ def _resolve_doc(target: str, work: str) -> Document:
     p = Path(target)
     if p.is_dir() and Document.exists(p):
         return Document.load(p)
-    if p.suffix.lower() == ".pdf":
-        wd = Path(work) / slugify(p.stem)
-        if Document.exists(wd):
-            return Document.load(wd)
+    if p.suffix.lower() == ".pdf" and p.is_file():
         from .pdf import new_document
 
         return new_document(p, work)
@@ -88,7 +85,7 @@ def _build(doc: Document, out_root: str, epub: bool = True) -> dict:
     from .assemble import assemble, export_style, image_options, load_export_settings
     from .epub import build_epub
 
-    out_dir = Path(out_root) / slugify(Path(doc.source).stem)
+    out_dir = Path(out_root) / Path(doc.workdir).name
     out_dir.mkdir(parents=True, exist_ok=True)
     # Indent, justification and page numbers per format, and how the figure files are written: the
     # Export section of the UI's settings.
@@ -117,7 +114,7 @@ def _validate(doc: Document, out_root: str, run_epubcheck: bool = True) -> dict:
     from .assemble import export_style, load_export_settings
     from .validate import coverage, epubcheck, validate_html
 
-    out_dir = Path(out_root) / slugify(Path(doc.source).stem)
+    out_dir = Path(out_root) / Path(doc.workdir).name
     html_path = built_html(out_dir)
     issues = []
     if html_path:

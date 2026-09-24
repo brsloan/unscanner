@@ -290,7 +290,7 @@ def get_output_html(doc_id: str, max_chars: int = 200000) -> str:
     """Return the assembled HTML from the last build (truncated to max_chars) for review."""
     from .cli import built_html
 
-    p = built_html(_out_root() / slugify(Path(_load(doc_id).source).stem))
+    p = built_html(_out_root() / Path(_load(doc_id).workdir).name)
     if not p:
         raise ToolError("no build yet; call build first")
     return p.read_text(encoding="utf-8")[:max_chars]

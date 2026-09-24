@@ -23,8 +23,10 @@ from pydantic import BaseModel
 from . import desktop, keystore, project
 from .assemble import EXPORT_DEFAULTS, image_mime, outline
 from .backends.openai_compat import DEFAULT_MODEL as DEFAULT_OPENAI_MODEL
-from .document import Document, normalize_rotation, parse_page_range, slugify
-from .pdf import cached_page_png, cached_page_words, new_document
+from .document import (Document, fingerprint, find_project, normalize_rotation, parse_page_range, project_dirs,
+                       slugify)
+from .pdf import (SourceMismatch, cached_page_png, cached_page_words, new_document, relink_source, remove_project,
+                  trim_cache)
 from .pipeline import apply_result, ensure_draft_text
 from .prompts import guidelines, prompt_status, save_prompts
 from .sanitize import sanitize_fragment
@@ -86,6 +88,14 @@ class OpenRequest(BaseModel):
     language: str = "en"
 
 
+class SourceRequest(BaseModel):
+    pdf_path: str
+
+
+class PickRequest(BaseModel):
+    kind: str = "pdf"  # "pdf" | "project"
+
+
 class PropertiesUpdate(BaseModel):
     title: str
     author: str = ""
@@ -134,6 +144,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
     from . import mcp_server
 
     mcp_server.configure(work_root, out_root)
+    trim_cache(work_root)  # page renders left by earlier runs, over the cache limit
     mcp_app = mcp_server.server.streamable_http_app(streamable_http_path="/", stateless_http=True) if mount_mcp else None
 
     @contextlib.asynccontextmanager
@@ -252,21 +263,57 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
     app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
 
     # ---------------------------------------------------------------- documents
+    @app.get("/api/app")
+    def app_info() -> dict[str, Any]:
+        """window: the UI is in its own window, so /api/pick-file can show the system's Open dialog."""
+        return {"window": desktop.window is not None, "work_root": str(work_root)}
+
+    @app.post("/api/pick-file")
+    def pick_file(req: PickRequest) -> dict[str, Any]:
+        """The system's Open dialog (window only): {path} chosen, or {path: null} when cancelled. The
+        file is opened where it is; nothing is copied."""
+        if req.kind not in desktop.FILE_TYPES:
+            raise HTTPException(400, f"unknown file kind {req.kind!r}")
+        try:
+            return {"path": desktop.pick_file(req.kind)}
+        except RuntimeError as e:
+            raise HTTPException(409, "not in a window: choose the file in the form instead") from e
+
     @app.get("/api/documents")
     def list_documents() -> list[dict[str, Any]]:
-        out = []
-        for wd in sorted(work_root.glob("*/")):
-            if Document.exists(wd):
-                d = Document.load(wd)
-                out.append({"doc_id": wd.name, **d.summary()})
-        return out
+        """Every project, the one opened most recently first, each with whether its PDF is still where
+        it was (source_found)."""
+        out = [{"doc_id": wd.name, **Document.load(wd).summary()} for wd in project_dirs(work_root)]
+        return sorted(out, key=lambda d: d["opened_at"], reverse=True)
 
     @app.post("/api/documents")
     def open_document(req: OpenRequest) -> dict[str, Any]:
         p = Path(req.pdf_path)
-        if not p.exists() or p.suffix.lower() != ".pdf":
+        if not p.is_file() or p.suffix.lower() != ".pdf":
             raise HTTPException(400, f"not a PDF file: {req.pdf_path}")
         doc = new_document(p, work_root, title=req.title, author=req.author, language=req.language)
+        trim_cache(work_root, keep=Path(doc.workdir).name)
+        return doc_view(doc)
+
+    @app.delete("/api/documents/{doc_id}")
+    def delete_document(doc_id: str) -> dict[str, Any]:
+        """Remove a project: its transcription and its page cache go; the PDF stays where it is (only an
+        upload's copy in work/_inbox is deleted with it). Export first to keep the work."""
+        doc = load_doc(doc_id)
+        if active_job(doc_id):
+            raise HTTPException(409, "a transcription job is running for this document; try again when it finishes")
+        remove_project(doc, work_root)
+        return {"removed": doc_id}
+
+    @app.post("/api/documents/{doc_id}/source")
+    def set_source(doc_id: str, req: SourceRequest) -> dict[str, Any]:
+        """Locate: point a project whose PDF was moved or renamed at the file again. It has to be the
+        same PDF."""
+        doc = load_doc(doc_id)
+        try:
+            relink_source(doc, req.pdf_path)
+        except SourceMismatch as e:
+            raise HTTPException(400, str(e)) from e
         return doc_view(doc)
 
     @app.post("/api/documents/upload")
@@ -291,12 +338,22 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         return JSONResponse(project.export_project(doc), headers={"Content-Disposition": disposition})
 
     @app.post("/api/projects/import")
-    def import_document(project_file: UploadFile = File(...), pdf: UploadFile | None = File(None),
-                        pdf_path: str = Form(""), replace: bool = Form(False)) -> dict[str, Any]:
-        """Restore an exported project. The PDF comes as an upload or a path; with neither, a copy
-        this work directory already has (same file name) is used."""
+    def import_document(project_file: UploadFile | None = File(None), project_path: str = Form(""),
+                        pdf: UploadFile | None = File(None), pdf_path: str = Form(""),
+                        replace: bool = Form(False)) -> dict[str, Any]:
+        """Restore an exported project (an upload, or a path on this computer). The PDF comes as an upload
+        or a path; with neither, the PDF of the project this work directory already has for it, or an
+        earlier upload of it, is used."""
         try:
-            data = json.loads(project_file.file.read().decode("utf-8-sig"))
+            if project_file is not None and project_file.filename:
+                raw = project_file.file.read()
+            elif project_path.strip():
+                raw = Path(project_path.strip()).read_bytes()
+            else:
+                raise HTTPException(400, "choose a project file")
+            data = json.loads(raw.decode("utf-8-sig"))
+        except OSError as e:
+            raise HTTPException(400, f"cannot read the project file: {e}") from e
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
             raise HTTPException(400, "not an Unscanner project file") from e
         inbox = work_root / "_inbox"
@@ -309,22 +366,25 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             if not src.exists() or src.suffix.lower() != ".pdf":
                 raise HTTPException(400, f"not a PDF file: {pdf_path}")
         else:
+            # The PDF of a project already here that is the same file (by fingerprint; by name for a
+            # project file from before fingerprints), else an earlier upload of it.
             name = Path(str(data.get("pdf_name") or "") if isinstance(data, dict) else "").name
-            wd = work_root / slugify(Path(name).stem)
-            known = [Path(Document.load(wd).source)] if name and Document.exists(wd) else []
-            src = next((p for p in [*known, inbox / name] if name and p.is_file()), None)
+            fp = str(data.get("fingerprint") or "") if isinstance(data, dict) else ""
+            known = [Path(d.source) for d in map(Document.load, project_dirs(work_root))
+                     if (fp and d.fingerprint == fp) or (not fp and name and Path(d.source).name == name)]
+            src = next((p for p in [*known, *([inbox / name] if name else [])] if p.is_file()), None)
             if src is None:
                 raise HTTPException(400, f"choose the PDF this project was made from{f' ({name})' if name else ''}")
-        doc_id = slugify(src.stem)
-        if Document.exists(work_root / doc_id):
-            if not replace:
-                raise HTTPException(409, f"{src.name} already has a project here")
-            if active_job(doc_id):
-                raise HTTPException(409, "a transcription job is running for this document; try again when it finishes")
         if pdf is not None and pdf.filename:
             inbox.mkdir(exist_ok=True)
             with src.open("wb") as fh:
                 shutil.copyfileobj(pdf.file, fh)
+        existing = find_project(work_root, fingerprint(src), src.name)
+        if existing is not None:
+            if not replace:
+                raise HTTPException(409, f"{src.name} already has a project here")
+            if active_job(existing.name):
+                raise HTTPException(409, "a transcription job is running for this document; try again when it finishes")
         try:
             doc = project.import_project(data, src, work_root, replace=replace)
         except project.ProjectExistsError as e:
@@ -363,7 +423,8 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             p = doc.page(n)
         except IndexError as e:
             raise HTTPException(404, str(e)) from e
-        ensure_draft_text(doc, [n])
+        if Path(doc.source).is_file():
+            ensure_draft_text(doc, [n])
         return {
             **page_view(p), "html": p.html, "draft_text": p.draft_text, "draft_source": p.draft_source,
             "model": p.model, "of": len(doc.pages), "figures": [asdict(f) for f in p.figures],
@@ -378,6 +439,8 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
             doc.page(n)
         except IndexError as e:
             raise HTTPException(404, str(e)) from e
+        if not Path(doc.source).is_file():
+            raise HTTPException(404, f"the PDF is not at {doc.source}; use Documents > Locate to find it")
         # Revalidated (cheap: ETag) so a page whose render changes, e.g. pages inserted into the
         # PDF, never shows a stale scan from the browser cache.
         return FileResponse(cached_page_png(doc, n), media_type="image/png",
@@ -635,7 +698,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         return _validate(load_doc(doc_id), str(out_root), run_epubcheck=epubcheck)
 
     def _out_dir(doc: Document) -> Path:
-        return out_root / slugify(Path(doc.source).stem)
+        return out_root / Path(doc.workdir).name
 
     def _built_html(doc_id: str) -> Path:
         from .cli import built_html

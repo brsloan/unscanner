@@ -2,16 +2,27 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import io
+import shutil
 from functools import lru_cache
 from pathlib import Path
 
 import pymupdf
 
-from .document import Document, Page, slugify
+from .document import Document, Page, doc_id_for, find_project, fingerprint
 
 TARGET_LONG_SIDE_PX = 1600  # good balance for vision models (Claude resizes above ~1568)
 MIN_TEXT_CHARS = 40  # below this we assume there is no usable text layer
+
+# Page renders and word boxes are made from the PDF on demand and kept to save the wait next time; they
+# can be thrown away at any moment. By default they sit in <workdir>/pages; the installed app points
+# cache_root at AppData\Local\Unscanner\cache (app.py), out of the synced Documents folder, and then
+# each project's cache is <cache_root>/<doc_id>. Together they are kept under CACHE_MAX_BYTES: the
+# projects used longest ago lose theirs first (trim_cache).
+cache_root: Path | None = None
+CACHE_DIR = "pages"
+CACHE_MAX_BYTES = 2_000_000_000
 
 
 def open_pdf(path: str | Path) -> pymupdf.Document:
@@ -28,9 +39,54 @@ def render_page_png(pdf_path: str | Path, index: int, long_side: int = TARGET_LO
         return pix.tobytes("png")
 
 
+def cache_dir(doc: Document) -> Path:
+    """Where this project's page renders live (see cache_root). With a cache_root, a cache left in the
+    work folder by an earlier version is dropped: it is only a copy of what the PDF holds."""
+    wd = Path(doc.workdir)
+    if cache_root is None:
+        return wd / CACHE_DIR
+    if (wd / CACHE_DIR).is_dir():
+        shutil.rmtree(wd / CACHE_DIR, ignore_errors=True)
+    return Path(cache_root) / wd.name
+
+
+def cache_dirs(work_root: str | Path) -> list[Path]:
+    """Every project cache folder there is (also those of projects removed meanwhile)."""
+    if cache_root is None:
+        return [d for d in Path(work_root).glob(f"*/{CACHE_DIR}") if d.is_dir()]
+    return [d for d in Path(cache_root).glob("*/") if d.is_dir()] if Path(cache_root).is_dir() else []
+
+
+def drop_cache(doc: Document) -> None:
+    shutil.rmtree(cache_dir(doc), ignore_errors=True)
+
+
+def _dir_size_and_age(d: Path) -> tuple[int, float]:
+    files = [f for f in d.rglob("*") if f.is_file()]
+    return sum(f.stat().st_size for f in files), max((f.stat().st_mtime for f in files), default=0.0)
+
+
+def trim_cache(work_root: str | Path, keep: str = "", max_bytes: int = CACHE_MAX_BYTES) -> list[str]:
+    """Drop whole project caches, least recently added to first, until the rest fit in max_bytes.
+    `keep` is the doc_id of the project being worked on, which stays. Returns the doc_ids dropped."""
+    sized = [(d, *_dir_size_and_age(d)) for d in cache_dirs(work_root)]
+    total = sum(size for _, size, _ in sized)
+    dropped = []
+    for d, size, _age in sorted(sized, key=lambda t: t[2]):
+        if total <= max_bytes:
+            break
+        doc_id = d.name if cache_root is not None else d.parent.name
+        if doc_id == keep:
+            continue
+        shutil.rmtree(d, ignore_errors=True)
+        total -= size
+        dropped.append(doc_id)
+    return dropped
+
+
 def cached_page_png(doc: Document, index: int) -> Path:
-    """Render once into <workdir>/pages/pNNN.png and return the path."""
-    out = Path(doc.workdir) / "pages" / f"p{index:03d}.png"
+    """Render once into the project's cache as pNNN.png and return the path."""
+    out = cache_dir(doc) / f"p{index:03d}.png"
     if not out.exists():
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_bytes(render_page_png(doc.source, index))
@@ -107,7 +163,7 @@ def cached_page_words(doc: Document, index: int) -> list[dict]:
     """Word boxes for a page (text layer, else OCR), cached as JSON next to the page render."""
     import json
 
-    out = Path(doc.workdir) / "pages" / f"p{index:03d}.words.json"
+    out = cache_dir(doc) / f"p{index:03d}.words.json"
     if out.exists():
         return json.loads(out.read_text(encoding="utf-8"))
     words = text_layer_words(doc.source, index)
@@ -168,19 +224,34 @@ def compress_image(png: bytes, grayscale: bool = False, jpeg: bool = False) -> b
     return buf.getvalue()
 
 
+class SourceMismatch(ValueError):
+    """The PDF offered is not the one the project was made from."""
+
+
+def _now() -> str:
+    return dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
+
+
 def new_document(pdf_path: str | Path, work_root: str | Path, title: str = "", author: str = "",
                  language: str = "en") -> Document:
-    """Create (or reopen) the work directory for a PDF and populate page records."""
+    """Open a PDF: its project when it has one here (found by the file's content, so a renamed or moved
+    PDF finds its work again, and another PDF with the same name does not), else a new one. The PDF
+    stays where it is; the project records its path."""
     pdf_path = Path(pdf_path).resolve()
-    workdir = Path(work_root).resolve() / slugify(pdf_path.stem)
-    if Document.exists(workdir):
+    fp = fingerprint(pdf_path)
+    workdir = find_project(work_root, fp, pdf_path.name)
+    if workdir is not None:
         doc = Document.load(workdir)
+        doc.source = str(pdf_path)  # the file the person just chose, wherever its earlier copy went
+        doc.fingerprint = fp
         if title:
             doc.title = title
         if author:
             doc.author = author
+        doc.opened_at = _now()
         doc.save()
         return doc
+    workdir = Path(work_root).resolve() / doc_id_for(pdf_path, fp)
     with open_pdf(pdf_path) as pdf:
         meta = pdf.metadata or {}
         pages = []
@@ -194,6 +265,38 @@ def new_document(pdf_path: str | Path, work_root: str | Path, title: str = "", a
         author=author or (meta.get("author") or "").strip(),
         language=language,
         pages=pages,
+        fingerprint=fp,
+        opened_at=_now(),
     )
     doc.save()
     return doc
+
+
+def relink_source(doc: Document, pdf_path: str | Path) -> None:
+    """Point a project whose PDF went missing at the file again (Locate in the UI). The file must be
+    the same PDF: same fingerprint, or for a project made before fingerprints, the same page count."""
+    pdf_path = Path(pdf_path).resolve()
+    if not pdf_path.is_file() or pdf_path.suffix.lower() != ".pdf":
+        raise SourceMismatch(f"not a PDF file: {pdf_path}")
+    fp = fingerprint(pdf_path)
+    if doc.fingerprint:
+        if fp != doc.fingerprint:
+            raise SourceMismatch(f"{pdf_path.name} is not the PDF this project was made from")
+    else:
+        with open_pdf(pdf_path) as pdf:
+            if len(pdf) != len(doc.pages):
+                raise SourceMismatch(f"{pdf_path.name} has {len(pdf)} pages; this project has {len(doc.pages)}")
+        doc.fingerprint = fp
+    doc.source = str(pdf_path)
+    doc.save()
+
+
+def remove_project(doc: Document, work_root: str | Path) -> None:
+    """Delete a project: its work folder, its cache, and its copy of the PDF when the PDF was uploaded
+    into work/_inbox (a PDF anywhere else is the person's own file and stays)."""
+    drop_cache(doc)
+    src = Path(doc.source)
+    inbox = Path(work_root).resolve() / "_inbox"
+    if src.is_file() and src.parent == inbox:
+        src.unlink(missing_ok=True)
+    shutil.rmtree(doc.workdir, ignore_errors=True)

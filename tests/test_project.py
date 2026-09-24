@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from unscanner import cli, webapp
-from unscanner.document import Document
+from unscanner.document import Document, project_dirs
 from unscanner.project import ProjectError, import_project
 from tests.test_pipeline import make_pdf
 
@@ -83,8 +83,17 @@ def test_import_rejects_bad_files(tmp_path):
         assert post(json.dumps({**data, "version": 99}).encode()).status_code == 400
         short = post(json.dumps({**data, "pages": data["pages"][:1]}).encode())
         assert short.status_code == 400 and "pages" in short.json()["detail"]
-        unknown = post(json.dumps({**data, "pdf_name": "never seen.pdf"}).encode())
+        # the fingerprint finds the PDF opened here whatever the file was called; without it, the name has to
+        renamed = post(json.dumps({**data, "pdf_name": "never seen.pdf"}).encode())
+        assert renamed.status_code == 200, renamed.text
+        unknown = post(json.dumps({**data, "pdf_name": "never seen.pdf", "fingerprint": "0" * 16}).encode())
         assert unknown.status_code == 400 and "never seen.pdf" in unknown.json()["detail"]
+        # the PDF given is not the one the project came from
+        from tests.test_projects import other_pdf
+
+        other = other_pdf(tmp_path / "other.pdf", n_pages=3)
+        wrong = post(r.content, pdf_path=str(other))
+        assert wrong.status_code == 400 and "not the PDF" in wrong.json()["detail"]
         assert post(r.content, pdf_path=str(tmp_path / "missing.pdf")).status_code == 400
 
 
@@ -106,7 +115,8 @@ def test_cli_export_writes_next_to_the_pdf_and_import_finds_it(tmp_path, capsys)
     project_file = tmp_path / "cli sample.unscanner.json"
     assert project_file.exists()
     cli.main(["--work", str(tmp_path / "w2"), "import", str(project_file)])
-    assert Document.load(tmp_path / "w2" / "cli-sample").title == "CLI"
+    [wd] = project_dirs(tmp_path / "w2")
+    assert wd.name.startswith("cli-sample-") and Document.load(wd).title == "CLI"
     with pytest.raises(SystemExit):
         cli.main(["--work", str(tmp_path / "w2"), "import", str(project_file)])
 

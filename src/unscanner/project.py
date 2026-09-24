@@ -10,7 +10,7 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from .document import Document, Page, slugify
+from .document import Document, Page, doc_id_for, find_project, fingerprint
 from .sanitize import sanitize_fragment
 
 FORMAT = "unscanner-project"
@@ -36,6 +36,7 @@ def export_project(doc: Document) -> dict[str, Any]:
         "format": FORMAT,
         "version": VERSION,
         "pdf_name": Path(doc.source).name,
+        "fingerprint": doc.fingerprint,  # so an import can tell the PDF it was made from
         "title": doc.title,
         "author": doc.author,
         "language": doc.language,
@@ -73,13 +74,16 @@ def import_project(data: Any, pdf_path: str | Path, work_root: str | Path, repla
     from .pdf import open_pdf
 
     pdf_path = Path(pdf_path).resolve()
+    fp = fingerprint(pdf_path)
+    if data.get("fingerprint") and data["fingerprint"] != fp:
+        raise ProjectError(f"{pdf_path.name} is not the PDF this project was made from")
     with open_pdf(pdf_path) as pdf:
         n_pages = len(pdf)
     if n_pages != len(raw_pages):
         raise ProjectError(f"the project has {len(raw_pages)} pages but {pdf_path.name} has {n_pages}; "
                            "is this the PDF the project was made from?")
 
-    workdir = Path(work_root).resolve() / slugify(pdf_path.stem)
+    workdir = find_project(work_root, fp, pdf_path.name) or Path(work_root).resolve() / doc_id_for(pdf_path, fp)
     pages = [_page_from(d, i + 1) for i, d in enumerate(raw_pages)]
     if Document.exists(workdir):
         if not replace:
@@ -87,7 +91,9 @@ def import_project(data: Any, pdf_path: str | Path, work_root: str | Path, repla
         old = Document.load(workdir)
         for page, old_page in zip(pages, old.pages):
             page.version = max(page.version, old_page.version) + 1
-    doc = Document(source=str(pdf_path), workdir=str(workdir), pages=pages)
+    from .pdf import _now
+
+    doc = Document(source=str(pdf_path), workdir=str(workdir), pages=pages, fingerprint=fp, opened_at=_now())
     try:
         doc.set_properties(str(data.get("title") or pdf_path.stem), str(data.get("author") or ""),
                            str(data.get("language") or "en"))

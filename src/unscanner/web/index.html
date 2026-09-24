@@ -14,6 +14,7 @@
   <label for="doc-select" class="visually-hidden">Document</label>
   <select id="doc-select" title="The document being worked on"><option value="">— document —</option></select>
   <button id="btn-open" type="button">Open PDF…</button>
+  <button id="btn-documents" type="button" title="Every project on this computer: reopen, locate a moved PDF, or remove">Documents…</button>
   <button id="btn-save-all" type="button" disabled title="Save every page with unsaved edits (Ctrl+S)">Save</button>
   <button id="btn-transcribe" type="button" disabled>Transcribe…</button>
   <button id="btn-build" type="button" disabled>Build</button>
@@ -236,8 +237,11 @@
 <dialog id="dlg-open">
   <form method="dialog" id="form-open">
     <h2>Open a PDF</h2>
-    <p><label>Path on this computer <input name="pdf_path" type="text" size="50" placeholder="C:\scans\reading.pdf"></label></p>
-    <p>or upload: <input name="file" type="file" accept="application/pdf"></p>
+    <p class="window-only"><button type="button" class="pick" data-kind="pdf" data-target="pdf_path">Choose PDF…</button>
+       <span class="picked" data-for="pdf_path">No file chosen</span></p>
+    <p class="browser-only"><label>Path on this computer <input name="pdf_path" type="text" size="50" placeholder="C:\scans\reading.pdf"></label></p>
+    <p class="browser-only">or upload: <input name="file" type="file" accept="application/pdf"></p>
+    <small>The PDF stays where it is; Unscanner keeps its transcription separately. A PDF opened here before, even renamed or moved, comes back with its work.</small>
     <p><label>Title <input name="title" type="text" size="40"></label></p>
     <p><label>Author <input name="author" type="text" size="40"></label>
        <label>Language <input name="language" type="text" size="4" value="en"></label></p>
@@ -248,12 +252,34 @@
 <dialog id="dlg-import">
   <form method="dialog" id="form-import">
     <h2>Import a project</h2>
-    <p><label>Project file (.unscanner.json) <input name="project_file" type="file" accept=".json,application/json" required></label></p>
-    <p><label>The PDF it was made from <input name="pdf" type="file" accept="application/pdf"></label></p>
-    <p><label>or the PDF's path on this computer <input name="pdf_path" type="text" size="50" placeholder="C:\scans\reading.pdf"></label></p>
+    <p class="window-only"><button type="button" class="pick" data-kind="project" data-target="project_path">Choose project file…</button>
+       <span class="picked" data-for="project_path">No file chosen</span></p>
+    <p class="window-only"><button type="button" class="pick" data-kind="pdf" data-target="pdf_path">Choose the PDF it was made from…</button>
+       <span class="picked" data-for="pdf_path">No file chosen</span></p>
+    <p class="browser-only"><label>Project file (.unscanner.json) <input name="project_file" type="file" accept=".json,application/json"></label></p>
+    <p class="browser-only"><label>The PDF it was made from <input name="pdf" type="file" accept="application/pdf"></label></p>
+    <p class="browser-only"><label>or the PDF's path on this computer <input name="pdf_path" type="text" size="50" placeholder="C:\scans\reading.pdf"></label></p>
     <p>The PDF can be left out when it has been opened here before.</p>
     <menu><button type="button" class="dlg-cancel">Cancel</button><button value="ok" class="primary">Import</button></menu>
   </form>
+</dialog>
+
+<dialog id="dlg-documents" class="dlg-documents">
+  <h2>Documents</h2>
+  <p><small>Every PDF opened on this computer and the work done on it. Removing a project deletes its transcription, not the PDF. <span class="window-only">A project whose PDF was moved or renamed can be pointed at the file again with Locate.</span></small></p>
+  <table id="documents-table"><thead><tr><th scope="col">Document</th><th scope="col">PDF</th><th scope="col">Pages</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+    <tbody></tbody></table>
+  <p id="documents-empty" hidden>No documents yet. Open a PDF to start.</p>
+  <menu><button id="btn-cleanup" type="button" hidden title="Remove every project whose PDF is no longer where it was">Remove all whose PDF is missing</button>
+    <span class="spacer"></span><button type="button" class="dlg-cancel">Close</button></menu>
+</dialog>
+
+<dialog id="dlg-remove">
+  <h2>Remove this project?</h2>
+  <p id="remove-text"></p>
+  <p><small>The PDF itself stays where it is. To keep the transcription, export it first: the project file can be imported again later.</small></p>
+  <menu><button type="button" class="dlg-cancel">Cancel</button><button id="btn-remove-export" type="button">Export, then remove</button>
+    <button id="btn-remove-now" type="button" class="primary">Remove</button></menu>
 </dialog>
 
 <dialog id="dlg-transcribe">

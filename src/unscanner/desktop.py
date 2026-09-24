@@ -27,6 +27,8 @@ LOG_MAX_BYTES = 1_000_000  # then it becomes unscanner.log.1 and a new one start
 PAUSE_ENV = "UNSCANNER_PAUSE_ON_ERROR"  # a console opened by reopen_with_console waits before closing on an error
 log_path: Path | None = None  # set by log_to_file: this copy has no console, errors go to a message box
 webview_storage: Path | None = None  # the window's browser data; None: work/.webview (app.gui sets AppData)
+window: Any = None  # the pywebview window while it is open, for pick_file
+FILE_TYPES = {"pdf": ("PDF files (*.pdf)",), "project": ("Unscanner project files (*.unscanner.json)", "JSON files (*.json)")}
 
 # The WebView2 runtime's registry key (per machine, and per user); pywebview checks the same ones.
 WEBVIEW2_KEYS = (("HKEY_LOCAL_MACHINE", r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients"),
@@ -71,12 +73,31 @@ def open_window(webview: Any, url: str, work_root: str | Path) -> None:
     # it to the browser. text_select and zoomable are off by default in pywebview; people need both.
     # Maximized: the scan and the editor side by side need the room; width and height are the size it
     # restores to.
-    webview.create_window("Unscanner", url, width=1400, height=900, min_size=(800, 500), maximized=True,
-                          text_select=True, zoomable=True)
+    global window
+    window = webview.create_window("Unscanner", url, width=1400, height=900, min_size=(800, 500), maximized=True,
+                                   text_select=True, zoomable=True)
     # Not private: the page keeps unsaved drafts, layout and choices in localStorage between runs. They
     # live in the work folder, so they move with it (the installed app keeps them in AppData instead).
     storage = webview_storage or Path(work_root).resolve() / ".webview"
-    webview.start(private_mode=False, storage_path=str(storage))
+    try:
+        webview.start(private_mode=False, storage_path=str(storage))
+    finally:
+        window = None
+
+
+def pick_file(kind: str, directory: str = "") -> str | None:
+    """The system's Open dialog, for a file of `kind` (FILE_TYPES): the path chosen, None when cancelled.
+    Raises RuntimeError when the UI is not in a window (a browser tab picks files its own way, and the
+    file is uploaded). Called from the server thread; pywebview hands the dialog to the window's thread."""
+    if window is None:
+        raise RuntimeError("no window")
+    import webview
+
+    dialog = getattr(webview, "FileDialog", None)
+    open_dialog = dialog.OPEN if dialog is not None else webview.OPEN_DIALOG
+    chosen = window.create_file_dialog(open_dialog, directory=directory, allow_multiple=False,
+                                       file_types=FILE_TYPES[kind])
+    return str(chosen[0]) if chosen else None
 
 
 # ---------------------------------------------------------------- without a console

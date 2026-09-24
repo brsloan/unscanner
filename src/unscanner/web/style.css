@@ -208,6 +208,16 @@ dialog menu { display: flex; justify-content: flex-end; gap: 0.5em; padding: 0; 
 dialog label { display: inline-flex; gap: 0.4em; align-items: center; margin-right: 1em; }
 dialog fieldset { border: 1px solid var(--line); border-radius: 4px; margin: 0.6em 0; }
 dialog small { color: var(--muted); display: block; }
+/* Files: the window shows the system's Open dialog (.pick), a browser tab uploads or takes a path. */
+body:not(.in-window) .window-only, body.in-window .browser-only { display: none; }
+.picked { color: var(--muted); margin-left: 0.5em; word-break: break-all; }
+.dlg-documents { width: min(70em, calc(100vw - 2em)); max-width: none; }
+.dlg-documents table { border-collapse: collapse; width: 100%; margin: 0.5em 0; }
+.dlg-documents th, .dlg-documents td { text-align: left; padding: 0.3em 0.5em; border-bottom: 1px solid var(--line); vertical-align: top; }
+.dlg-documents td.path { color: var(--muted); font-size: 0.9em; word-break: break-all; }
+.dlg-documents td.path.missing { color: var(--warn); }
+.dlg-documents td.actions { white-space: nowrap; text-align: right; }
+.dlg-documents menu { align-items: center; }
 .dlg-prompts { width: min(80em, calc(100vw - 2em)); max-width: none; }
 .dlg-prompts textarea { width: 100%; box-sizing: border-box; resize: vertical; white-space: pre; overflow-x: auto; font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem; background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0.3em 0.5em; }
 .dlg-prompts pre { white-space: pre-wrap; font-size: 0.8rem; color: var(--muted); max-height: 20em; overflow: auto; }

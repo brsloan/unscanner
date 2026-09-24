@@ -5,8 +5,9 @@
 
 (Windows file names ignore case, so the command line cannot be called unscanner.exe next to Unscanner.exe.)
 Both keep documents and output in Documents\\Unscanner, not in the program folder, so an upgrade or an
-uninstall never touches them; --work / --out still choose another place. The window's browser data goes
-to AppData\\Local\\Unscanner, which OneDrive does not sync.
+uninstall never touches them; --work / --out still choose another place. The window's browser data and
+the page render cache (big, and remade from the PDF at any time) go to AppData\\Local\\Unscanner, which
+OneDrive does not sync.
 """
 
 from __future__ import annotations
@@ -42,9 +43,14 @@ def with_data_dirs(argv: list[str]) -> list[str]:
     return extra + argv
 
 
-def _run(argv: list[str]) -> None:
-    from . import cli
+def local_dir() -> Path:
+    return Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "Unscanner"
 
+
+def _run(argv: list[str]) -> None:
+    from . import cli, pdf
+
+    pdf.cache_root = local_dir() / "cache"
     # Everything downstream (the command a copy reopens itself with, the log header) reads sys.argv.
     sys.argv = [sys.argv[0], *argv]
     cli.main()
@@ -54,8 +60,7 @@ def gui() -> None:
     """Unscanner.exe: `unscanner ui`, no console."""
     from . import desktop
 
-    local = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
-    desktop.webview_storage = local / "Unscanner" / "webview"
+    desktop.webview_storage = local_dir() / "webview"
     _run(with_data_dirs(["ui", *sys.argv[1:]]))
 
 

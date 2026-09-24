@@ -407,11 +407,12 @@ $("#banner-primary").addEventListener("click", () => {});
 
 // ------------------------------------------------------------------ documents
 async function loadDocs(selectId) {
-  state.docs = await api("/documents");
+  state.docs = await api("/documents");  // most recently opened first
   const sel = $("#doc-select");
   sel.innerHTML = '<option value="">— document —</option>' +
-    state.docs.map((d) => `<option value="${d.doc_id}">${escapeHtml(d.title || d.doc_id)}</option>`).join("");
-  if (selectId) { sel.value = selectId; await openDoc(selectId); }
+    state.docs.map((d) => `<option value="${d.doc_id}">${escapeHtml(d.title || d.doc_id)}${d.source_found ? "" : " (PDF missing)"}</option>`).join("");
+  if (selectId && state.docs.some((d) => d.doc_id === selectId)) { sel.value = selectId; await openDoc(selectId); }
+  else if (selectId) await openDoc("");
 }
 
 async function openDoc(docId, pageToShow) {
@@ -420,10 +421,19 @@ async function openDoc(docId, pageToShow) {
   state.outline = []; state.outlineKey = ""; state.outlineShownPage = null;  // the outline belongs to
   loadCollapsed(docId);                                                      // the document we are leaving
   state.picked.clear(); state.pickAnchor = null; closePageMenu();
-  if (!docId) { state.doc = null; renderPages(); return; }
+  if (!docId) {  // no document (the last one was removed): an empty editor, and nothing to run on it
+    state.doc = null; state.page = null; state.pageData = null; state.dirty = false;
+    $("#editor").innerHTML = ""; $("#doc-meta").textContent = "";
+    ["#btn-transcribe", "#btn-build", "#btn-validate", "#btn-properties", "#btn-export"].forEach((b) => ($(b).disabled = true));
+    renderPages(); return;
+  }
   state.doc = await api(`/documents/${docId}`);
   localStorage.setItem("unscanner.lastDoc", docId);
   renderPages(); renderMeta();
+  if (!state.doc.source_found) {
+    showBanner(`The PDF is not at ${state.doc.source}. The pages can be read and exported; to see the scans again, point the project at the file.`,
+      { label: "Locate PDF…", run: () => locatePdf(docId) }, { label: "Remove project…", run: () => askRemove(docId) });
+  }
   ["#btn-transcribe", "#btn-build", "#btn-validate", "#btn-properties", "#btn-export"].forEach((b) => ($(b).disabled = false));
   $("#lnk-html").href = `/api/documents/${docId}/output/html`;
   $("#lnk-epub").href = `/api/documents/${docId}/output/epub`;
@@ -1707,7 +1717,28 @@ dlgProperties.addEventListener("close", () => {
 });
 dlgProperties.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); dlgProperties.close("cancel"); } });
 
-$("#btn-open").addEventListener("click", () => dlgOpen.showModal());
+$("#btn-open").addEventListener("click", () => { resetPicks($("#form-open")); dlgOpen.showModal(); });
+
+// In the window, files are chosen with the system's Open dialog and opened where they are: the server
+// shows the dialog (/api/pick-file) and the path lands in the form's hidden field. A browser tab cannot
+// see paths, so there the form uploads the file instead (.browser-only / .window-only in the markup).
+async function loadAppInfo() {
+  try { state.app = await api("/app"); } catch (_) { state.app = { window: false }; }
+  document.body.classList.toggle("in-window", !!state.app.window);
+}
+function resetPicks(form) {
+  form.reset();
+  form.querySelectorAll(".picked").forEach((el) => (el.textContent = "No file chosen"));
+}
+document.querySelectorAll("button.pick").forEach((btn) => btn.addEventListener("click", async () => {
+  const form = btn.closest("form") || btn.closest("dialog");
+  try {
+    const { path } = await api("/pick-file", { method: "POST", body: { kind: btn.dataset.kind } });
+    if (!path) return;
+    form.elements[btn.dataset.target].value = path;
+    form.querySelector(`.picked[data-for="${btn.dataset.target}"]`).textContent = path;
+  } catch (err) { setStatus("Could not open the file dialog: " + err.message, true); }
+}));
 $("#form-open").addEventListener("submit", async (e) => {
   const f = new FormData(e.target);
   try {
@@ -1735,12 +1766,13 @@ $("#btn-export").addEventListener("click", async () => {
 });
 
 const dlgImport = wireDialog("#dlg-import");
-$("#btn-import").addEventListener("click", () => { $("#form-import").reset(); dlgImport.showModal(); });
+$("#btn-import").addEventListener("click", () => { resetPicks($("#form-import")); dlgImport.showModal(); });
 $("#form-import").addEventListener("submit", async (e) => {
   const f = new FormData(e.target);
   const send = (replace) => {
     const fd = new FormData();
-    fd.append("project_file", f.get("project_file"));
+    if (f.get("project_file") && f.get("project_file").size > 0) fd.append("project_file", f.get("project_file"));
+    fd.append("project_path", f.get("project_path") || "");
     if (f.get("pdf") && f.get("pdf").size > 0) fd.append("pdf", f.get("pdf"));
     fd.append("pdf_path", f.get("pdf_path") || "");
     fd.append("replace", replace ? "true" : "false");
@@ -1942,4 +1974,91 @@ $("#form-prompts").addEventListener("submit", async (e) => {
 function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 
 // ------------------------------------------------------------------ start
-loadDocs(localStorage.getItem("unscanner.lastDoc") || "").catch((e) => setStatus(e.message, true));
+// ------------------------------------------------------------------ the Documents dialog
+// Every project on this computer: reopen one, point one whose PDF moved at the file again (Locate, in
+// the window), or remove it. Projects pile up otherwise: people open a PDF, deliver, and delete the PDF.
+const dlgDocuments = wireDialog("#dlg-documents"), dlgRemove = wireDialog("#dlg-remove");
+$("#btn-documents").addEventListener("click", async () => { await renderDocuments(); dlgDocuments.showModal(); });
+async function renderDocuments() {
+  state.docs = await api("/documents");
+  const body = $("#documents-table tbody");
+  body.innerHTML = state.docs.map((d) => {
+    const done = d.status_counts.done || 0;
+    const actions = [`<button type="button" class="small" data-act="open">Open</button>`];
+    if (!d.source_found && state.app && state.app.window) actions.push(`<button type="button" class="small" data-act="locate">Locate…</button>`);
+    actions.push(`<button type="button" class="small" data-act="remove">Remove…</button>`);
+    return `<tr data-doc="${d.doc_id}"><td>${escapeHtml(d.title || d.doc_id)}</td>` +
+      `<td class="path${d.source_found ? "" : " missing"}">${d.source_found ? escapeHtml(d.source) : "PDF not found: " + escapeHtml(d.source)}</td>` +
+      `<td>${done} / ${d.page_count} approved</td><td class="actions">${actions.join(" ")}</td></tr>`;
+  }).join("");
+  $("#documents-empty").hidden = state.docs.length > 0;
+  $("#documents-table").hidden = state.docs.length === 0;
+  $("#btn-cleanup").hidden = !state.docs.some((d) => !d.source_found);
+}
+$("#documents-table").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn) return;
+  const docId = btn.closest("tr").dataset.doc;
+  if (btn.dataset.act === "open") { dlgDocuments.close(); $("#doc-select").value = docId; await openDoc(docId); }
+  else if (btn.dataset.act === "locate") await locatePdf(docId);
+  else if (btn.dataset.act === "remove") askRemove(docId);
+});
+$("#btn-cleanup").addEventListener("click", async () => {
+  const gone = state.docs.filter((d) => !d.source_found);
+  if (!confirm(`Remove ${gone.length} project(s) whose PDF is missing? Their transcriptions will be deleted.`)) return;
+  let removed = 0;
+  for (const d of gone) {
+    try { await removeProject(d.doc_id); removed++; } catch (err) { setStatus(`Could not remove ${d.title}: ${err.message}`, true); }
+  }
+  await renderDocuments();
+  if (removed) setStatus(`Removed ${removed} project(s)`);
+});
+
+async function locatePdf(docId) {
+  try {
+    const { path } = await api("/pick-file", { method: "POST", body: { kind: "pdf" } });
+    if (!path) return;
+    const d = await api(`/documents/${docId}/source`, { method: "POST", body: { pdf_path: path } });
+    if ($("#dlg-documents").open) await renderDocuments();
+    await loadDocs(docId);
+    setStatus(`${d.title} now reads its scans from ${path}`);
+  } catch (err) { setStatus("Locate failed: " + err.message, true); }
+}
+
+function askRemove(docId) {
+  const d = state.docs.find((x) => x.doc_id === docId);
+  if (!d) return;
+  const done = d.status_counts.done || 0;
+  $("#remove-text").textContent = `${d.title || d.doc_id}: ${d.page_count} pages, ${done} approved.`;
+  dlgRemove.dataset.doc = docId;
+  dlgRemove.showModal();
+}
+$("#btn-remove-now").addEventListener("click", () => finishRemove(false));
+$("#btn-remove-export").addEventListener("click", () => finishRemove(true));
+async function finishRemove(exportFirst) {
+  const docId = dlgRemove.dataset.doc;
+  const d = state.docs.find((x) => x.doc_id === docId) || { title: docId };
+  try {
+    if (exportFirst) {
+      if (state.doc && state.doc.doc_id === docId && state.dirty) await savePage(false);
+      const res = await fetch(`/api/documents/${docId}/export`);  // fetched whole before the project goes
+      if (!res.ok) throw new Error("export failed: " + res.statusText);
+      const blob = await res.blob();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob); a.download = (d.source || d.title || docId).split(/[\\/]/).pop().replace(/\.pdf$/i, "") + ".unscanner.json";
+      document.body.append(a); a.click(); a.remove();
+    }
+    await removeProject(docId);
+    dlgRemove.close();
+    if ($("#dlg-documents").open) await renderDocuments();
+    setStatus(exportFirst ? `Exported and removed ${d.title}` : `Removed ${d.title}`);
+  } catch (err) { setStatus("Remove failed: " + err.message, true); }
+}
+async function removeProject(docId) {
+  await api(`/documents/${docId}`, { method: "DELETE" });
+  const drafts = allDrafts(); delete drafts[docId]; writeDrafts(drafts);  // its unsaved edits go with it
+  if (state.doc && state.doc.doc_id === docId) { state.dirty = false; hideBanner(); }
+  await loadDocs(state.doc && state.doc.doc_id !== docId ? state.doc.doc_id : "");
+}
+
+loadAppInfo().then(() => loadDocs(localStorage.getItem("unscanner.lastDoc") || "")).catch((e) => setStatus(e.message, true));
