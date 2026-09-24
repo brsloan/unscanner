@@ -1700,7 +1700,7 @@ function wireDialog(id) {
   dlg.querySelector(".dlg-cancel").addEventListener("click", () => dlg.close("cancel"));
   return dlg;
 }
-const dlgOpen = wireDialog("#dlg-open"), dlgTranscribe = wireDialog("#dlg-transcribe"), dlgSettings = wireDialog("#dlg-settings");
+const dlgTranscribe = wireDialog("#dlg-transcribe"), dlgSettings = wireDialog("#dlg-settings");
 const dlgProperties = wireDialog("#dlg-properties");
 // Shown over the editor pane only, so the scan and page list stay usable for reading the title page.
 function showInEditorPane(dlg) {
@@ -1716,8 +1716,6 @@ dlgProperties.addEventListener("close", () => {
   pane.classList.remove("dialog-open");
 });
 dlgProperties.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); dlgProperties.close("cancel"); } });
-
-$("#btn-open").addEventListener("click", () => { resetPicks($("#form-open")); dlgOpen.showModal(); });
 
 // In the window, files are chosen with the system's Open dialog and opened where they are: the server
 // shows the dialog (/api/pick-file) and the path lands in the form's hidden field. A browser tab cannot
@@ -1739,20 +1737,30 @@ document.querySelectorAll("button.pick").forEach((btn) => btn.addEventListener("
     form.querySelector(`.picked[data-for="${btn.dataset.target}"]`).textContent = path;
   } catch (err) { setStatus("Could not open the file dialog: " + err.message, true); }
 }));
-$("#form-open").addEventListener("submit", async (e) => {
-  const f = new FormData(e.target);
+// Open PDF goes straight to the file chooser; the title, author and language are filled in afterwards in
+// Properties, which opens beside the scan so the title page can be read while typing them.
+$("#btn-open").addEventListener("click", async () => {
+  if (!(state.app && state.app.window)) { $("#open-file").value = ""; $("#open-file").click(); return; }
   try {
-    let doc;
-    if (f.get("file") && f.get("file").size > 0) {
-      const fd = new FormData(); fd.append("file", f.get("file")); ["title", "author", "language"].forEach((k) => fd.append(k, f.get(k)));
-      doc = await api("/documents/upload", { method: "POST", body: fd });
-    } else {
-      doc = await api("/documents", { method: "POST", body: { pdf_path: f.get("pdf_path"), title: f.get("title"), author: f.get("author"), language: f.get("language") || "en" } });
-    }
+    const { path } = await api("/pick-file", { method: "POST", body: { kind: "pdf" } });
+    if (path) await openPdf(api("/documents", { method: "POST", body: { pdf_path: path } }));
+  } catch (err) { setStatus("Could not open the file dialog: " + err.message, true); }
+});
+$("#open-file").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const fd = new FormData(); fd.append("file", file);
+  openPdf(api("/documents/upload", { method: "POST", body: fd }));
+});
+async function openPdf(request) {
+  try {
+    setStatus("Opening…");
+    const doc = await request;
     await loadDocs(doc.doc_id);
     setStatus(`Opened ${doc.title} (${doc.page_count} pages)`);
+    $("#btn-properties").click();
   } catch (err) { setStatus("Open failed: " + err.message, true); }
-});
+}
 
 // Export / import: the whole project as one file, for backups and for moving to another computer.
 $("#btn-export").addEventListener("click", async () => {
