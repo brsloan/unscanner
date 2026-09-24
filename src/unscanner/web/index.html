@@ -39,6 +39,7 @@
   <button id="btn-validate" type="button" disabled>Validate</button>
   <a id="lnk-html" class="button" hidden download>HTML</a>
   <a id="lnk-epub" class="button" hidden download>EPUB</a>
+  <span id="working" class="working" role="status" hidden><span class="spinner" aria-hidden="true"></span><span id="working-label">Working…</span></span>
   <span class="spacer"></span>
   <button id="btn-diff" type="button" aria-pressed="true" title="Highlight where the transcription differs from the text found on the scan">Diff <span id="diff-count" class="diff-count" hidden></span></button>
   <button id="btn-notes" type="button" aria-pressed="true" title="Show or hide the notes panel">Notes <span id="notes-warn" class="warn" role="img" aria-label="this page has notes" hidden>⚠</span></button>
@@ -466,6 +467,10 @@
       </ul>
       <p>Drag the thin bars between the columns to make one wider. The line at the very bottom of the window shows what just
         happened, such as “Saved” or an error; click ▲ at its right end to read a long message in full.</p>
+      <p>While Unscanner is busy, for example opening a large PDF or building the files, a spinning circle with
+        <strong>Working…</strong> (or what it is doing) shows in the top bar and the mouse pointer changes to the busy pointer.
+        Wait for it to go away before expecting the result. While pages are being transcribed or a scan is loading, the pointer
+        keeps its arrow with a small spinner beside it: you can go on working meanwhile.</p>
     </section>
 
     <section aria-labelledby="help-pages">

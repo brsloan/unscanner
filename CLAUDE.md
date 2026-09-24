@@ -127,6 +127,9 @@ accessibility term and stays.
   go by it, and the page being shown always stays listed. `has_figures` / `has_tables` come from `page_view` in
   `webapp.py`. The choice is kept in `unscanner.pageFilter` (the old checkbox's `unscanner.filterReview` is read once).
 - New validation rule: add to `validate_html` in `validate.py` and cover it in `tests/`.
+- Something in the UI that can take more than a moment: wrap it in `working(label, task)` in `app.js`, which shows
+  the top bar's Working… sign and the wait cursor (`{ background: true }`: the progress cursor, for work the person
+  can carry on beside, like transcribing or the scan loading).
 - New UI feature: `web/app.js` talks only to `/api/...` routes in `webapp.py`. Keep it vanilla JS. Describe the
   feature in the Help dialog (`#dlg-help` in `index.html`) in plain words, and change its section when a feature changes.
 

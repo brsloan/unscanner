@@ -25,6 +25,15 @@ button:focus-visible, a:focus-visible, [contenteditable]:focus-visible, .gutter:
 /* ---- top bar: one line, never wraps */
 .topbar { display: flex; align-items: center; gap: 0.35em; padding: 0.25em 0.6em; border-bottom: 1px solid var(--line); background: var(--panel); flex: none; overflow-x: auto; white-space: nowrap; }
 .topbar h1 { font-size: 1em; margin: 0 0.4em 0 0; }
+/* Working…: shown by renderWorking() in app.js while something slow runs. busy = wait for it (the wait
+   cursor everywhere); busy-background = carry on meanwhile (the progress cursor, text fields keep their caret). */
+.working { display: inline-flex; align-items: center; gap: 0.4em; margin-left: 0.4em; color: var(--accent); font-weight: 600; }
+.spinner { width: 1em; height: 1em; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.5s; } }
+body.busy, body.busy * { cursor: wait !important; }
+body.busy-background { cursor: progress; }
+body.busy-background :is(#editor, #editor *, textarea, input:not([type="checkbox"], [type="radio"])) { cursor: text; }
 /* File menu: a menu-bar button with a drop-down (role=menu), and Recent projects as a submenu to its right. */
 .menubar { position: relative; flex: none; }
 .menubar > button[aria-expanded="true"] { background: var(--sel); border-color: var(--accent); }

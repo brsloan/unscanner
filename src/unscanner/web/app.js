@@ -17,6 +17,34 @@ async function tracked(promise) {
   try { return await promise; } finally { state.busy--; state.gen++; }
 }
 
+/* The Working… sign in the top bar, and the mouse cursor, while something slow runs (opening a large PDF,
+   a build). `working(label, task)` shows them while the task (a promise, or a function returning one)
+   runs, with the wait cursor. `background: true` is for work the person can carry on beside (transcribing,
+   the scan loading, a model reading a table): the arrow-with-spinner cursor instead. Nothing shows for the
+   first WORKING_DELAY ms, so quick requests do not flicker. */
+const WORKING_DELAY = 300;
+const workingTasks = new Map();
+let workingSeq = 0;
+function startWorking(label, background = false) {
+  const id = ++workingSeq;
+  workingTasks.set(id, { label, background, shown: false });
+  setTimeout(() => { const t = workingTasks.get(id); if (t) { t.shown = true; renderWorking(); } }, WORKING_DELAY);
+  return id;
+}
+function stopWorking(id) { if (workingTasks.delete(id)) renderWorking(); }
+function renderWorking() {
+  const shown = [...workingTasks.values()].filter((t) => t.shown);
+  const fore = shown.filter((t) => !t.background);
+  document.body.classList.toggle("busy", fore.length > 0);
+  document.body.classList.toggle("busy-background", shown.length > 0 && !fore.length);
+  $("#working").hidden = !shown.length;
+  if (shown.length) $("#working-label").textContent = (fore.length ? fore : shown).at(-1).label;
+}
+async function working(label, task, { background = false } = {}) {
+  const id = startWorking(label, background);
+  try { return await (typeof task === "function" ? task() : task); } finally { stopWorking(id); }
+}
+
 // ------------------------------------------------------------------ api
 async function api(path, opts = {}) {
   const res = await fetch("/api" + path, {
@@ -80,7 +108,14 @@ function setZoomMode(mode) {
   if (mode !== "manual") $("#zoom").value = 100;
   applyZoom();
 }
-img.addEventListener("load", () => { applyZoom(); if (state.lastBox && (state.follow || state.mark)) placeMarker(state.lastBox); });
+// A page is drawn from the PDF the first time it is shown, which can take a moment: Working… until it arrives.
+let scanWork = null;
+function showScan(src) {
+  stopWorking(scanWork); scanWork = startWorking("Loading the scan…", true);
+  img.src = src;
+}
+img.addEventListener("error", () => stopWorking(scanWork));
+img.addEventListener("load", () => { stopWorking(scanWork); applyZoom(); if (state.lastBox && (state.follow || state.mark)) placeMarker(state.lastBox); });
 new ResizeObserver(applyZoom).observe(scroller);
 $("#btn-fit").addEventListener("click", () => setZoomMode("fit"));
 $("#btn-fill").addEventListener("click", () => setZoomMode("fill"));
@@ -674,7 +709,7 @@ async function loadPage(n, opts = {}) {
   // Leaving a page never loses anything: unsaved edits are kept as a draft and restored on return.
   if (state.dirty && !opts.discardCurrent && n !== state.page) storeDraftNow();
   else if (opts.discardCurrent) clearDraft(state.page);
-  const d = await tracked(api(`/documents/${state.doc.doc_id}/pages/${n}`));
+  const d = await tracked(working("Loading the page…", api(`/documents/${state.doc.doc_id}/pages/${n}`), { background: true }));
   state.page = n; state.pageData = d; state.dirty = false;
   rememberPage(state.doc.doc_id, n);
   hideBanner();
@@ -683,7 +718,7 @@ async function loadPage(n, opts = {}) {
   ind.textContent = `${n}/${d.of}`;
   ind.title = `PDF page ${n} of ${d.of}${d.label ? ", printed page " + d.label : ""}`;
   img.hidden = false;
-  img.src = `/api/documents/${state.doc.doc_id}/pages/${n}/image`;
+  showScan(`/api/documents/${state.doc.doc_id}/pages/${n}/image`);
   clearDiff();
   $("#editor").innerHTML = d.html || "";
   showFigures($("#editor"));
@@ -1363,8 +1398,8 @@ async function readTable(box, target) {
   const btn = $("#btn-insert-table");
   showCropBox(box); btn.disabled = true; setStatus("Asking the model to read the region as a table…");
   try {
-    const r = await api(`/documents/${target.doc}/pages/${target.page}/table`, { method: "POST",
-      body: { bbox: [box.x0, box.y0, box.x1, box.y1].map((v) => Math.round(v * 10) / 10), text: target.text } });
+    const r = await working("Reading the table…", api(`/documents/${target.doc}/pages/${target.page}/table`, { method: "POST",
+      body: { bbox: [box.x0, box.y0, box.x1, box.y1].map((v) => Math.round(v * 10) / 10), text: target.text } }), { background: true });
     if (!state.doc || state.doc.doc_id !== target.doc || state.page !== target.page) {
       setStatus("The table came back after you left the page; it was not inserted.", true); return;
     }
@@ -1437,8 +1472,8 @@ $("#fig-ai").addEventListener("click", async () => {
   if (fig) { if (fig.previousElementSibling) around.push(fig.previousElementSibling.textContent); if (fig.nextElementSibling) around.push(fig.nextElementSibling.textContent); }
   $("#fig-ai").disabled = true; setStatus("Asking the model for alt text…");
   try {
-    const r = await api(`/documents/${state.doc.doc_id}/pages/${state.page}/figures/${encodeURIComponent(selectedImg.dataset.fig)}/describe`,
-      { method: "POST", body: { caption, context: around.join("\n").slice(0, 1500) } });
+    const r = await working("Writing alt text…", api(`/documents/${state.doc.doc_id}/pages/${state.page}/figures/${encodeURIComponent(selectedImg.dataset.fig)}/describe`,
+      { method: "POST", body: { caption, context: around.join("\n").slice(0, 1500) } }), { background: true });
     if (r.decorative) setStatus(`${r.model} judged this image decorative; alt text left empty. Override if it carries meaning.`);
     else setStatus(`Alt text suggested by ${r.model}; edit as needed and Save.`);
     $("#fig-alt").value = r.alt; selectedImg.setAttribute("alt", r.alt); markDirty();
@@ -1843,8 +1878,7 @@ $("#open-file").addEventListener("change", (e) => {
 async function openPdf(request) {
   try {
     setStatus("Opening…");
-    const doc = await request;
-    await loadDocs(doc.doc_id);
+    const doc = await working("Opening the PDF…", async () => { const d = await request; await loadDocs(d.doc_id); return d; });
     setStatus(`Opened ${doc.title} (${doc.page_count} pages)`);
     if (doc.created) $("#btn-properties").click();  // a project opened before already has its properties
   } catch (err) { setStatus("Open failed: " + err.message, true); }
@@ -1876,13 +1910,13 @@ $("#form-import").addEventListener("submit", async (e) => {
   };
   try {
     let doc;
-    try { doc = await send(false); } catch (err) {
+    try { doc = await working("Importing…", send(false)); } catch (err) {
       if (err.status !== 409 || !confirm(`${err.message}. Replace it with the imported project? The pages stored here now, and any unsaved edits to them, will be lost.`)) throw err;
-      doc = await send(true);
+      doc = await working("Importing…", send(true));
       const d = allDrafts(); delete d[doc.doc_id]; writeDrafts(d);  // they were edits to the replaced pages
       if (state.doc && state.doc.doc_id === doc.doc_id) state.dirty = false;
     }
-    await loadDocs(doc.doc_id);
+    await working("Importing…", loadDocs(doc.doc_id));
     setStatus(`Imported ${doc.title} (${doc.page_count} pages)`);
   } catch (err) { setStatus("Import failed: " + err.message, true); }
 });
@@ -1901,17 +1935,21 @@ $("#form-transcribe").addEventListener("submit", async (e) => {
   try {
     const job = await api(`/documents/${state.doc.doc_id}/transcribe`, { method: "POST",
       body: { pages: f.get("pages") || "all", force: !!f.get("force"), instructions: f.get("instructions") || "" } });
-    pollJob(job.id);
+    pollJob(job.id, startWorking("Transcribing…", true));
   } catch (err) { setStatus("Could not start: " + err.message, true); }
 });
 
-async function pollJob(jobId) {
-  const job = await api(`/jobs/${jobId}`);
+async function pollJob(jobId, work) {
+  let job;
+  try { job = await api(`/jobs/${jobId}`); } catch (err) {
+    stopWorking(work); setStatus("Lost track of the transcription: " + err.message, true); return;
+  }
   state.job = job;
   if (job.status === "running") {
     setStatus(`Transcribing with ${job.model}: ${job.completed}/${job.requested} pages${job.errors ? ", " + job.errors + " errors" : ""} — ${job.last}`);
-    setTimeout(() => pollJob(jobId), 2000);
+    setTimeout(() => pollJob(jobId, work), 2000);
   } else {
+    stopWorking(work);
     const fresh = await api(`/documents/${state.doc.doc_id}`);
     state.doc = fresh; renderPages(); renderMeta();
     if (job.status === "error") setStatus("Transcription failed: " + job.error, true);
@@ -1930,7 +1968,7 @@ $("#btn-build").addEventListener("click", async () => {
   if (Object.keys(docDrafts()).length) await saveAll();
   setStatus("Building…");
   try {
-    const r = await api(`/documents/${state.doc.doc_id}/build`, { method: "POST" });
+    const r = await working("Building…", api(`/documents/${state.doc.doc_id}/build`, { method: "POST" }));
     $("#lnk-html").hidden = false; $("#lnk-epub").hidden = !r.epub;
     showResults("Build", `<p>Wrote <code>${escapeHtml(r.html)}</code>${r.epub ? " and <code>" + escapeHtml(r.epub) + "</code>" : ""}. ` +
       `<a href="/api/documents/${state.doc.doc_id}/preview" target="_blank" rel="noopener">Open HTML preview</a></p>` +
@@ -1942,7 +1980,7 @@ $("#btn-build").addEventListener("click", async () => {
 $("#btn-validate").addEventListener("click", async () => {
   setStatus("Validating (epubcheck may take a moment)…");
   try {
-    const r = await api(`/documents/${state.doc.doc_id}/validate`);
+    const r = await working("Validating…", api(`/documents/${state.doc.doc_id}/validate`));
     const c = r.counts;
     const rows = r.issues.map((i) => {
       const m = /page (\d+)/.exec(i.location || "");
@@ -2123,9 +2161,12 @@ async function locatePdf(docId) {
   try {
     const { path } = await api("/pick-file", { method: "POST", body: { kind: "pdf" } });
     if (!path) return;
-    const d = await api(`/documents/${docId}/source`, { method: "POST", body: { pdf_path: path } });
-    if ($("#dlg-documents").open) await renderDocuments();
-    await loadDocs(docId);
+    const d = await working("Opening the PDF…", async () => {
+      const r = await api(`/documents/${docId}/source`, { method: "POST", body: { pdf_path: path } });
+      if ($("#dlg-documents").open) await renderDocuments();
+      await loadDocs(docId);
+      return r;
+    });
     setStatus(`${d.title} now reads its scans from ${path}`);
   } catch (err) { setStatus("Locate failed: " + err.message, true); }
 }
@@ -2143,6 +2184,7 @@ $("#btn-remove-export").addEventListener("click", () => finishRemove(true));
 async function finishRemove(exportFirst) {
   const docId = dlgRemove.dataset.doc;
   const d = state.docs.find((x) => x.doc_id === docId) || { title: docId };
+  const work = startWorking("Removing…");
   try {
     if (exportFirst) {
       if (state.doc && state.doc.doc_id === docId && state.dirty) await savePage(false);
@@ -2158,6 +2200,7 @@ async function finishRemove(exportFirst) {
     if ($("#dlg-documents").open) await renderDocuments();
     setStatus(exportFirst ? `Exported and removed ${d.title}` : `Removed ${d.title}`);
   } catch (err) { setStatus("Remove failed: " + err.message, true); }
+  finally { stopWorking(work); }
 }
 async function removeProject(docId) {
   await api(`/documents/${docId}`, { method: "DELETE" });
