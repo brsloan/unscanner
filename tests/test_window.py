@@ -71,6 +71,7 @@ def test_the_ui_opens_in_a_window_and_closing_it_stops_the_server(tmp_path, monk
     assert title == "Unscanner" and url == f"http://127.0.0.1:{port}/"
     assert "<title>Unscanner</title>" in fake.pages[0]  # the server was up while the window was open
     assert kw["text_select"] and kw["zoomable"]  # both off by default in pywebview
+    assert kw["maximized"]
     assert fake.settings["ALLOW_DOWNLOADS"] is True  # Export project, HTML and EPUB downloads
     # drafts and layout persist between runs, in the work folder
     assert fake.started[0] == {"private_mode": False, "storage_path": str((tmp_path / "work" / ".webview").resolve())}

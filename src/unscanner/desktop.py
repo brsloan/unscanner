@@ -69,7 +69,9 @@ def open_window(webview: Any, url: str, work_root: str | Path) -> None:
     webview.settings["ALLOW_DOWNLOADS"] = True  # Export project, HTML, EPUB: a Save dialog, as in a browser
     # The built HTML preview is a target=_blank link; OPEN_EXTERNAL_LINKS_IN_BROWSER (on by default) sends
     # it to the browser. text_select and zoomable are off by default in pywebview; people need both.
-    webview.create_window("Unscanner", url, width=1400, height=900, min_size=(800, 500),
+    # Maximized: the scan and the editor side by side need the room; width and height are the size it
+    # restores to.
+    webview.create_window("Unscanner", url, width=1400, height=900, min_size=(800, 500), maximized=True,
                           text_select=True, zoomable=True)
     # Not private: the page keeps unsaved drafts, layout and choices in localStorage between runs. They
     # live in the work folder, so they move with it (the installed app keeps them in AppData instead).
