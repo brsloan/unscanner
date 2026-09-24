@@ -15,6 +15,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -166,7 +167,8 @@ def find_epubcheck() -> str | None:
     env = os.environ.get("EPUBCHECK_JAR")
     if env and Path(env).exists():
         return env
-    root = Path(__file__).resolve().parents[2]
+    # the repo or the portable copy: src/unscanner/validate.py; the installed app: next to Unscanner.exe
+    root = Path(sys.executable).parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[2]
     hits = sorted(glob.glob(str(root / "tools" / "epubcheck*" / "epubcheck.jar")))
     return hits[-1] if hits else None
 

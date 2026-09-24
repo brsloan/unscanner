@@ -1,5 +1,8 @@
 """The web UI as a desktop app: its own window (pywebview) and, on Windows, no console window.
 
+The installed app's Unscanner.exe (app.py) is built with no console, so it starts out as the copy
+described next, and hands over to unscanner-cli.exe when it needs a console.
+
 start-unscanner.bat runs `unscanner ui --no-console`. That process checks, while it still has a console
 to report to, that a window can be shown and the port is free; then it starts the same command again
 with pythonw.exe (no console) and exits, which closes the console. The pythonw copy writes its output
@@ -23,6 +26,7 @@ LOG_NAME = "unscanner.log"
 LOG_MAX_BYTES = 1_000_000  # then it becomes unscanner.log.1 and a new one starts
 PAUSE_ENV = "UNSCANNER_PAUSE_ON_ERROR"  # a console opened by reopen_with_console waits before closing on an error
 log_path: Path | None = None  # set by log_to_file: this copy has no console, errors go to a message box
+webview_storage: Path | None = None  # the window's browser data; None: work/.webview (app.gui sets AppData)
 
 # The WebView2 runtime's registry key (per machine, and per user); pywebview checks the same ones.
 WEBVIEW2_KEYS = (("HKEY_LOCAL_MACHINE", r"SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients"),
@@ -68,8 +72,9 @@ def open_window(webview: Any, url: str, work_root: str | Path) -> None:
     webview.create_window("Unscanner", url, width=1400, height=900, min_size=(800, 500),
                           text_select=True, zoomable=True)
     # Not private: the page keeps unsaved drafts, layout and choices in localStorage between runs. They
-    # live in the work folder, so they move with it.
-    webview.start(private_mode=False, storage_path=str(Path(work_root).resolve() / ".webview"))
+    # live in the work folder, so they move with it (the installed app keeps them in AppData instead).
+    storage = webview_storage or Path(work_root).resolve() / ".webview"
+    webview.start(private_mode=False, storage_path=str(storage))
 
 
 # ---------------------------------------------------------------- without a console
@@ -79,9 +84,14 @@ def has_console() -> bool:
     return sys.stdout is not None and sys.stderr is not None
 
 
+def frozen() -> bool:
+    """The installed app (PyInstaller): Unscanner.exe has no console, unscanner-cli.exe has one."""
+    return bool(getattr(sys, "frozen", False))
+
+
 def pythonw() -> Path | None:
     """The console-less twin of the running Python, when there is one (Windows only)."""
-    if sys.platform != "win32":
+    if sys.platform != "win32" or frozen():
         return None
     exe = Path(sys.executable).with_name("pythonw.exe")
     return exe if exe.exists() else None
@@ -96,14 +106,20 @@ def port_free(host: str, port: int) -> bool:
     return True
 
 
-def _command(python: Path, argv: list[str]) -> list[str]:
+def _command(argv: list[str], console: bool) -> list[str]:
+    """`unscanner <argv>` as a command line, run with (console=True) or without a console."""
+    if frozen():
+        from .app import CLI_EXE, GUI_EXE
+
+        return [str(Path(sys.executable).with_name(CLI_EXE if console else GUI_EXE)), *argv]
+    python = Path(sys.executable).with_name("python.exe") if console else pythonw()
     flags = ["-s"] if sys.flags.no_user_site else []  # the portable copy runs with -s; keep it
     return [str(python), *flags, "-m", "unscanner.cli", *argv]
 
 
 def detach(argv: list[str]) -> None:
     """Start `unscanner <argv>` again with pythonw.exe, not tied to this console, and return at once."""
-    subprocess.Popen(_command(pythonw(), argv), close_fds=True,
+    subprocess.Popen(_command(argv, console=False), close_fds=True,
                      creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP)
 
 
@@ -112,8 +128,7 @@ def reopen_with_console(argv: list[str] | None = None) -> None:
     copy's own) in a console window of its own, where the app can be stopped, and which stays open to
     show an error."""
     argv = sys.argv[1:] if argv is None else argv
-    python = Path(sys.executable).with_name("python.exe")
-    subprocess.Popen(_command(python, [*argv, "--browser"]), creationflags=subprocess.CREATE_NEW_CONSOLE,
+    subprocess.Popen(_command([*argv, "--browser"], console=True), creationflags=subprocess.CREATE_NEW_CONSOLE,
                      env={**os.environ, PAUSE_ENV: "1"})
 
 

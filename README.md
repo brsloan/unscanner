@@ -28,6 +28,16 @@ Python and every dependency. People unzip it anywhere and double-click `start-un
 install and no admin rights needed. The source stays plain `.py` files a library can adapt. See
 `PORTABLE.txt` in the zip.
 
+**An installer (Windows):** `python scripts/build_installer.py` makes `dist/Unscanner-Setup-<version>.exe`
+(about 150 MB; it needs Inno Setup 6, `winget install JRSoftware.InnoSetup`). It installs for the current
+user only, with no administrator rights, into `AppData\Local\Programs\Unscanner`, and adds Unscanner to
+the Start menu. Unscanner opens in its own window with no console. Documents and output go to
+`Documents\Unscanner` (`work\`, `out\`, and the log `work\unscanner.log`), which upgrades and uninstalls
+leave alone. `unscanner-cli.exe` next to it is the command line; for Claude over stdio the MCP command is
+`%LOCALAPPDATA%\Programs\Unscanner\unscanner-cli.exe serve`. The program is frozen (PyInstaller), so
+code changes need a rebuild, but the prompts are edited in the app (see below). The installer is not
+signed: Windows SmartScreen asks once ("More info", then "Run anyway").
+
 **Before your first run, open Settings > Edit prompts in the web UI and rewrite "Who is doing the work
 and why".** It tells the model who is doing the work and on what legal basis (a university library's
 accessibility service, source held lawfully, use reviewed by counsel) so that faithful transcription is
