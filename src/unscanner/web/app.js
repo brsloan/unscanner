@@ -1737,8 +1737,8 @@ document.querySelectorAll("button.pick").forEach((btn) => btn.addEventListener("
     form.querySelector(`.picked[data-for="${btn.dataset.target}"]`).textContent = path;
   } catch (err) { setStatus("Could not open the file dialog: " + err.message, true); }
 }));
-// Open PDF goes straight to the file chooser; the title, author and language are filled in afterwards in
-// Properties, which opens beside the scan so the title page can be read while typing them.
+// Open PDF goes straight to the file chooser; for a new project the title, author and language are filled
+// in afterwards in Properties, which opens beside the scan so the title page can be read while typing them.
 $("#btn-open").addEventListener("click", async () => {
   if (!(state.app && state.app.window)) { $("#open-file").value = ""; $("#open-file").click(); return; }
   try {
@@ -1758,7 +1758,7 @@ async function openPdf(request) {
     const doc = await request;
     await loadDocs(doc.doc_id);
     setStatus(`Opened ${doc.title} (${doc.page_count} pages)`);
-    $("#btn-properties").click();
+    if (doc.created) $("#btn-properties").click();  // a project opened before already has its properties
   } catch (err) { setStatus("Open failed: " + err.message, true); }
 }
 

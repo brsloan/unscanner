@@ -286,14 +286,20 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         out = [{"doc_id": wd.name, **Document.load(wd).summary()} for wd in project_dirs(work_root)]
         return sorted(out, key=lambda d: d["opened_at"], reverse=True)
 
+    def open_pdf(pdf_path: Path, **props: str) -> dict[str, Any]:
+        """new_document, and whether it made a new project (`created`): the UI then opens Properties."""
+        known = {wd.name for wd in project_dirs(work_root)}
+        doc = new_document(pdf_path, work_root, **props)
+        return {**doc_view(doc), "created": Path(doc.workdir).name not in known}
+
     @app.post("/api/documents")
     def open_document(req: OpenRequest) -> dict[str, Any]:
         p = Path(req.pdf_path)
         if not p.is_file() or p.suffix.lower() != ".pdf":
             raise HTTPException(400, f"not a PDF file: {req.pdf_path}")
-        doc = new_document(p, work_root, title=req.title, author=req.author, language=req.language)
-        trim_cache(work_root, keep=Path(doc.workdir).name)
-        return doc_view(doc)
+        view = open_pdf(p, title=req.title, author=req.author, language=req.language)
+        trim_cache(work_root, keep=view["doc_id"])
+        return view
 
     @app.delete("/api/documents/{doc_id}")
     def delete_document(doc_id: str) -> dict[str, Any]:
@@ -326,8 +332,7 @@ def create_app(work_root: str | Path = "work", out_root: str | Path = "out", mou
         dest = inbox / Path(file.filename).name
         with dest.open("wb") as fh:
             shutil.copyfileobj(file.file, fh)
-        doc = new_document(dest, work_root, title=title, author=author, language=language)
-        return doc_view(doc)
+        return open_pdf(dest, title=title, author=author, language=language)
 
     @app.get("/api/documents/{doc_id}/export")
     def export_document(doc_id: str) -> JSONResponse:

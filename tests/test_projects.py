@@ -110,9 +110,14 @@ def test_list_remove_and_locate(tmp_path):
     first = make_pdf(tmp_path / "scans" / "first.pdf")
     second = other_pdf(tmp_path / "scans" / "second.pdf")
     with make_client(tmp_path) as c:
-        id1 = c.post("/api/documents", json={"pdf_path": str(first)}).json()["doc_id"]
+        r = c.post("/api/documents", json={"pdf_path": str(first)}).json()
+        id1 = r["doc_id"]
+        assert r["created"] is True  # the UI opens Properties for a new project only
         time.sleep(1.1)  # opened_at is to the second
         id2 = c.post("/api/documents", json={"pdf_path": str(second)}).json()["doc_id"]
+        assert c.post("/api/documents", json={"pdf_path": str(first)}).json()["created"] is False
+        time.sleep(1.1)
+        c.post("/api/documents", json={"pdf_path": str(second)})
         docs = c.get("/api/documents").json()
         assert [d["doc_id"] for d in docs] == [id2, id1] and all(d["source_found"] for d in docs)
         assert c.get(f"/api/documents/{id1}/pages/1/image").status_code == 200
@@ -149,7 +154,10 @@ def test_removing_an_uploaded_pdf_removes_the_copy_too(tmp_path):
             r = c.post("/api/documents/upload", files={"file": ("uploaded.pdf", fh, "application/pdf")})
         assert r.status_code == 200, r.text
         copy = tmp_path / "work" / "_inbox" / "uploaded.pdf"
-        assert copy.exists() and r.json()["source"] == str(copy.resolve())
+        assert copy.exists() and r.json()["source"] == str(copy.resolve()) and r.json()["created"] is True
+        with src.open("rb") as fh:
+            again = c.post("/api/documents/upload", files={"file": ("uploaded.pdf", fh, "application/pdf")})
+        assert again.json()["created"] is False
         c.delete(f"/api/documents/{r.json()['doc_id']}")
         assert not copy.exists() and src.exists()
 
