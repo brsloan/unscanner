@@ -68,14 +68,21 @@ jobs:
       - name: Build the installer
         run: python scripts/build_installer.py
 
-      - name: Keep the files (manual runs)
+      # One artifact each, so people download only the one they need.
+      - name: Keep the installer (manual runs)
         if: github.ref_type != 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: unscanner-windows
-          path: |
-            dist/Unscanner-Setup-*.exe
-            dist/unscanner-*-win64.zip
+          name: installer
+          path: dist/Unscanner-Setup-*.exe
+          retention-days: 7
+
+      - name: Keep the portable zip (manual runs)
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable
+          path: dist/unscanner-*-win64.zip
           retention-days: 7
 
       - name: Publish the release
